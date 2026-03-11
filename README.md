@@ -186,12 +186,28 @@ Navigate once, then query many times — the browser persists between calls.
 
 ## Architecture
 
-- **Compiled CLI binary** (Bun `--compile`, ~58MB) — ~1ms startup, reads `/tmp/browse-server.json` for server port + auth token
-- **Persistent Bun HTTP server** — launches headless Chromium via Playwright, listens on localhost:9400-9410
+- **Compiled CLI binary** (Bun `--compile`, ~58MB) — ~1ms startup, reads state file for server port + auth token
+- **Persistent Bun HTTP server** — launches headless Chromium via Playwright on localhost
 - **Bearer token auth** — random UUID per server session, stored in state file (chmod 600)
 - **Console/network buffers** — all entries in memory, flushed to `/tmp/browse-*.log` every 1s
 - **Auto-idle shutdown** — 30 minutes (configurable via `BROWSE_IDLE_TIMEOUT`)
 - **Crash handling** — Chromium crash kills server, CLI auto-restarts on next command
+
+### Multi-workspace support
+
+Each workspace gets its own isolated browser instance. If `CONDUCTOR_PORT` is set (e.g., by [Conductor](https://conductor.dev)), the browse port is derived deterministically:
+
+```
+browse_port = CONDUCTOR_PORT - 45600
+```
+
+| Workspace | CONDUCTOR_PORT | Browse port | State file |
+|-----------|---------------|-------------|------------|
+| Workspace A | 55040 | 9440 | `/tmp/browse-server-9440.json` |
+| Workspace B | 55041 | 9441 | `/tmp/browse-server-9441.json` |
+| No Conductor | — | 9400 (scan) | `/tmp/browse-server.json` |
+
+Each instance has its own Chromium process, tabs, cookies, console/network logs. No cross-workspace interference. You can also set `BROWSE_PORT` directly if you're not using Conductor.
 
 ## Development
 
