@@ -10,7 +10,7 @@ description: |
 allowed-tools:
   - Bash
   - Read
-  - mcp__conductor__AskUserQuestion
+
 ---
 
 # Browse v2: Persistent Browser for Claude Code
@@ -27,8 +27,8 @@ test -x ~/.claude/skills/gstack-browse/dist/browse && echo "READY" || echo "NEED
 ```
 
 If `NEEDS_SETUP`:
-1. Use `mcp__conductor__AskUserQuestion` to ask: "gstack-browse needs a one-time setup (bun install + compile CLI). This takes ~10 seconds. OK to proceed?"
-2. If approved, run:
+1. Tell the user: "gstack-browse needs a one-time setup (bun install + compile CLI binary). This takes ~10 seconds. OK to proceed?" Then STOP and wait for their response.
+2. If they approve, run:
 ```bash
 cd ~/.claude/skills/gstack-browse && bun install && bun run build
 ```
