@@ -12,7 +12,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const STATE_FILE = process.env.BROWSE_STATE_FILE || '/tmp/browse-server.json';
+const PORT_OFFSET = 45600;
+const BROWSE_PORT = process.env.CONDUCTOR_PORT
+  ? parseInt(process.env.CONDUCTOR_PORT, 10) - PORT_OFFSET
+  : parseInt(process.env.BROWSE_PORT || '0', 10);
+const INSTANCE_SUFFIX = BROWSE_PORT ? `-${BROWSE_PORT}` : '';
+const STATE_FILE = process.env.BROWSE_STATE_FILE || `/tmp/browse-server${INSTANCE_SUFFIX}.json`;
 // When compiled, import.meta.dir is virtual. Use env var or well-known path.
 const SERVER_SCRIPT = process.env.BROWSE_SERVER_SCRIPT
   || (import.meta.dir.startsWith('/') && !import.meta.dir.includes('$bunfs')

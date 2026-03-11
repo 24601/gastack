@@ -18,7 +18,12 @@ import * as crypto from 'crypto';
 
 // ─── Auth (inline) ─────────────────────────────────────────────
 const AUTH_TOKEN = crypto.randomUUID();
-const STATE_FILE = process.env.BROWSE_STATE_FILE || '/tmp/browse-server.json';
+const PORT_OFFSET = 45600;
+const BROWSE_PORT = process.env.CONDUCTOR_PORT
+  ? parseInt(process.env.CONDUCTOR_PORT, 10) - PORT_OFFSET
+  : parseInt(process.env.BROWSE_PORT || '0', 10); // 0 = auto-scan
+const INSTANCE_SUFFIX = BROWSE_PORT ? `-${BROWSE_PORT}` : '';
+const STATE_FILE = process.env.BROWSE_STATE_FILE || `/tmp/browse-server${INSTANCE_SUFFIX}.json`;
 const IDLE_TIMEOUT_MS = parseInt(process.env.BROWSE_IDLE_TIMEOUT || '1800000', 10); // 30 min
 
 function validateAuth(req: Request): boolean {
@@ -29,8 +34,8 @@ function validateAuth(req: Request): boolean {
 // ─── Buffer (from buffers.ts) ────────────────────────────────────
 import { consoleBuffer, networkBuffer, addConsoleEntry, addNetworkEntry, type LogEntry, type NetworkEntry } from './buffers';
 export { consoleBuffer, networkBuffer, addConsoleEntry, addNetworkEntry, type LogEntry, type NetworkEntry };
-const CONSOLE_LOG_PATH = '/tmp/browse-console.log';
-const NETWORK_LOG_PATH = '/tmp/browse-network.log';
+const CONSOLE_LOG_PATH = `/tmp/browse-console${INSTANCE_SUFFIX}.log`;
+const NETWORK_LOG_PATH = `/tmp/browse-network${INSTANCE_SUFFIX}.log`;
 let lastConsoleFlushed = 0;
 let lastNetworkFlushed = 0;
 
@@ -98,8 +103,20 @@ const META_COMMANDS = new Set([
   'url',
 ]);
 
-// Find available port
+// Find port: deterministic from CONDUCTOR_PORT, or scan range
 async function findPort(): Promise<number> {
+  // Deterministic port from CONDUCTOR_PORT (e.g., 55040 - 45600 = 9440)
+  if (BROWSE_PORT) {
+    try {
+      const testServer = Bun.serve({ port: BROWSE_PORT, fetch: () => new Response('ok') });
+      testServer.stop();
+      return BROWSE_PORT;
+    } catch {
+      throw new Error(`[browse] Port ${BROWSE_PORT} (from CONDUCTOR_PORT ${process.env.CONDUCTOR_PORT}) is in use`);
+    }
+  }
+
+  // Fallback: scan range
   const start = parseInt(process.env.BROWSE_PORT_START || '9400', 10);
   for (let port = start; port < start + 10; port++) {
     try {
