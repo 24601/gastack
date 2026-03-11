@@ -1,7 +1,7 @@
 {
   "name": "gstack-browse",
   "version": "0.1.0",
-  "description": "Fast headless browser CLI for AI coding agents. Persistent Chromium daemon with sub-200ms commands.",
+  "description": "Fast headless browser for Claude Code. Persistent Chromium daemon, ~100ms commands, zero MCP overhead.",
   "license": "MIT",
   "type": "module",
   "bin": {

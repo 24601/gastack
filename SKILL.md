@@ -2,7 +2,7 @@
 name: gstack-browse
 version: 0.1.0
 description: |
-  Fast web browsing via persistent headless Chromium daemon. Navigate to any URL,
+  Fast web browsing for Claude Code via persistent headless Chromium daemon. Navigate to any URL,
   read page content, click elements, fill forms, run JavaScript, take screenshots,
   inspect CSS/DOM, capture console/network logs, and more. ~100ms per command after
   first call. Use when you need to check a website, verify a deployment, read docs,

@@ -1,12 +1,12 @@
 # gstack-browse
 
-**The browser tool that AI coding agents deserve.** Persistent headless Chromium daemon with ~100ms commands. No MCP. No Chrome extension. No bullshit.
+**The browser tool that Claude Code deserves.** Persistent headless Chromium daemon with ~100ms commands. No MCP. No Chrome extension. No bullshit.
 
 Created by [Garry Tan](https://x.com/garrytan), President & CEO of [Y Combinator](https://www.ycombinator.com/).
 
 ## The Problem
 
-Every AI coding agent needs to browse the web. Check a deployment. Verify a UI change. Read documentation. Fill out a form. Take a screenshot. Simple stuff.
+Claude Code needs to browse the web. Check a deployment. Verify a UI change. Read documentation. Fill out a form. Take a screenshot. Simple stuff.
 
 The existing solutions are all terrible:
 
@@ -53,9 +53,11 @@ Claude Code ──Bash──> browse CLI ──HTTP──> Bun server ──Play
 
 **Crash recovery**: If Chromium crashes, the server exits. Next CLI call auto-starts a fresh one. No stale state. No zombie processes. No "have you tried restarting the extension?"
 
+**Works with any agent**: Built for Claude Code, but any coding agent with shell access (Codex, Cursor, etc.) can call the CLI. It's just a binary that prints to stdout.
+
 ## What it can do
 
-40+ commands covering everything an AI agent needs:
+40+ commands covering everything Claude Code needs:
 
 ```bash
 B=~/.claude/skills/gstack-browse/dist/browse
