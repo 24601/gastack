@@ -1,0 +1,247 @@
+/**
+ * gstack-browse server — persistent Chromium daemon
+ *
+ * Architecture:
+ *   Bun.serve HTTP on localhost → routes commands to Playwright
+ *   Console/network buffers: in-memory (all entries) + disk flush every 1s
+ *   Chromium crash → server EXITS with clear error (CLI auto-restarts)
+ *   Auto-shutdown after BROWSE_IDLE_TIMEOUT (default 30 min)
+ */
+
+import { BrowserManager } from './browser-manager';
+import { handleReadCommand } from './read-commands';
+import { handleWriteCommand } from './write-commands';
+import { handleMetaCommand } from './meta-commands';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as crypto from 'crypto';
+
+// ─── Auth (inline) ─────────────────────────────────────────────
+const AUTH_TOKEN = crypto.randomUUID();
+const STATE_FILE = process.env.BROWSE_STATE_FILE || '/tmp/browse-server.json';
+const IDLE_TIMEOUT_MS = parseInt(process.env.BROWSE_IDLE_TIMEOUT || '1800000', 10); // 30 min
+
+function validateAuth(req: Request): boolean {
+  const header = req.headers.get('authorization');
+  return header === `Bearer ${AUTH_TOKEN}`;
+}
+
+// ─── Buffer (from buffers.ts) ────────────────────────────────────
+import { consoleBuffer, networkBuffer, addConsoleEntry, addNetworkEntry, type LogEntry, type NetworkEntry } from './buffers';
+export { consoleBuffer, networkBuffer, addConsoleEntry, addNetworkEntry, type LogEntry, type NetworkEntry };
+const CONSOLE_LOG_PATH = '/tmp/browse-console.log';
+const NETWORK_LOG_PATH = '/tmp/browse-network.log';
+let lastConsoleFlushed = 0;
+let lastNetworkFlushed = 0;
+
+function flushBuffers() {
+  // Flush new console entries to disk
+  if (consoleBuffer.length > lastConsoleFlushed) {
+    const newEntries = consoleBuffer.slice(lastConsoleFlushed);
+    const lines = newEntries.map(e =>
+      `[${new Date(e.timestamp).toISOString()}] [${e.level}] ${e.text}`
+    ).join('\n') + '\n';
+    fs.appendFileSync(CONSOLE_LOG_PATH, lines);
+    lastConsoleFlushed = consoleBuffer.length;
+  }
+
+  // Flush new network entries to disk
+  if (networkBuffer.length > lastNetworkFlushed) {
+    const newEntries = networkBuffer.slice(lastNetworkFlushed);
+    const lines = newEntries.map(e =>
+      `[${new Date(e.timestamp).toISOString()}] ${e.method} ${e.url} → ${e.status || 'pending'} (${e.duration || '?'}ms, ${e.size || '?'}B)`
+    ).join('\n') + '\n';
+    fs.appendFileSync(NETWORK_LOG_PATH, lines);
+    lastNetworkFlushed = networkBuffer.length;
+  }
+}
+
+// Flush every 1 second
+const flushInterval = setInterval(flushBuffers, 1000);
+
+// ─── Idle Timer ────────────────────────────────────────────────
+let lastActivity = Date.now();
+
+function resetIdleTimer() {
+  lastActivity = Date.now();
+}
+
+const idleCheckInterval = setInterval(() => {
+  if (Date.now() - lastActivity > IDLE_TIMEOUT_MS) {
+    console.log(`[browse] Idle for ${IDLE_TIMEOUT_MS / 1000}s, shutting down`);
+    shutdown();
+  }
+}, 60_000);
+
+// ─── Server ────────────────────────────────────────────────────
+const browserManager = new BrowserManager();
+let isShuttingDown = false;
+
+// Read/write/meta command sets for routing
+const READ_COMMANDS = new Set([
+  'text', 'html', 'links', 'forms', 'accessibility',
+  'js', 'eval', 'css', 'attrs',
+  'console', 'network', 'cookies', 'storage', 'perf',
+]);
+
+const WRITE_COMMANDS = new Set([
+  'goto', 'back', 'forward', 'reload',
+  'click', 'fill', 'select', 'hover', 'type', 'press', 'scroll', 'wait',
+  'viewport', 'cookie', 'header', 'useragent',
+]);
+
+const META_COMMANDS = new Set([
+  'tabs', 'tab', 'newtab', 'closetab',
+  'status', 'stop', 'restart',
+  'screenshot', 'pdf', 'responsive',
+  'chain', 'diff',
+  'url',
+]);
+
+// Find available port
+async function findPort(): Promise<number> {
+  const start = parseInt(process.env.BROWSE_PORT_START || '9400', 10);
+  for (let port = start; port < start + 10; port++) {
+    try {
+      const testServer = Bun.serve({ port, fetch: () => new Response('ok') });
+      testServer.stop();
+      return port;
+    } catch {
+      continue;
+    }
+  }
+  throw new Error(`[browse] No available port in range ${start}-${start + 9}`);
+}
+
+async function handleCommand(body: any): Promise<Response> {
+  const { command, args = [] } = body;
+
+  if (!command) {
+    return new Response(JSON.stringify({ error: 'Missing "command" field' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    let result: string;
+
+    if (READ_COMMANDS.has(command)) {
+      result = await handleReadCommand(command, args, browserManager);
+    } else if (WRITE_COMMANDS.has(command)) {
+      result = await handleWriteCommand(command, args, browserManager);
+    } else if (META_COMMANDS.has(command)) {
+      result = await handleMetaCommand(command, args, browserManager, shutdown);
+    } else {
+      return new Response(JSON.stringify({
+        error: `Unknown command: ${command}`,
+        hint: `Available commands: ${[...READ_COMMANDS, ...WRITE_COMMANDS, ...META_COMMANDS].sort().join(', ')}`,
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(result, {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+async function shutdown() {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log('[browse] Shutting down...');
+  clearInterval(flushInterval);
+  clearInterval(idleCheckInterval);
+  flushBuffers(); // Final flush
+
+  await browserManager.close();
+
+  // Clean up state file
+  try { fs.unlinkSync(STATE_FILE); } catch {}
+
+  process.exit(0);
+}
+
+// Handle signals
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+// ─── Start ─────────────────────────────────────────────────────
+async function start() {
+  // Clear old log files
+  try { fs.unlinkSync(CONSOLE_LOG_PATH); } catch {}
+  try { fs.unlinkSync(NETWORK_LOG_PATH); } catch {}
+
+  const port = await findPort();
+
+  // Launch browser
+  await browserManager.launch();
+
+  const startTime = Date.now();
+  const server = Bun.serve({
+    port,
+    hostname: '127.0.0.1',
+    fetch: async (req) => {
+      resetIdleTimer();
+
+      const url = new URL(req.url);
+
+      // Health check — no auth required
+      if (url.pathname === '/health') {
+        const healthy = browserManager.isHealthy();
+        return new Response(JSON.stringify({
+          status: healthy ? 'healthy' : 'unhealthy',
+          uptime: Math.floor((Date.now() - startTime) / 1000),
+          tabs: browserManager.getTabCount(),
+          currentUrl: browserManager.getCurrentUrl(),
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // All other endpoints require auth
+      if (!validateAuth(req)) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (url.pathname === '/command' && req.method === 'POST') {
+        const body = await req.json();
+        return handleCommand(body);
+      }
+
+      return new Response('Not found', { status: 404 });
+    },
+  });
+
+  // Write state file
+  const state = {
+    pid: process.pid,
+    port,
+    token: AUTH_TOKEN,
+    startedAt: new Date().toISOString(),
+    serverPath: path.resolve(import.meta.dir, 'server.ts'),
+  };
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), { mode: 0o600 });
+
+  console.log(`[browse] Server running on http://127.0.0.1:${port} (PID: ${process.pid})`);
+  console.log(`[browse] State file: ${STATE_FILE}`);
+  console.log(`[browse] Idle timeout: ${IDLE_TIMEOUT_MS / 1000}s`);
+}
+
+start().catch((err) => {
+  console.error(`[browse] Failed to start: ${err.message}`);
+  process.exit(1);
+});

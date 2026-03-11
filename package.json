@@ -1,0 +1,34 @@
+{
+  "name": "gstack-browse",
+  "version": "2.0.0",
+  "description": "Fast headless browser CLI for AI coding agents. Persistent Chromium daemon with sub-200ms commands.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "browse": "./dist/browse"
+  },
+  "scripts": {
+    "build": "bun build --compile src/cli.ts --outfile dist/browse",
+    "dev": "bun run src/cli.ts",
+    "server": "bun run src/server.ts",
+    "test": "bun test",
+    "start": "bun run src/server.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.58.2",
+    "diff": "^7.0.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "keywords": [
+    "browser",
+    "automation",
+    "playwright",
+    "headless",
+    "cli",
+    "claude",
+    "ai-agent",
+    "devtools"
+  ]
+}
