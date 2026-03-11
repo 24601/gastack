@@ -10,6 +10,7 @@ description: |
 allowed-tools:
   - Bash
   - Read
+  - mcp__conductor__AskUserQuestion
 ---
 
 # Browse v2: Persistent Browser for Claude Code
@@ -17,9 +18,27 @@ allowed-tools:
 Persistent headless Chromium daemon. First call auto-starts the server (~3s).
 Every subsequent call: ~100-200ms. Auto-shuts down after 30 min idle.
 
+## SETUP (run this check BEFORE any browse command)
+
+Before using any browse command, check if the binary exists:
+
+```bash
+test -x ~/.claude/skills/gstack-browse/dist/browse && echo "READY" || echo "NEEDS_SETUP"
+```
+
+If `NEEDS_SETUP`:
+1. Use `mcp__conductor__AskUserQuestion` to ask: "gstack-browse needs a one-time setup (bun install + compile CLI). This takes ~10 seconds. OK to proceed?"
+2. If approved, run:
+```bash
+cd ~/.claude/skills/gstack-browse && bun install && bun run build
+```
+3. If `bun` is not installed, tell the user to install it: `curl -fsSL https://bun.sh/install | bash`
+
+Once setup is done, it never needs to run again (the compiled binary persists).
+
 ## IMPORTANT
 
-- Use `~/.claude/skills/gstack-browse/dist/browse` (compiled binary) or `bun run ~/.claude/skills/gstack-browse/src/cli.ts` via Bash.
+- Use `~/.claude/skills/gstack-browse/dist/browse` (compiled binary) via Bash.
 - NEVER use `mcp__claude-in-chrome__*` tools. They are slow and unreliable.
 - The browser persists between calls — cookies, tabs, and state carry over.
 - The server auto-starts on first command. No setup needed.
@@ -183,30 +202,6 @@ browse restart                 Kill + restart server
 | Compare two pages | `diff <url1> <url2>` |
 | Mobile layout check | `responsive /tmp/prefix` |
 | Multi-step flow | `echo '[...]' \| browse chain` |
-
-## Multi-step Workflow Example
-
-```bash
-B=~/.claude/skills/gstack-browse/dist/browse
-
-# Login flow
-$B goto https://example.com/login
-$B fill "#email" "user@test.com"
-$B fill "#password" "pass123"
-$B click "button[type=submit]"
-$B wait ".dashboard"
-$B screenshot /tmp/dashboard.png
-
-# Or as a chain (single call):
-echo '[
-  ["goto", "https://example.com/login"],
-  ["fill", "#email", "user@test.com"],
-  ["fill", "#password", "pass123"],
-  ["click", "button[type=submit]"],
-  ["wait", ".dashboard"],
-  ["screenshot", "/tmp/dashboard.png"]
-]' | $B chain
-```
 
 ## Architecture
 
