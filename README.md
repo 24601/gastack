@@ -120,15 +120,12 @@ The browser **persists between calls**. Navigate once, then query as many times 
 
 ## Install
 
-**Requires [Bun](https://bun.sh/) v1.0+**
+Just clone it. Claude handles the rest on first use (installs dependencies, compiles the binary).
 
 ### Option A: Project-level (recommended for teams)
 
 ```bash
-cd your-repo
 git submodule add https://github.com/garrytan/gstack-browse.git .claude/skills/gstack-browse
-cd .claude/skills/gstack-browse
-bun install && bun run build
 ```
 
 Commit the submodule. Everyone who clones your repo gets the browser.
@@ -137,18 +134,11 @@ Commit the submodule. Everyone who clones your repo gets the browser.
 
 ```bash
 git clone https://github.com/garrytan/gstack-browse.git ~/.claude/skills/gstack-browse
-cd ~/.claude/skills/gstack-browse
-bun install && bun run build
 ```
 
-### Verify
+That's it. Next time Claude needs to browse a page, it'll detect the skill, ask to run setup (~10 seconds), and you're live.
 
-```bash
-~/.claude/skills/gstack-browse/dist/browse goto https://example.com
-~/.claude/skills/gstack-browse/dist/browse text
-```
-
-If you see the page text, you're done.
+**Prerequisite**: [Bun](https://bun.sh/) v1.0+ (Claude will tell you if it's missing).
 
 ## Teach Claude to use it
 
