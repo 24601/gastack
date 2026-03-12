@@ -1,18 +1,18 @@
 {
-  "name": "gstack-browse",
-  "version": "0.1.0",
-  "description": "Fast headless browser for Claude Code. Persistent Chromium daemon, ~100ms commands, zero MCP overhead.",
+  "name": "gstack",
+  "version": "0.2.0",
+  "description": "Garry's Stack — Claude Code skills + fast headless browser. One repo, one install, entire AI engineering workflow.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "browse": "./dist/browse"
+    "browse": "./browse/dist/browse"
   },
   "scripts": {
-    "build": "bun build --compile src/cli.ts --outfile dist/browse",
-    "dev": "bun run src/cli.ts",
-    "server": "bun run src/server.ts",
+    "build": "bun build --compile browse/src/cli.ts --outfile browse/dist/browse",
+    "dev": "bun run browse/src/cli.ts",
+    "server": "bun run browse/src/server.ts",
     "test": "bun test",
-    "start": "bun run src/server.ts"
+    "start": "bun run browse/src/server.ts"
   },
   "dependencies": {
     "playwright": "^1.58.2",

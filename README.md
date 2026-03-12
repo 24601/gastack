@@ -1,8 +1,20 @@
-# gstack-browse
+# gstack
 
-**The browser tool that Claude Code deserves.** Persistent headless Chromium daemon with ~100ms commands. No MCP. No Chrome extension. No bullshit.
+**Garry's Stack — the AI engineering toolkit that Claude Code deserves.** Browser automation, workflow skills, and more. One repo, one install. No MCP. No Chrome extension. No bullshit.
 
 Created by [Garry Tan](https://x.com/garrytan), President & CEO of [Y Combinator](https://www.ycombinator.com/).
+
+## What's in the box
+
+### Browser (`browse`)
+Persistent headless Chromium daemon with ~100ms commands. Navigate, click, fill forms, take screenshots, run JavaScript, inspect CSS/DOM, capture console/network logs. The killer feature: **ref-based element selection** via accessibility tree snapshots.
+
+### Skills
+- **ship** — merge, test, review, bump version, changelog, commit, push, PR
+- **review** — pre-landing PR review with structural analysis
+- **plan-exit-review** — thorough plan review before implementation
+- **plan-mega-review** — the most rigorous plan review possible (3 modes)
+- **retro** — weekly engineering retrospective with trend tracking
 
 ## The Problem
 
@@ -16,24 +28,19 @@ Chrome MCP (the "Claude in Chrome" integration) is the default browser tool in C
 
 If you've used it, you know. It's the tool you learn to avoid.
 
-### Why Playwright MCP sucks
+### Why MCP itself is the problem for local tools
 
-Playwright MCP wraps Playwright in an MCP server. Sounds reasonable until you actually use it. It inherits all of MCP's problems: connection management, JSON-RPC overhead, schema bloat in context. The server process is fragile. Reconnection logic is flaky. And because it's MCP, every single browser action costs you context window tokens for protocol framing that adds zero value. You're burning your most precious resource (context) on transport protocol garbage instead of actual work.
-
-### Why MCP itself is the problem
-
-MCP (Model Context Protocol) is a well-intentioned standard that adds a layer of complexity between the AI and the tool. For browser automation, that layer is pure overhead:
+MCP is a well-intentioned standard that adds a layer of complexity between the AI and the tool. For browser automation, that layer is pure overhead:
 
 - **Context bloat**: Every MCP tool call includes full JSON schemas, capability declarations, and protocol framing. A simple "get the page text" costs 10x more context tokens than it should.
-- **Connection fragility**: MCP uses persistent connections (WebSocket/stdio). Connections drop. Reconnection is unreliable. Your multi-step browser flow dies at step 4 of 7.
-- **Cold start tax**: MCP servers need to handshake, declare capabilities, and negotiate. This happens every session.
-- **Unnecessary abstraction**: The AI agent is *already running in a shell*. It can already call CLI tools via Bash. MCP adds a client-server protocol on top of... calling a local process. It's solving a problem that doesn't exist for local tools.
+- **Connection fragility**: MCP uses persistent connections (WebSocket/stdio). Connections drop. Reconnection is unreliable.
+- **Unnecessary abstraction**: The AI agent is *already running in a shell*. It can already call CLI tools via Bash. MCP adds a client-server protocol on top of... calling a local process.
 
 **The insight**: Claude Code already has `Bash`. A CLI tool that prints to stdout is the simplest, fastest, most reliable interface possible. No protocol overhead. No connection management. No schema bloat. Just input and output.
 
 ## The Solution
 
-gstack-browse is a CLI that talks to a persistent local Chromium daemon via HTTP. That's it.
+A CLI that talks to a persistent local Chromium daemon via HTTP. That's it.
 
 ```
 Claude Code ──Bash──> browse CLI ──HTTP──> Bun server ──Playwright──> Chromium
@@ -49,18 +56,16 @@ Claude Code ──Bash──> browse CLI ──HTTP──> Bun server ──Play
 
 **No MCP**: Zero protocol overhead. Zero context bloat. The CLI prints plain text to stdout. Claude reads it. Done.
 
-**No Chrome extension**: No permissions dialogs. No "extension not responding." No WebSocket reconnection prayer circles. The browser runs headless in a local process that you control.
+**No Chrome extension**: No permissions dialogs. No "extension not responding." No WebSocket reconnection prayer circles.
 
-**Crash recovery**: If Chromium crashes, the server exits. Next CLI call auto-starts a fresh one. No stale state. No zombie processes. No "have you tried restarting the extension?"
-
-**Works with any agent**: Built for Claude Code, but any coding agent with shell access (Codex, Cursor, etc.) can call the CLI. It's just a binary that prints to stdout.
+**Crash recovery**: If Chromium crashes, the server exits. Next CLI call auto-starts a fresh one. No stale state.
 
 ## What it can do
 
 40+ commands covering everything Claude Code needs:
 
 ```bash
-B=~/.claude/skills/gstack-browse/dist/browse
+B=~/.claude/skills/gstack/browse/dist/browse
 
 # Navigate and read pages
 $B goto https://yourapp.com
@@ -70,7 +75,18 @@ $B links                             # all links as "text -> href"
 $B forms                             # all forms + fields as structured JSON
 $B accessibility                     # full ARIA tree
 
-# Interact with pages
+# Snapshot: accessibility tree with refs for interaction
+$B snapshot -i                       # interactive elements only
+# Output:
+#   @e1 [link] "Home"
+#   @e2 [textbox] "Email"
+#   @e3 [button] "Submit"
+
+# Interact by ref (after snapshot)
+$B fill @e2 "test@test.com"
+$B click @e3
+
+# Or interact by CSS selector
 $B click "button.submit"
 $B fill "#email" "test@test.com"
 $B select "#country" "US"
@@ -96,12 +112,13 @@ $B pdf /tmp/page.pdf                 # save as PDF
 # Compare pages
 $B diff https://prod.app https://staging.app   # text diff between two URLs
 
-# Multi-step flows (single call, no shell quoting hell)
+# Multi-step flows (single call)
 echo '[
   ["goto", "https://app.com/login"],
-  ["fill", "#email", "user@test.com"],
-  ["fill", "#password", "secret"],
-  ["click", "button[type=submit]"],
+  ["snapshot", "-i"],
+  ["fill", "@e2", "user@test.com"],
+  ["fill", "@e3", "secret"],
+  ["click", "@e4"],
   ["wait", ".dashboard"],
   ["screenshot", "/tmp/logged-in.png"]
 ]' | $B chain
@@ -116,59 +133,44 @@ $B status                            # health, uptime, tab count
 $B stop                              # shut down (or just let it idle-timeout)
 ```
 
-The browser **persists between calls**. Navigate once, then query as many times as you want. Cookies, tabs, localStorage all carry over. This is the killer feature MCP-based tools can't match — they either start fresh every call (slow) or maintain fragile persistent connections (unreliable).
+The browser **persists between calls**. Navigate once, then query as many times as you want. Cookies, tabs, localStorage all carry over.
 
 ## Install
 
-Just clone it. Claude handles the rest on first use (installs dependencies, compiles the binary, ~10 seconds).
-
-### Option A: Project-level (recommended for teams)
-
-Run this from the root of your git project:
+### 1. Add gstack to your project
 
 ```bash
-git submodule add https://github.com/garrytan/gstack-browse.git .claude/skills/gstack-browse
+# Project-level (teams — committed to repo):
+git submodule add https://github.com/garrytan/gstack.git .claude/skills/gstack
+
+# Or user-level (personal — available everywhere):
+git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
 ```
 
-Commit the submodule. Everyone who clones your repo gets the browser.
+### 2. Add to your CLAUDE.md (required)
 
-**Worktrees**: New worktrees need `git submodule update --init .claude/skills/gstack-browse` to populate the directory. Claude's auto-setup handles this — it detects an empty submodule and runs the init for you.
+Paste this into your project's `CLAUDE.md`:
 
-### Option B: User-level (personal)
+````markdown
+## Browser
+Use gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
+````
 
-```bash
-git clone https://github.com/garrytan/gstack-browse.git ~/.claude/skills/gstack-browse
-```
+### 3. Done
 
-Available across all your projects. No per-repo setup.
+First time Claude needs the browser, it will ask to run a 10-second one-time setup. Say yes. All skills are available from then on.
 
 **Prerequisite**: [Bun](https://bun.sh/) v1.0+ (Claude will tell you if it's missing).
 
-## Teach Claude to use it
-
-Add this to your project's `CLAUDE.md`:
-
-````markdown
-## Browser Automation
-
-Use gstack-browse for all web browsing. NEVER use `mcp__claude-in-chrome__*` tools.
+### Update
 
 ```bash
-B=~/.claude/skills/gstack-browse/dist/browse
-
-$B goto <url>                    # navigate
-$B text                          # read page
-$B js "document.title"           # run JS
-$B css "body" "font-family"      # check CSS
-$B click "button.submit"         # interact
-$B fill "#email" "test@test.com" # fill forms
-$B screenshot /tmp/page.png      # visual check
-$B console                       # debug console
-$B network                       # debug network
+cd .claude/skills/gstack && git pull && ./setup
 ```
 
-Navigate once, then query many times — the browser persists between calls.
-````
+### Worktrees
+
+New worktrees need `git submodule update --init .claude/skills/gstack` to populate the directory. Claude's auto-setup handles this — it detects an empty submodule and runs the init for you.
 
 ## Command Reference
 
@@ -176,6 +178,7 @@ Navigate once, then query many times — the browser persists between calls.
 |----------|----------|
 | Navigate | `goto <url>`, `back`, `forward`, `reload`, `url` |
 | Read | `text`, `html [sel]`, `links`, `forms`, `accessibility` |
+| Snapshot | `snapshot [-i] [-c] [-d N] [-s sel]` |
 | Interact | `click <sel>`, `fill <sel> <val>`, `select <sel> <val>`, `hover <sel>`, `type <text>`, `press <key>`, `scroll [sel]`, `wait <sel>`, `viewport <WxH>` |
 | Inspect | `js <expr>`, `eval <file>`, `css <sel> <prop>`, `attrs <sel>`, `console`, `network`, `cookies`, `storage`, `perf` |
 | Visual | `screenshot [path]`, `pdf [path]`, `responsive [prefix]` |
@@ -184,11 +187,28 @@ Navigate once, then query many times — the browser persists between calls.
 | Multi-step | `chain` (reads JSON array from stdin) |
 | Server | `status`, `stop`, `restart` |
 
+All commands that take `<sel>` accept either CSS selectors or `@ref` after `snapshot`.
+
 ## Architecture
 
-- **Compiled CLI binary** (Bun `--compile`, ~58MB) — ~1ms startup, reads state file for server port + auth token
-- **Persistent Bun HTTP server** — launches headless Chromium via Playwright on localhost
-- **Bearer token auth** — random UUID per server session, stored in state file (chmod 600)
+```
+gstack/
+├── browse/          # Browser CLI (Playwright)
+│   ├── src/         # CLI + server + commands + snapshot
+│   ├── test/        # Integration tests + fixtures
+│   └── dist/        # Compiled binary (~58MB)
+├── ship/            # Ship workflow skill
+├── review/          # PR review skill
+├── plan-exit-review/# Plan review skill
+├── plan-mega-review/# Mega plan review skill
+├── retro/           # Retrospective skill
+├── setup            # One-time setup: build + symlink skills
+└── SKILL.md         # Browse skill (Claude discovers this)
+```
+
+- **Compiled CLI binary** (Bun `--compile`) — ~1ms startup
+- **Persistent Bun HTTP server** — launches headless Chromium via Playwright, localhost:9400-9410
+- **Bearer token auth** — random UUID per session, stored in state file (chmod 600)
 - **Console/network buffers** — all entries in memory, flushed to `/tmp/browse-*.log` every 1s
 - **Auto-idle shutdown** — 30 minutes (configurable via `BROWSE_IDLE_TIMEOUT`)
 - **Crash handling** — Chromium crash kills server, CLI auto-restarts on next command
@@ -209,24 +229,24 @@ browse_port = CONDUCTOR_PORT - 45600
 
 Each instance has its own Chromium process, tabs, cookies, console/network logs. No cross-workspace interference. You can also set `BROWSE_PORT` directly if you're not using Conductor.
 
+## Performance comparison
+
+| Tool | First call | Subsequent calls | Context overhead per call |
+|------|-----------|-----------------|--------------------------
+| Chrome MCP | ~5s | ~2-5s | ~2000 tokens (schema + protocol) |
+| Playwright MCP | ~3s | ~1-3s | ~1500 tokens (schema + protocol) |
+| **gstack** | **~3s** | **~100-200ms** | **0 tokens** (plain text stdout) |
+
+The context overhead difference compounds fast. In a 20-command browser session, MCP tools burn 30,000-40,000 tokens on protocol framing alone. gstack burns zero.
+
 ## Development
 
 ```bash
 bun install              # install dependencies
-bun test                 # run 40 integration tests (~2s)
+bun test                 # run 55 integration tests (~3s)
 bun run dev <cmd>        # run CLI from source (no compile)
-bun run build            # compile to dist/browse
+bun run build            # compile to browse/dist/browse
 ```
-
-## Performance comparison
-
-| Tool | First call | Subsequent calls | Context overhead per call |
-|------|-----------|-----------------|--------------------------|
-| Chrome MCP | ~5s | ~2-5s | ~2000 tokens (schema + protocol) |
-| Playwright MCP | ~3s | ~1-3s | ~1500 tokens (schema + protocol) |
-| **gstack-browse** | **~3s** | **~100-200ms** | **0 tokens** (plain text stdout) |
-
-The context overhead difference compounds fast. In a 20-command browser session, MCP tools burn 30,000-40,000 tokens on protocol framing alone. gstack-browse burns zero.
 
 ## License
 

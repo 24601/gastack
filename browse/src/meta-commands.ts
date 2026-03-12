@@ -1,8 +1,9 @@
 /**
- * Meta commands — tabs, server control, screenshots, chain, diff
+ * Meta commands — tabs, server control, screenshots, chain, diff, snapshot
  */
 
 import type { BrowserManager } from './browser-manager';
+import { handleSnapshot } from './snapshot';
 import * as Diff from 'diff';
 import * as fs from 'fs';
 
@@ -190,6 +191,11 @@ export async function handleMetaCommand(
       }
 
       return output.join('\n');
+    }
+
+    // ─── Snapshot ─────────────────────────────────────
+    case 'snapshot': {
+      return await handleSnapshot(args, bm);
     }
 
     default:

@@ -34,7 +34,11 @@ export async function handleReadCommand(
     case 'html': {
       const selector = args[0];
       if (selector) {
-        return await page.innerHTML(selector);
+        const resolved = bm.resolveRef(selector);
+        if ('locator' in resolved) {
+          return await resolved.locator.innerHTML({ timeout: 5000 });
+        }
+        return await page.innerHTML(resolved.selector);
       }
       return await page.content();
     }
@@ -103,13 +107,21 @@ export async function handleReadCommand(
     case 'css': {
       const [selector, property] = args;
       if (!selector || !property) throw new Error('Usage: browse css <selector> <property>');
+      const resolved = bm.resolveRef(selector);
+      if ('locator' in resolved) {
+        const value = await resolved.locator.evaluate(
+          (el, prop) => getComputedStyle(el).getPropertyValue(prop),
+          property
+        );
+        return value;
+      }
       const value = await page.evaluate(
         ([sel, prop]) => {
           const el = document.querySelector(sel);
           if (!el) return `Element not found: ${sel}`;
           return getComputedStyle(el).getPropertyValue(prop);
         },
-        [selector, property]
+        [resolved.selector, property]
       );
       return value;
     }
@@ -117,6 +129,17 @@ export async function handleReadCommand(
     case 'attrs': {
       const selector = args[0];
       if (!selector) throw new Error('Usage: browse attrs <selector>');
+      const resolved = bm.resolveRef(selector);
+      if ('locator' in resolved) {
+        const attrs = await resolved.locator.evaluate((el) => {
+          const result: Record<string, string> = {};
+          for (const attr of el.attributes) {
+            result[attr.name] = attr.value;
+          }
+          return result;
+        });
+        return JSON.stringify(attrs, null, 2);
+      }
       const attrs = await page.evaluate((sel) => {
         const el = document.querySelector(sel);
         if (!el) return `Element not found: ${sel}`;
@@ -125,7 +148,7 @@ export async function handleReadCommand(
           result[attr.name] = attr.value;
         }
         return result;
-      }, selector);
+      }, resolved.selector);
       return typeof attrs === 'string' ? attrs : JSON.stringify(attrs, null, 2);
     }
 

@@ -1,5 +1,5 @@
 /**
- * gstack-browse server — persistent Chromium daemon
+ * gstack browse server — persistent Chromium daemon
  *
  * Architecture:
  *   Bun.serve HTTP on localhost → routes commands to Playwright
@@ -100,7 +100,7 @@ const META_COMMANDS = new Set([
   'status', 'stop', 'restart',
   'screenshot', 'pdf', 'responsive',
   'chain', 'diff',
-  'url',
+  'url', 'snapshot',
 ]);
 
 // Find port: deterministic from CONDUCTOR_PORT, or scan range

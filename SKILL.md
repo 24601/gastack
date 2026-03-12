@@ -1,6 +1,6 @@
 ---
-name: gstack-browse
-version: 0.1.0
+name: gstack
+version: 0.2.0
 description: |
   Fast web browsing for Claude Code via persistent headless Chromium daemon. Navigate to any URL,
   read page content, click elements, fill forms, run JavaScript, take screenshots,
@@ -13,7 +13,7 @@ allowed-tools:
 
 ---
 
-# gstack-browse: Persistent Browser for Claude Code
+# gstack: Persistent Browser for Claude Code
 
 Persistent headless Chromium daemon. First call auto-starts the server (~3s).
 Every subsequent call: ~100-200ms. Auto-shuts down after 30 min idle.
@@ -24,9 +24,9 @@ Before using any browse command, find the skill and check if the binary exists:
 
 ```bash
 # Check project-level first, then user-level
-if test -x .claude/skills/gstack-browse/dist/browse; then
+if test -x .claude/skills/gstack/browse/dist/browse; then
   echo "READY_PROJECT"
-elif test -x ~/.claude/skills/gstack-browse/dist/browse; then
+elif test -x ~/.claude/skills/gstack/browse/dist/browse; then
   echo "READY_USER"
 else
   echo "NEEDS_SETUP"
@@ -36,16 +36,16 @@ fi
 Set `B` to whichever path is READY and use it for all commands. Prefer project-level if both exist.
 
 If `NEEDS_SETUP`:
-1. Tell the user: "gstack-browse needs a one-time setup (~10 seconds). OK to proceed?" Then STOP and wait for their response.
-2. If they approve, determine the skill directory (project-level `.claude/skills/gstack-browse` or user-level `~/.claude/skills/gstack-browse`) and run:
+1. Tell the user: "gstack needs a one-time setup (~10 seconds). OK to proceed?" Then STOP and wait for their response.
+2. If they approve, determine the skill directory (project-level `.claude/skills/gstack` or user-level `~/.claude/skills/gstack`) and run:
 ```bash
 SKILL_DIR=<whichever path exists>
 
 # If submodule exists but isn't initialized (empty dir, no package.json):
 test -f "$SKILL_DIR/package.json" || git submodule update --init "$SKILL_DIR"
 
-# Install and build
-cd "$SKILL_DIR" && bun install && bun run build
+# Build binary + register skills
+cd "$SKILL_DIR" && ./setup
 ```
 3. If `bun` is not installed, tell the user to install it: `curl -fsSL https://bun.sh/install | bash`
 
@@ -53,7 +53,7 @@ Once setup is done, it never needs to run again (the compiled binary persists ac
 
 ## IMPORTANT
 
-- Use the compiled binary via Bash: `.claude/skills/gstack-browse/dist/browse` (project) or `~/.claude/skills/gstack-browse/dist/browse` (user).
+- Use the compiled binary via Bash: `.claude/skills/gstack/browse/dist/browse` (project) or `~/.claude/skills/gstack/browse/dist/browse` (user).
 - NEVER use `mcp__claude-in-chrome__*` tools. They are slow and unreliable.
 - The browser persists between calls — cookies, tabs, and state carry over.
 - The server auto-starts on first command. No setup needed.
@@ -61,7 +61,7 @@ Once setup is done, it never needs to run again (the compiled binary persists ac
 ## Quick Reference
 
 ```bash
-B=~/.claude/skills/gstack-browse/dist/browse
+B=~/.claude/skills/gstack/browse/dist/browse
 
 # Navigate to a page
 $B goto https://example.com
@@ -72,16 +72,25 @@ $B text
 # Take a screenshot (then Read the image)
 $B screenshot /tmp/page.png
 
+# Snapshot: accessibility tree with refs
+$B snapshot -i
+
+# Click by ref (after snapshot)
+$B click @e3
+
+# Fill by ref
+$B fill @e4 "test@test.com"
+
 # Run JavaScript
 $B js "document.title"
 
 # Get all links
 $B links
 
-# Click something
+# Click by CSS selector
 $B click "button.submit"
 
-# Fill a form
+# Fill a form by CSS selector
 $B fill "#email" "test@test.com"
 $B fill "#password" "abc123"
 $B click "button[type=submit]"
@@ -129,9 +138,30 @@ browse forms              All forms + fields as JSON
 browse accessibility      Accessibility tree snapshot (ARIA)
 ```
 
+### Snapshot (ref-based element selection)
+```
+browse snapshot           Full accessibility tree with @refs
+browse snapshot -i        Interactive elements only (buttons, links, inputs)
+browse snapshot -c        Compact (no empty structural elements)
+browse snapshot -d <N>    Limit depth to N levels
+browse snapshot -s <sel>  Scope to CSS selector
+```
+
+After snapshot, use @refs as selectors in any command:
+```
+browse click @e3          Click the element assigned ref @e3
+browse fill @e4 "value"   Fill the input assigned ref @e4
+browse hover @e1          Hover the element assigned ref @e1
+browse html @e2           Get innerHTML of ref @e2
+browse css @e5 "color"    Get computed CSS of ref @e5
+browse attrs @e6          Get attributes of ref @e6
+```
+
+Refs are invalidated on navigation — run `snapshot` again after `goto`.
+
 ### Interaction
 ```
-browse click <selector>        Click element
+browse click <selector>        Click element (CSS selector or @ref)
 browse fill <selector> <value> Fill input field
 browse select <selector> <val> Select dropdown value
 browse hover <selector>        Hover over element
@@ -172,7 +202,7 @@ browse diff <url1> <url2>      Text diff between two pages
 
 ### Multi-step (chain)
 ```
-echo '[["goto","https://example.com"],["fill","#email","test@test.com"],["click","#submit"],["screenshot","/tmp/result.png"]]' | browse chain
+echo '[["goto","https://example.com"],["snapshot","-i"],["click","@e1"],["screenshot","/tmp/result.png"]]' | browse chain
 ```
 
 ### Tabs
@@ -193,27 +223,27 @@ browse restart                 Kill + restart server
 ## Speed Rules
 
 1. **Navigate once, query many times.** `goto` loads the page; then `text`, `js`, `css`, `screenshot` all run against the loaded page instantly.
-2. **Use `js` for precision.** `js "document.querySelector('.price').textContent"` is faster than parsing full page text.
-3. **Use `links` to survey.** Faster than `text` when you just need navigation structure.
-4. **Use `chain` for multi-step flows.** Avoids CLI overhead per step.
-5. **Use `responsive` for layout checks.** One command = 3 viewport screenshots.
+2. **Use `snapshot -i` for interaction.** Get refs for all interactive elements, then click/fill by ref. No need to guess CSS selectors.
+3. **Use `js` for precision.** `js "document.querySelector('.price').textContent"` is faster than parsing full page text.
+4. **Use `links` to survey.** Faster than `text` when you just need navigation structure.
+5. **Use `chain` for multi-step flows.** Avoids CLI overhead per step.
+6. **Use `responsive` for layout checks.** One command = 3 viewport screenshots.
 
 ## When to Use What
 
 | Task | Commands |
 |------|----------|
 | Read a page | `goto <url>` then `text` |
+| Interact with elements | `snapshot -i` then `click @e3` |
 | Check if element exists | `js "!!document.querySelector('.thing')"` |
 | Extract specific data | `js "document.querySelector('.price').textContent"` |
 | Visual check | `screenshot /tmp/x.png` then Read the image |
-| Fill and submit form | `fill "#email" "val"` → `click "#submit"` → `screenshot` |
-| Check CSS | `css "selector" "property"` |
-| Inspect DOM | `html "selector"` or `attrs "selector"` |
+| Fill and submit form | `snapshot -i` → `fill @e4 "val"` → `click @e5` → `screenshot` |
+| Check CSS | `css "selector" "property"` or `css @e3 "property"` |
+| Inspect DOM | `html "selector"` or `attrs @e3` |
 | Debug console errors | `console` |
 | Check network requests | `network` |
 | Check local dev | `goto http://127.0.0.1:3000` |
-| Check staging | `goto https://staging.garryslist.org` |
-| Check production | `goto https://garryslist.org` |
 | Compare two pages | `diff <url1> <url2>` |
 | Mobile layout check | `responsive /tmp/prefix` |
 | Multi-step flow | `echo '[...]' \| browse chain` |

@@ -41,7 +41,12 @@ export async function handleWriteCommand(
     case 'click': {
       const selector = args[0];
       if (!selector) throw new Error('Usage: browse click <selector>');
-      await page.click(selector, { timeout: 5000 });
+      const resolved = bm.resolveRef(selector);
+      if ('locator' in resolved) {
+        await resolved.locator.click({ timeout: 5000 });
+      } else {
+        await page.click(resolved.selector, { timeout: 5000 });
+      }
       // Wait briefly for any navigation/DOM update
       await page.waitForLoadState('domcontentloaded').catch(() => {});
       return `Clicked ${selector} → now at ${page.url()}`;
@@ -51,7 +56,12 @@ export async function handleWriteCommand(
       const [selector, ...valueParts] = args;
       const value = valueParts.join(' ');
       if (!selector || !value) throw new Error('Usage: browse fill <selector> <value>');
-      await page.fill(selector, value, { timeout: 5000 });
+      const resolved = bm.resolveRef(selector);
+      if ('locator' in resolved) {
+        await resolved.locator.fill(value, { timeout: 5000 });
+      } else {
+        await page.fill(resolved.selector, value, { timeout: 5000 });
+      }
       return `Filled ${selector}`;
     }
 
@@ -59,14 +69,24 @@ export async function handleWriteCommand(
       const [selector, ...valueParts] = args;
       const value = valueParts.join(' ');
       if (!selector || !value) throw new Error('Usage: browse select <selector> <value>');
-      await page.selectOption(selector, value, { timeout: 5000 });
+      const resolved = bm.resolveRef(selector);
+      if ('locator' in resolved) {
+        await resolved.locator.selectOption(value, { timeout: 5000 });
+      } else {
+        await page.selectOption(resolved.selector, value, { timeout: 5000 });
+      }
       return `Selected "${value}" in ${selector}`;
     }
 
     case 'hover': {
       const selector = args[0];
       if (!selector) throw new Error('Usage: browse hover <selector>');
-      await page.hover(selector, { timeout: 5000 });
+      const resolved = bm.resolveRef(selector);
+      if ('locator' in resolved) {
+        await resolved.locator.hover({ timeout: 5000 });
+      } else {
+        await page.hover(resolved.selector, { timeout: 5000 });
+      }
       return `Hovered ${selector}`;
     }
 
@@ -87,7 +107,12 @@ export async function handleWriteCommand(
     case 'scroll': {
       const selector = args[0];
       if (selector) {
-        await page.locator(selector).scrollIntoViewIfNeeded({ timeout: 5000 });
+        const resolved = bm.resolveRef(selector);
+        if ('locator' in resolved) {
+          await resolved.locator.scrollIntoViewIfNeeded({ timeout: 5000 });
+        } else {
+          await page.locator(resolved.selector).scrollIntoViewIfNeeded({ timeout: 5000 });
+        }
         return `Scrolled ${selector} into view`;
       }
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -98,7 +123,12 @@ export async function handleWriteCommand(
       const selector = args[0];
       if (!selector) throw new Error('Usage: browse wait <selector>');
       const timeout = args[1] ? parseInt(args[1], 10) : 15000;
-      await page.waitForSelector(selector, { timeout });
+      const resolved = bm.resolveRef(selector);
+      if ('locator' in resolved) {
+        await resolved.locator.waitFor({ state: 'visible', timeout });
+      } else {
+        await page.waitForSelector(resolved.selector, { timeout });
+      }
       return `Element ${selector} appeared`;
     }
 

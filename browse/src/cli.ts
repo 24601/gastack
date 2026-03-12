@@ -1,5 +1,5 @@
 /**
- * gstack-browse CLI — thin wrapper that talks to the persistent server
+ * gstack CLI — thin wrapper that talks to the persistent server
  *
  * Flow:
  *   1. Read /tmp/browse-server.json for port + token
@@ -22,7 +22,7 @@ const STATE_FILE = process.env.BROWSE_STATE_FILE || `/tmp/browse-server${INSTANC
 const SERVER_SCRIPT = process.env.BROWSE_SERVER_SCRIPT
   || (import.meta.dir.startsWith('/') && !import.meta.dir.includes('$bunfs')
     ? path.resolve(import.meta.dir, 'server.ts')
-    : path.resolve(process.env.HOME || '/tmp', '.claude/skills/gstack-browse/src/server.ts'));
+    : path.resolve(process.env.HOME || '/tmp', '.claude/skills/gstack/browse/src/server.ts'));
 const MAX_START_WAIT = 8000; // 8 seconds to start
 
 interface ServerState {
@@ -176,7 +176,7 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
-    console.log(`gstack-browse — Fast headless browser for AI coding agents
+    console.log(`gstack browse — Fast headless browser for AI coding agents
 
 Usage: browse <command> [args...]
 
@@ -189,11 +189,15 @@ Inspection:     js <expr> | eval <file> | css <sel> <prop> | attrs <sel>
                 console [--clear] | network [--clear]
                 cookies | storage [set <k> <v>] | perf
 Visual:         screenshot [path] | pdf [path] | responsive [prefix]
+Snapshot:       snapshot [-i] [-c] [-d N] [-s sel]
 Compare:        diff <url1> <url2>
 Multi-step:     chain (reads JSON from stdin)
 Tabs:           tabs | tab <id> | newtab [url] | closetab [id]
 Server:         status | cookie <n>=<v> | header <n>:<v>
-                useragent <str> | stop | restart`);
+                useragent <str> | stop | restart
+
+Refs:           After 'snapshot', use @e1, @e2... as selectors:
+                click @e3 | fill @e4 "value" | hover @e1`);
     process.exit(0);
   }
 

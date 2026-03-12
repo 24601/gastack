@@ -7,7 +7,7 @@
  *   We do NOT try to self-heal — don't hide failure.
  */
 
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page, type Locator } from 'playwright';
 import { addConsoleEntry, addNetworkEntry, networkBuffer, type LogEntry, type NetworkEntry } from './buffers';
 
 export class BrowserManager {
@@ -18,6 +18,9 @@ export class BrowserManager {
   private nextTabId: number = 1;
   private extraHeaders: Record<string, string> = {};
   private customUserAgent: string | null = null;
+
+  // ─── Ref Map (snapshot → @e1, @e2, ...) ────────────────────
+  private refMap: Map<string, Locator> = new Map();
 
   async launch() {
     this.browser = await chromium.launch({ headless: true });
@@ -139,6 +142,37 @@ export class BrowserManager {
     }
   }
 
+  // ─── Ref Map ──────────────────────────────────────────────
+  setRefMap(refs: Map<string, Locator>) {
+    this.refMap = refs;
+  }
+
+  clearRefs() {
+    this.refMap.clear();
+  }
+
+  /**
+   * Resolve a selector that may be a @ref (e.g., "@e3") or a CSS selector.
+   * Returns { locator } for refs or { selector } for CSS selectors.
+   */
+  resolveRef(selector: string): { locator: Locator } | { selector: string } {
+    if (selector.startsWith('@e')) {
+      const ref = selector.slice(1); // "e3"
+      const locator = this.refMap.get(ref);
+      if (!locator) {
+        throw new Error(
+          `Ref ${selector} not found. Page may have changed — run 'snapshot' to get fresh refs.`
+        );
+      }
+      return { locator };
+    }
+    return { selector };
+  }
+
+  getRefCount(): number {
+    return this.refMap.size;
+  }
+
   // ─── Viewport ──────────────────────────────────────────────
   async setViewport(width: number, height: number) {
     await this.getPage().setViewportSize({ width, height });
@@ -159,8 +193,15 @@ export class BrowserManager {
     this.customUserAgent = ua;
   }
 
-  // ─── Console/Network Wiring ────────────────────────────────
+  // ─── Console/Network/Ref Wiring ────────────────────────────
   private wirePageEvents(page: Page) {
+    // Clear ref map on navigation — refs point to stale elements after page change
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame()) {
+        this.clearRefs();
+      }
+    });
+
     page.on('console', (msg) => {
       addConsoleEntry({
         timestamp: Date.now(),
