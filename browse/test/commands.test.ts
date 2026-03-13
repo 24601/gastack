@@ -1365,3 +1365,134 @@ describe('Cookie import', () => {
     }
   });
 });
+
+// ─── Security: Redact sensitive values (PR #21) ─────────────────
+
+describe('Sensitive value redaction', () => {
+  test('type command does not echo typed text', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    const result = await handleWriteCommand('type', ['my-secret-password'], bm);
+    expect(result).not.toContain('my-secret-password');
+    expect(result).toContain('18 characters');
+  });
+
+  test('cookie command redacts value', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    const result = await handleWriteCommand('cookie', ['session=secret123'], bm);
+    expect(result).toContain('session');
+    expect(result).toContain('****');
+    expect(result).not.toContain('secret123');
+  });
+
+  test('header command redacts Authorization value', async () => {
+    const result = await handleWriteCommand('header', ['Authorization:Bearer token-xyz'], bm);
+    expect(result).toContain('Authorization');
+    expect(result).toContain('****');
+    expect(result).not.toContain('token-xyz');
+  });
+
+  test('header command shows non-sensitive values', async () => {
+    const result = await handleWriteCommand('header', ['Content-Type:application/json'], bm);
+    expect(result).toContain('Content-Type');
+    expect(result).toContain('application/json');
+    expect(result).not.toContain('****');
+  });
+
+  test('header command redacts X-API-Key', async () => {
+    const result = await handleWriteCommand('header', ['X-API-Key:sk-12345'], bm);
+    expect(result).toContain('X-API-Key');
+    expect(result).toContain('****');
+    expect(result).not.toContain('sk-12345');
+  });
+
+  test('storage set does not echo value', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    const result = await handleReadCommand('storage', ['set', 'apiKey', 'secret-api-key-value'], bm);
+    expect(result).toContain('apiKey');
+    expect(result).not.toContain('secret-api-key-value');
+  });
+
+  test('forms redacts password field values', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/forms.html'], bm);
+    const formsResult = await handleReadCommand('forms', [], bm);
+    const forms = JSON.parse(formsResult);
+    // Find password fields and verify they're redacted
+    for (const form of forms) {
+      for (const field of form.fields) {
+        if (field.type === 'password') {
+          expect(field.value === undefined || field.value === '[redacted]').toBe(true);
+        }
+      }
+    }
+  });
+});
+
+// ─── Security: Path traversal prevention (PR #26) ───────────────
+
+describe('Path traversal prevention', () => {
+  test('screenshot rejects path outside safe dirs', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    try {
+      await handleMetaCommand('screenshot', ['/etc/evil.png'], bm, () => {});
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Path must be within');
+    }
+  });
+
+  test('screenshot allows /tmp path', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    const result = await handleMetaCommand('screenshot', ['/tmp/test-safe.png'], bm, () => {});
+    expect(result).toContain('Screenshot saved');
+    try { fs.unlinkSync('/tmp/test-safe.png'); } catch {}
+  });
+
+  test('pdf rejects path outside safe dirs', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    try {
+      await handleMetaCommand('pdf', ['/home/evil.pdf'], bm, () => {});
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Path must be within');
+    }
+  });
+
+  test('responsive rejects path outside safe dirs', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    try {
+      await handleMetaCommand('responsive', ['/var/evil'], bm, () => {});
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Path must be within');
+    }
+  });
+
+  test('eval rejects path traversal with ..', async () => {
+    try {
+      await handleReadCommand('eval', ['../../etc/passwd'], bm);
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Path traversal');
+    }
+  });
+
+  test('eval rejects absolute path outside safe dirs', async () => {
+    try {
+      await handleReadCommand('eval', ['/etc/passwd'], bm);
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Absolute path must be within');
+    }
+  });
+
+  test('eval allows /tmp path', async () => {
+    const tmpFile = '/tmp/test-eval-safe.js';
+    fs.writeFileSync(tmpFile, 'document.title');
+    try {
+      const result = await handleReadCommand('eval', [tmpFile], bm);
+      expect(typeof result).toBe('string');
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
+  });
+});

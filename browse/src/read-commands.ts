@@ -9,6 +9,23 @@ import type { BrowserManager } from './browser-manager';
 import { consoleBuffer, networkBuffer, dialogBuffer } from './buffers';
 import type { Page } from 'playwright';
 import * as fs from 'fs';
+import * as path from 'path';
+
+// Security: Path validation to prevent path traversal attacks
+const SAFE_DIRECTORIES = ['/tmp', process.cwd()];
+
+function validateReadPath(filePath: string): void {
+  if (path.isAbsolute(filePath)) {
+    const isSafe = SAFE_DIRECTORIES.some(dir => path.resolve(filePath).startsWith(dir));
+    if (!isSafe) {
+      throw new Error(`Absolute path must be within: ${SAFE_DIRECTORIES.join(', ')}`);
+    }
+  }
+  const normalized = path.normalize(filePath);
+  if (normalized.includes('..')) {
+    throw new Error('Path traversal sequences (..) are not allowed');
+  }
+}
 
 /**
  * Extract clean text from a page (strips script/style/noscript/svg).
@@ -74,7 +91,7 @@ export async function handleReadCommand(
               id: input.id || undefined,
               placeholder: input.placeholder || undefined,
               required: input.required || undefined,
-              value: input.value || undefined,
+              value: input.type === 'password' ? '[redacted]' : (input.value || undefined),
               options: el.tagName === 'SELECT'
                 ? [...(el as HTMLSelectElement).options].map(o => ({ value: o.value, text: o.text }))
                 : undefined,
@@ -107,6 +124,7 @@ export async function handleReadCommand(
     case 'eval': {
       const filePath = args[0];
       if (!filePath) throw new Error('Usage: browse eval <js-file>');
+      validateReadPath(filePath);
       if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
       const code = fs.readFileSync(filePath, 'utf-8');
       const result = await page.evaluate(code);
@@ -238,7 +256,7 @@ export async function handleReadCommand(
         const key = args[1];
         const value = args[2] || '';
         await page.evaluate(([k, v]) => localStorage.setItem(k, v), [key, value]);
-        return `Set localStorage["${key}"] = "${value}"`;
+        return `Set localStorage["${key}"]`;
       }
       const storage = await page.evaluate(() => ({
         localStorage: { ...localStorage },
