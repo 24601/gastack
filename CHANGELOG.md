@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.2 — 2026-03-13
+
+### Fixed
+- Cookie import picker now returns JSON instead of HTML — `jsonResponse()` referenced `url` out of scope, crashing every API call
+- `help` command routed correctly (was unreachable due to META_COMMANDS dispatch ordering)
+
+### Added
+- `help` command — agents can self-discover all commands and snapshot flags
+- Version-aware `find-browse` with META signal protocol — detects stale binaries and prompts agents to update
+- `browse/dist/find-browse` compiled binary with git SHA comparison against origin/main (4hr cached)
+- `.version` file written at build time for binary version tracking
+- Route-level tests for cookie picker (13 tests) and find-browse version check (10 tests)
+
+### Changed
+- SKILL.md setup checks parse META signals and handle `META:UPDATE_AVAILABLE`
+- `jsonResponse`/`errorResponse` use options objects to prevent positional parameter confusion
+- Build script compiles both `browse` and `find-browse` binaries, cleans up `.bun-build` temp files
+
 ## 0.3.1 — 2026-03-12
 
 ### Phase 3.5: Browser cookie import
