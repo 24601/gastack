@@ -20,6 +20,7 @@ const CHAIN_WRITE = new Set([
   'click', 'fill', 'select', 'hover', 'type', 'press', 'scroll', 'wait',
   'viewport', 'cookie', 'header', 'useragent',
   'upload', 'dialog-accept', 'dialog-dismiss',
+  'cookie-import-browser',
 ]);
 const CHAIN_META = new Set([
   'tabs', 'tab', 'newtab', 'closetab',

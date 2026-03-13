@@ -12,6 +12,7 @@ import { BrowserManager } from './browser-manager';
 import { handleReadCommand } from './read-commands';
 import { handleWriteCommand } from './write-commands';
 import { handleMetaCommand } from './meta-commands';
+import { handleCookiePickerRoute } from './cookie-picker-routes';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -115,7 +116,7 @@ export const READ_COMMANDS = new Set([
 export const WRITE_COMMANDS = new Set([
   'goto', 'back', 'forward', 'reload',
   'click', 'fill', 'select', 'hover', 'type', 'press', 'scroll', 'wait',
-  'viewport', 'cookie', 'cookie-import', 'header', 'useragent',
+  'viewport', 'cookie', 'cookie-import', 'cookie-import-browser', 'header', 'useragent',
   'upload', 'dialog-accept', 'dialog-dismiss',
 ]);
 
@@ -264,6 +265,11 @@ async function start() {
 
       const url = new URL(req.url);
 
+      // Cookie picker routes — no auth required (localhost-only)
+      if (url.pathname.startsWith('/cookie-picker')) {
+        return handleCookiePickerRoute(url, req, browserManager);
+      }
+
       // Health check — no auth required (now async)
       if (url.pathname === '/health') {
         const healthy = await browserManager.isHealthy();
@@ -305,6 +311,7 @@ async function start() {
   };
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), { mode: 0o600 });
 
+  browserManager.serverPort = port;
   console.log(`[browse] Server running on http://127.0.0.1:${port} (PID: ${process.pid})`);
   console.log(`[browse] State file: ${STATE_FILE}`);
   console.log(`[browse] Idle timeout: ${IDLE_TIMEOUT_MS / 1000}s`);

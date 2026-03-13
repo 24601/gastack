@@ -27,6 +27,9 @@ export class BrowserManager {
   private extraHeaders: Record<string, string> = {};
   private customUserAgent: string | null = null;
 
+  /** Server port — set after server starts, used by cookie-import-browser command */
+  public serverPort: number = 0;
+
   // ─── Ref Map (snapshot → @e1, @e2, @c1, @c2, ...) ────────
   private refMap: Map<string, Locator> = new Map();
 
