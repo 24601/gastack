@@ -4,21 +4,25 @@ Thanks for wanting to make gstack better. Whether you're fixing a typo in a skil
 
 ## Quick start
 
+gstack skills are Markdown files that Claude Code discovers from a `skills/` directory. Normally they live at `~/.claude/skills/gstack/` (your global install). But when you're developing gstack itself, you want Claude Code to use the skills *in your working tree* — so edits take effect instantly without copying or deploying anything.
+
+That's what dev mode does. It symlinks your repo into the local `.claude/skills/` directory so Claude Code reads skills straight from your checkout.
+
 ```bash
-bin/dev-setup      # activate dev mode — skills resolve from your working tree
+git clone <repo> && cd gstack
+bun install                    # install dependencies
+bin/dev-setup                  # activate dev mode
 ```
 
-That's it. Edit any `SKILL.md`, run the skill in Claude Code (e.g. `/review`), and your changes take effect immediately. No copying, no deploying, no restarting.
-
-When you're done:
+Now edit any `SKILL.md`, invoke it in Claude Code (e.g. `/review`), and see your changes live. When you're done developing:
 
 ```bash
-bin/dev-teardown   # deactivate — back to your global install
+bin/dev-teardown               # deactivate — back to your global install
 ```
 
 ## How dev mode works
 
-Claude Code discovers skills from `.claude/skills/` (project-local) or `~/.claude/skills/` (global). `bin/dev-setup` creates a local `.claude/skills/` with symlinks pointing back to your working tree, so Claude Code picks up your edits live.
+`bin/dev-setup` creates a `.claude/skills/` directory inside the repo (gitignored) and fills it with symlinks pointing back to your working tree. Claude Code sees the local `skills/` first, so your edits win over the global install.
 
 ```
 gstack/                          <- your working tree
