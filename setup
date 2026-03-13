@@ -4,14 +4,41 @@ set -e
 
 GSTACK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_DIR="$(dirname "$GSTACK_DIR")"
+BROWSE_BIN="$GSTACK_DIR/browse/dist/browse"
+
+ensure_playwright_browser() {
+  (
+    cd "$GSTACK_DIR"
+    bun --eval 'import { chromium } from "playwright"; const browser = await chromium.launch(); await browser.close();'
+  ) >/dev/null 2>&1
+}
 
 # 1. Build browse binary if needed
-if [ ! -x "$GSTACK_DIR/browse/dist/browse" ]; then
+if [ ! -x "$BROWSE_BIN" ]; then
   echo "Building browse binary..."
   cd "$GSTACK_DIR" && bun install && bun run build
 fi
 
-# 2. Only create skill symlinks if we're inside a .claude/skills directory
+if [ ! -x "$BROWSE_BIN" ]; then
+  echo "gstack setup failed: browse binary not found at $BROWSE_BIN" >&2
+  exit 1
+fi
+
+# 2. Ensure Playwright's Chromium is available
+if ! ensure_playwright_browser; then
+  echo "Installing Playwright Chromium..."
+  (
+    cd "$GSTACK_DIR"
+    bunx playwright install chromium
+  )
+fi
+
+if ! ensure_playwright_browser; then
+  echo "gstack setup failed: Playwright Chromium could not be launched" >&2
+  exit 1
+fi
+
+# 3. Only create skill symlinks if we're inside a .claude/skills directory
 SKILLS_BASENAME="$(basename "$SKILLS_DIR")"
 if [ "$SKILLS_BASENAME" = "skills" ]; then
   linked=()
