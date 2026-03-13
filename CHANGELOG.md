@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1 — 2026-03-12
+
+### Phase 3.5: Browser cookie import
+
+- `cookie-import-browser` command — decrypt and import cookies from real Chromium browsers (Comet, Chrome, Arc, Brave, Edge)
+- Interactive cookie picker web UI served from the browse server (dark theme, two-panel layout, domain search, import/remove)
+- Direct CLI import with `--domain` flag for non-interactive use
+- `/setup-browser-cookies` skill for Claude Code integration
+- macOS Keychain access with async 10s timeout (no event loop blocking)
+- Per-browser AES key caching (one Keychain prompt per browser per session)
+- DB lock fallback: copies locked cookie DB to /tmp for safe reads
+- 18 unit tests with encrypted cookie fixtures
+
 ## 0.3.0 — 2026-03-12
 
 ### Phase 3: /qa skill — systematic QA testing
