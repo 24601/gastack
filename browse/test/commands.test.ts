@@ -8,6 +8,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { startTestServer } from './test-server';
 import { BrowserManager } from '../src/browser-manager';
+import { resolveServerScript } from '../src/cli';
 import { handleReadCommand } from '../src/read-commands';
 import { handleWriteCommand } from '../src/write-commands';
 import { handleMetaCommand } from '../src/meta-commands';
@@ -420,34 +421,74 @@ describe('Status', () => {
   });
 });
 
-// ─── CLI retry guard ────────────────────────────────────────────
+// ─── CLI server script resolution ───────────────────────────────
 
-describe('CLI retry guard', () => {
-  test('sendCommand aborts after repeated connection failures', async () => {
-    // Use an isolated state file to avoid conflicts with running servers
-    const stateFile = '/tmp/browse-server-test-retry.json';
-    fs.writeFileSync(stateFile, JSON.stringify({ port: 1, token: 'fake', pid: 999999 }));
+describe('CLI server script resolution', () => {
+  test('prefers adjacent browse/src/server.ts for compiled project installs', () => {
+    const root = fs.mkdtempSync('/tmp/gstack-cli-');
+    const execPath = path.join(root, '.claude/skills/gstack/browse/dist/browse');
+    const serverPath = path.join(root, '.claude/skills/gstack/browse/src/server.ts');
+
+    fs.mkdirSync(path.dirname(execPath), { recursive: true });
+    fs.mkdirSync(path.dirname(serverPath), { recursive: true });
+    fs.writeFileSync(serverPath, '// test server\n');
+
+    const resolved = resolveServerScript(
+      { HOME: path.join(root, 'empty-home') },
+      '$bunfs/root',
+      execPath
+    );
+
+    expect(resolved).toBe(serverPath);
+
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
+// ─── CLI lifecycle ──────────────────────────────────────────────
+
+describe('CLI lifecycle', () => {
+  test('dead state file triggers a clean restart', async () => {
+    const stateFile = `/tmp/browse-test-state-${Date.now()}.json`;
+    fs.writeFileSync(stateFile, JSON.stringify({
+      port: 1,
+      token: 'fake',
+      pid: 999999,
+    }));
 
     const cliPath = path.resolve(__dirname, '../src/cli.ts');
-    const result = await new Promise<{ code: number; stderr: string }>((resolve) => {
+    // Build env without CONDUCTOR_PORT/BROWSE_PORT so BROWSE_PORT_START takes effect
+    const cliEnv: Record<string, string> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (k !== 'CONDUCTOR_PORT' && k !== 'BROWSE_PORT' && v !== undefined) cliEnv[k] = v;
+    }
+    cliEnv.BROWSE_STATE_FILE = stateFile;
+    // Use a random high port to avoid conflicts with running servers
+    cliEnv.BROWSE_PORT_START = String(9600 + Math.floor(Math.random() * 100));
+    const result = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
       const proc = spawn('bun', ['run', cliPath, 'status'], {
         timeout: 15000,
-        env: {
-          ...process.env,
-          BROWSE_STATE_FILE: stateFile,
-          BROWSE_PORT: '1', // Force port 1 (will fail)
-        },
+        env: cliEnv,
       });
+      let stdout = '';
       let stderr = '';
+      proc.stdout.on('data', (d) => stdout += d.toString());
       proc.stderr.on('data', (d) => stderr += d.toString());
-      proc.on('close', (code) => resolve({ code: code ?? 1, stderr }));
+      proc.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
     });
 
-    // Clean up
-    try { fs.unlinkSync(stateFile); } catch {}
+    let restartedPid: number | null = null;
+    if (fs.existsSync(stateFile)) {
+      restartedPid = JSON.parse(fs.readFileSync(stateFile, 'utf-8')).pid;
+      fs.unlinkSync(stateFile);
+    }
+    if (restartedPid) {
+      try { process.kill(restartedPid, 'SIGTERM'); } catch {}
+    }
 
-    // Should fail, not loop forever
-    expect(result.code).not.toBe(0);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Status: healthy');
+    expect(result.stderr).toContain('Starting server');
   }, 20000);
 });
 
