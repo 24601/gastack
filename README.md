@@ -85,6 +85,16 @@ You already use Claude Code heavily and want consistent, high-rigor workflows in
 
 This is not a prompt pack for beginners. It is an operating system for people who ship.
 
+## How to fly: 10 sessions at once
+
+gstack is powerful with one Claude Code session. It is transformative with ten.
+
+[Conductor](https://conductor.build) runs multiple Claude Code sessions in parallel — each in its own isolated workspace. That means you can have one session running `/qa` on staging, another doing `/review` on a PR, a third implementing a feature, and seven more working on other branches. All at the same time.
+
+gstack is Conductor-aware out of the box. Each workspace gets its own isolated browser instance (separate Chromium process, cookies, tabs, and logs) so `/browse` and `/qa` sessions never collide. No configuration needed — it just works.
+
+This is the setup I use. One person, ten parallel agents, each with the right cognitive mode for its task. That is not incremental improvement. That is a different way of building software.
+
 ## Install
 
 **Requirements:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Git](https://git-scm.com/), [Bun](https://bun.sh/) v1.0+. `/browse` compiles a native binary — works on macOS and Linux (x64 and arm64).
