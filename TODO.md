@@ -103,6 +103,7 @@
   - [ ] Trend tracking across QA runs — compare baseline.json over time, detect regressions (P2, S)
   - [ ] CI/CD integration — `/qa` as GitHub Action step, fail PR if health score drops (P2, M)
   - [ ] Accessibility audit mode — `--a11y` flag for focused accessibility testing (P3, S)
+  - [ ] Greptile training feedback loop — export suppression patterns to Greptile team for model improvement (P3, S)
 
 ## Ideas & Notes
   - Browser is the nervous system — every skill should be able to see, interact with, and verify the web
