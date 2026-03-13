@@ -16,7 +16,8 @@ const SAFE_DIRECTORIES = ['/tmp', process.cwd()];
 
 function validateReadPath(filePath: string): void {
   if (path.isAbsolute(filePath)) {
-    const isSafe = SAFE_DIRECTORIES.some(dir => path.resolve(filePath).startsWith(dir));
+    const resolved = path.resolve(filePath);
+    const isSafe = SAFE_DIRECTORIES.some(dir => resolved === dir || resolved.startsWith(dir + '/'));
     if (!isSafe) {
       throw new Error(`Absolute path must be within: ${SAFE_DIRECTORIES.join(', ')}`);
     }

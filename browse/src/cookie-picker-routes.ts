@@ -31,7 +31,7 @@ function jsonResponse(data: any, status = 200): Response {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': `http://127.0.0.1:${parseInt(url.port, 10) || 9400}`,
     },
   });
 }
@@ -54,7 +54,7 @@ export async function handleCookiePickerRoute(
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': `http://127.0.0.1:${parseInt(url.port, 10) || 9400}`,
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       },

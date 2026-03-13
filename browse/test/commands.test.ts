@@ -1495,4 +1495,32 @@ describe('Path traversal prevention', () => {
       try { fs.unlinkSync(tmpFile); } catch {}
     }
   });
+
+  test('screenshot rejects /tmpevil prefix collision', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    try {
+      await handleMetaCommand('screenshot', ['/tmpevil/steal.png'], bm, () => {});
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Path must be within');
+    }
+  });
+
+  test('cookie-import rejects path traversal', async () => {
+    try {
+      await handleWriteCommand('cookie-import', ['../../etc/shadow'], bm);
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Path traversal');
+    }
+  });
+
+  test('cookie-import rejects absolute path outside safe dirs', async () => {
+    try {
+      await handleWriteCommand('cookie-import', ['/etc/passwd'], bm);
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Path must be within');
+    }
+  });
 });

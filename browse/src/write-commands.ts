@@ -236,6 +236,17 @@ export async function handleWriteCommand(
     case 'cookie-import': {
       const filePath = args[0];
       if (!filePath) throw new Error('Usage: browse cookie-import <json-file>');
+      // Path validation — prevent reading arbitrary files
+      if (path.isAbsolute(filePath)) {
+        const safeDirs = ['/tmp', process.cwd()];
+        const resolved = path.resolve(filePath);
+        if (!safeDirs.some(dir => resolved === dir || resolved.startsWith(dir + '/'))) {
+          throw new Error(`Path must be within: ${safeDirs.join(', ')}`);
+        }
+      }
+      if (path.normalize(filePath).includes('..')) {
+        throw new Error('Path traversal sequences (..) are not allowed');
+      }
       if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
       const raw = fs.readFileSync(filePath, 'utf-8');
       let cookies: any[];
