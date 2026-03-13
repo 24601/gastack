@@ -30,7 +30,7 @@ const CHAIN_READ = new Set([
 const CHAIN_WRITE = new Set([
   'goto', 'back', 'forward', 'reload',
   'click', 'fill', 'select', 'hover', 'type', 'press', 'scroll', 'wait',
-  'viewport', 'cookie', 'header', 'useragent',
+  'viewport', 'cookie', 'cookie-import', 'header', 'useragent',
   'upload', 'dialog-accept', 'dialog-dismiss',
   'cookie-import-browser',
 ]);

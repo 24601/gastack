@@ -241,7 +241,7 @@ function openDb(dbPath: string, browserName: string): Database {
 }
 
 function openDbFromCopy(dbPath: string, browserName: string): Database {
-  const tmpPath = `/tmp/browse-cookies-${browserName.toLowerCase()}.db`;
+  const tmpPath = `/tmp/browse-cookies-${browserName.toLowerCase()}-${crypto.randomUUID()}.db`;
   try {
     fs.copyFileSync(dbPath, tmpPath);
     // Also copy WAL and SHM if they exist (for consistent reads)

@@ -1523,4 +1523,38 @@ describe('Path traversal prevention', () => {
       expect(err.message).toContain('Path must be within');
     }
   });
+
+  test('snapshot -a -o rejects path outside safe dirs', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    // First get a snapshot so refs exist
+    await handleMetaCommand('snapshot', ['-i'], bm, () => {});
+    try {
+      await handleMetaCommand('snapshot', ['-a', '-o', '/etc/evil.png'], bm, () => {});
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toContain('Path must be within');
+    }
+  });
+});
+
+// ─── Chain command: cookie-import in chain ──────────────────────
+
+describe('Chain with cookie-import', () => {
+  test('cookie-import works inside chain', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    const tmpCookies = '/tmp/test-chain-cookies.json';
+    fs.writeFileSync(tmpCookies, JSON.stringify([
+      { name: 'chain_test', value: 'chain_value', domain: 'localhost', path: '/' }
+    ]));
+    try {
+      const commands = JSON.stringify([
+        ['cookie-import', tmpCookies],
+      ]);
+      const result = await handleMetaCommand('chain', [commands], bm, async () => {});
+      expect(result).toContain('[cookie-import]');
+      expect(result).toContain('Loaded 1 cookie');
+    } finally {
+      try { fs.unlinkSync(tmpCookies); } catch {}
+    }
+  });
 });
