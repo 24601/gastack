@@ -71,3 +71,80 @@ describe('gen-skill-docs', () => {
     expect(browseTmpl).toContain('{{SNAPSHOT_FLAGS}}');
   });
 });
+
+/**
+ * Quality evals — catch description regressions.
+ *
+ * These test that generated output is *useful for an AI agent*,
+ * not just structurally valid. Each test targets a specific
+ * regression we actually shipped and caught in review.
+ */
+describe('description quality evals', () => {
+  // Regression: snapshot flags lost value hints (-d <N>, -s <sel>, -o <path>)
+  test('snapshot flags with values include value hints in output', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
+    for (const flag of SNAPSHOT_FLAGS) {
+      if (flag.takesValue) {
+        expect(flag.valueHint).toBeDefined();
+        expect(content).toContain(`${flag.short} ${flag.valueHint}`);
+      }
+    }
+  });
+
+  // Regression: "is" lost the valid states enum
+  test('is command lists valid state values', () => {
+    const desc = COMMAND_DESCRIPTIONS['is'].description;
+    for (const state of ['visible', 'hidden', 'enabled', 'disabled', 'checked', 'editable', 'focused']) {
+      expect(desc).toContain(state);
+    }
+  });
+
+  // Regression: "press" lost common key examples
+  test('press command lists example keys', () => {
+    const desc = COMMAND_DESCRIPTIONS['press'].description;
+    expect(desc).toContain('Enter');
+    expect(desc).toContain('Tab');
+    expect(desc).toContain('Escape');
+  });
+
+  // Regression: "console" lost --errors filter note
+  test('console command describes --errors behavior', () => {
+    const desc = COMMAND_DESCRIPTIONS['console'].description;
+    expect(desc).toContain('--errors');
+  });
+
+  // Regression: snapshot -i lost "@e refs" context
+  test('snapshot -i mentions @e refs', () => {
+    const flag = SNAPSHOT_FLAGS.find(f => f.short === '-i')!;
+    expect(flag.description).toContain('@e');
+  });
+
+  // Regression: snapshot -C lost "@c refs" context
+  test('snapshot -C mentions @c refs', () => {
+    const flag = SNAPSHOT_FLAGS.find(f => f.short === '-C')!;
+    expect(flag.description).toContain('@c');
+  });
+
+  // Guard: every description must be at least 8 chars (catches empty or stub descriptions)
+  test('all command descriptions have meaningful length', () => {
+    for (const [cmd, meta] of Object.entries(COMMAND_DESCRIPTIONS)) {
+      expect(meta.description.length).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  // Guard: snapshot flag descriptions must be at least 10 chars
+  test('all snapshot flag descriptions have meaningful length', () => {
+    for (const flag of SNAPSHOT_FLAGS) {
+      expect(flag.description.length).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  // Guard: generated output uses → not ->
+  test('generated SKILL.md uses unicode arrows', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
+    // Check the Tips section specifically (where we regressed -> from →)
+    const tipsSection = content.slice(content.indexOf('## Tips'));
+    expect(tipsSection).toContain('→');
+    expect(tipsSection).not.toContain('->');
+  });
+});
