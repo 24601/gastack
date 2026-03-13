@@ -1,6 +1,7 @@
 node_modules/
 browse/dist/
 .gstack/
+.claude/
 /tmp/
 *.log
 bun.lock
