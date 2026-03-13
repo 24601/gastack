@@ -8,10 +8,15 @@
     "browse": "./browse/dist/browse"
   },
   "scripts": {
-    "build": "bun build --compile browse/src/cli.ts --outfile browse/dist/browse",
+    "build": "bun run gen:skill-docs && bun build --compile browse/src/cli.ts --outfile browse/dist/browse",
+    "gen:skill-docs": "bun run scripts/gen-skill-docs.ts",
     "dev": "bun run browse/src/cli.ts",
     "server": "bun run browse/src/server.ts",
-    "test": "bun test",
+    "test": "bun test browse/test/ test/ --ignore test/skill-e2e.test.ts",
+    "test:e2e": "SKILL_E2E=1 bun test test/skill-e2e.test.ts",
+    "test:all": "bun test browse/test/ test/ --ignore test/skill-e2e.test.ts && SKILL_E2E=1 bun test test/skill-e2e.test.ts",
+    "skill:check": "bun run scripts/skill-check.ts",
+    "dev:skill": "bun run scripts/dev-skill.ts",
     "start": "bun run browse/src/server.ts"
   },
   "dependencies": {
@@ -30,5 +35,8 @@
     "claude",
     "ai-agent",
     "devtools"
-  ]
+  ],
+  "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.75"
+  }
 }
