@@ -15,9 +15,10 @@ This document covers the command reference and internals of gstack's headless br
 | Compare | `diff <url1> <url2>` | Spot differences between environments |
 | Dialogs | `dialog-accept [text]`, `dialog-dismiss` | Control alert/confirm/prompt handling |
 | Tabs | `tabs`, `tab`, `newtab`, `closetab` | Multi-page workflows |
+| Cookies | `cookie-import`, `cookie-import-browser` | Import cookies from file or real browser |
 | Multi-step | `chain` (JSON from stdin) | Batch commands in one call |
 
-All selector arguments accept CSS selectors, `@e` refs after `snapshot`, or `@c` refs after `snapshot -C`. 50+ commands total.
+All selector arguments accept CSS selectors, `@e` refs after `snapshot`, or `@c` refs after `snapshot -C`. 50+ commands total plus cookie import.
 
 ## How it works
 
@@ -65,6 +66,9 @@ browse/
 │   ├── read-commands.ts    # Non-mutating commands (text, html, links, js, css, is, dialog, etc.)
 │   ├── write-commands.ts   # Mutating commands (click, fill, select, upload, dialog-accept, etc.)
 │   ├── meta-commands.ts    # Server management, chain, diff, snapshot routing
+│   ├── cookie-import-browser.ts  # Decrypt + import cookies from real Chromium browsers
+│   ├── cookie-picker-routes.ts   # HTTP routes for interactive cookie picker UI
+│   ├── cookie-picker-ui.ts       # Self-contained HTML/CSS/JS for cookie picker
 │   └── buffers.ts          # CircularBuffer<T> + console/network/dialog capture
 ├── test/                   # Integration tests + HTML fixtures
 └── dist/
@@ -191,11 +195,12 @@ The compiled binary (`bun run build`) is only needed for distribution. It produc
 
 ```bash
 bun test                         # run all tests
-bun test browse/test/commands    # run command integration tests only
-bun test browse/test/snapshot    # run snapshot tests only
+bun test browse/test/commands              # run command integration tests only
+bun test browse/test/snapshot              # run snapshot tests only
+bun test browse/test/cookie-import-browser # run cookie import unit tests only
 ```
 
-Tests spin up a local HTTP server (`browse/test/test-server.ts`) serving HTML fixtures from `browse/test/fixtures/`, then exercise the CLI commands against those pages. 148 tests across 2 files, ~15 seconds total.
+Tests spin up a local HTTP server (`browse/test/test-server.ts`) serving HTML fixtures from `browse/test/fixtures/`, then exercise the CLI commands against those pages. 203 tests across 3 files, ~15 seconds total.
 
 ### Source map
 
@@ -208,6 +213,9 @@ Tests spin up a local HTTP server (`browse/test/test-server.ts`) serving HTML fi
 | `browse/src/read-commands.ts` | Non-mutating commands: `text`, `html`, `links`, `js`, `css`, `is`, `dialog`, `forms`, etc. Exports `getCleanText()`. |
 | `browse/src/write-commands.ts` | Mutating commands: `goto`, `click`, `fill`, `upload`, `dialog-accept`, `useragent` (with context recreation), etc. |
 | `browse/src/meta-commands.ts` | Server management, chain routing, diff (DRY via `getCleanText`), snapshot delegation. |
+| `browse/src/cookie-import-browser.ts` | Decrypt Chromium cookies via macOS Keychain + PBKDF2/AES-128-CBC. Auto-detects installed browsers. |
+| `browse/src/cookie-picker-routes.ts` | HTTP routes for `/cookie-picker/*` — browser list, domain search, import, remove. |
+| `browse/src/cookie-picker-ui.ts` | Self-contained HTML generator for the interactive cookie picker (dark theme, no frameworks). |
 | `browse/src/buffers.ts` | `CircularBuffer<T>` (O(1) ring buffer) + console/network/dialog capture with async disk flush. |
 
 ### Deploying to the active skill
