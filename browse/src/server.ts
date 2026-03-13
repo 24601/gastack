@@ -124,7 +124,7 @@ export const META_COMMANDS = new Set([
   'tabs', 'tab', 'newtab', 'closetab',
   'status', 'stop', 'restart',
   'screenshot', 'pdf', 'responsive',
-  'chain', 'diff',
+  'chain', 'diff', 'help',
   'url', 'snapshot',
 ]);
 
@@ -201,6 +201,34 @@ async function handleCommand(body: any): Promise<Response> {
       result = await handleWriteCommand(command, args, browserManager);
     } else if (META_COMMANDS.has(command)) {
       result = await handleMetaCommand(command, args, browserManager, shutdown);
+    } else if (command === 'help') {
+      const helpText = [
+        'gstack browse — headless browser for AI agents',
+        '',
+        'Commands:',
+        '  Navigation:    goto <url>, back, forward, reload',
+        '  Interaction:   click <sel>, fill <sel> <text>, select <sel> <val>, hover, type, press, scroll, wait',
+        '  Read:          text [sel], html [sel], links, forms, accessibility, cookies, storage, console, network, perf',
+        '  Evaluate:      js <expr>, eval <expr>, css <sel> <prop>, attrs <sel>, is <sel> <state>',
+        '  Snapshot:      snapshot [-i] [-c] [-d N] [-s sel] [-D] [-a] [-o path] [-C]',
+        '  Screenshot:    screenshot [path], pdf [path], responsive <widths>',
+        '  Tabs:          tabs, tab <id>, newtab [url], closetab [id]',
+        '  State:         cookie <set|get|clear>, cookie-import <json>, cookie-import-browser [browser]',
+        '  Headers:       header <set|clear> [name] [value], useragent [string]',
+        '  Upload:        upload <sel> <file1> [file2...]',
+        '  Dialogs:       dialog, dialog-accept [text], dialog-dismiss',
+        '  Meta:          status, stop, restart, diff, chain, help',
+        '',
+        'Snapshot flags:',
+        '  -i  interactive only    -c  compact (remove empty nodes)',
+        '  -d N  limit depth       -s sel  scope to CSS selector',
+        '  -D  diff vs previous    -a  annotated screenshot with ref labels',
+        '  -o path  output file    -C  cursor-interactive elements',
+      ].join('\n');
+      return new Response(helpText, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      });
     } else {
       return new Response(JSON.stringify({
         error: `Unknown command: ${command}`,
