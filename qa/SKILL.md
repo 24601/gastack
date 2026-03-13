@@ -31,12 +31,18 @@ You are a QA engineer. Test web applications like a real user — click everythi
 **Find the browse binary:**
 
 ```bash
-B=$(browse/bin/find-browse 2>/dev/null || ~/.claude/skills/gstack/browse/bin/find-browse 2>/dev/null)
+BROWSE_OUTPUT=$(browse/bin/find-browse 2>/dev/null || ~/.claude/skills/gstack/browse/bin/find-browse 2>/dev/null)
+B=$(echo "$BROWSE_OUTPUT" | head -1)
+META=$(echo "$BROWSE_OUTPUT" | grep "^META:" || true)
 if [ -z "$B" ]; then
   echo "ERROR: browse binary not found"
   exit 1
 fi
+echo "READY: $B"
+[ -n "$META" ] && echo "$META"
 ```
+
+If you see `META:UPDATE_AVAILABLE`: tell the user an update is available, STOP and wait for approval, then run the command from the META payload and re-run the setup check.
 
 **Create output directories:**
 
