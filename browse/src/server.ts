@@ -124,7 +124,7 @@ export const META_COMMANDS = new Set([
   'tabs', 'tab', 'newtab', 'closetab',
   'status', 'stop', 'restart',
   'screenshot', 'pdf', 'responsive',
-  'chain', 'diff', 'help',
+  'chain', 'diff',
   'url', 'snapshot',
 ]);
 
