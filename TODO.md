@@ -40,7 +40,14 @@
   - [x] `browse/bin/find-browse` (DRY binary discovery across skills)
   - [ ] Video recording (deferred to Phase 5 — recreateContext destroys page state)
 
-## Phase 3.5: Visual PR Annotations + S3 Upload
+## Phase 3.5: Browser Cookie Import (v0.3.x)
+  - [x] `cookie-import-browser` command (Chromium cookie DB decryption)
+  - [x] Cookie picker web UI (served from browse server)
+  - [x] `/setup-browser-cookies` skill
+  - [x] Unit tests with encrypted cookie fixtures (18 tests)
+  - [x] Browser registry (Comet, Chrome, Arc, Brave, Edge)
+
+## Phase 3.6: Visual PR Annotations + S3 Upload
   - [ ] `/setup-gstack-upload` skill (configure S3 bucket for image hosting)
   - [ ] `browse/bin/gstack-upload` helper (upload file to S3, return public URL)
   - [ ] `/ship` Step 7.5: visual verification with screenshots in PR body
@@ -70,6 +77,7 @@
     - Pass/fail with evidence
 
 ## Phase 5: State & Sessions
+  - [ ] v20 encryption format support (AES-256-GCM) — future Chromium versions may change from v10
   - [ ] Sessions (isolated browser instances with separate cookies/storage/history)
   - [ ] State persistence (save/load cookies + localStorage to JSON files)
   - [ ] Auth vault (encrypted credential storage, referenced by name, LLM never sees passwords)
@@ -91,6 +99,7 @@
   - [ ] CDP mode (connect to already-running Chrome/Electron apps)
 
 ## Future Ideas
+  - [ ] Linux/Windows cookie decryption (GNOME Keyring / kwallet / DPAPI)
   - [ ] Trend tracking across QA runs — compare baseline.json over time, detect regressions (P2, S)
   - [ ] CI/CD integration — `/qa` as GitHub Action step, fail PR if health score drops (P2, M)
   - [ ] Accessibility audit mode — `--a11y` flag for focused accessibility testing (P3, S)

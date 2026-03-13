@@ -158,6 +158,21 @@ $B dialog-accept "my answer"  # accept with text
 $B click "#rename-button"     # triggers prompt
 ```
 
+### Test authenticated pages (import real browser cookies)
+
+```bash
+# Import cookies from your real browser (opens interactive picker)
+$B cookie-import-browser
+
+# Or import a specific domain directly
+$B cookie-import-browser comet --domain .github.com
+
+# Now test authenticated pages
+$B goto https://github.com/settings/profile
+$B snapshot -i
+$B screenshot /tmp/github-profile.png
+```
+
 ### Compare two pages / environments
 
 ```bash
@@ -270,6 +285,7 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 | `wait --load` | Wait for page load event |
 | `upload <sel> <file...>` | Upload file(s) |
 | `cookie-import <json>` | Import cookies from JSON file |
+| `cookie-import-browser [browser] [--domain <d>]` | Import cookies from real browser (opens picker UI, or direct import with --domain) |
 | `dialog-accept [text]` | Auto-accept dialogs |
 | `dialog-dismiss` | Auto-dismiss dialogs |
 | `viewport <WxH>` | Set viewport size |
