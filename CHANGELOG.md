@@ -16,6 +16,10 @@
 - `bun run test:eval` for LLM-as-judge evals
 - `test/helpers/skill-parser.ts` — extracts and validates `$B` commands from Markdown
 - `test/helpers/session-runner.ts` — Agent SDK wrapper with error pattern scanning and transcript saving
+- **ARCHITECTURE.md** — design decisions document covering daemon model, security, ref system, logging, crash recovery
+- **Conductor integration** (`conductor.json`) — lifecycle hooks for workspace setup/teardown
+- **`.env` propagation** — `bin/dev-setup` copies `.env` from main worktree into Conductor workspaces automatically
+- `.env.example` template for API key configuration
 
 ### Changed
 - Build now runs `gen:skill-docs` before compiling binaries
