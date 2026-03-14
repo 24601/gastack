@@ -22,7 +22,7 @@ Eight opinionated workflow skills for [Claude Code](https://docs.anthropic.com/e
 | `/review` | Paranoid staff engineer | Find the bugs that pass CI but blow up in production. Triages Greptile review comments. |
 | `/ship` | Release engineer | Sync main, run tests, resolve Greptile reviews, push, open PR. For a ready branch, not for deciding what to build. |
 | `/browse` | QA engineer | Give the agent eyes. It logs in, clicks through your app, takes screenshots, catches breakage. Full QA pass in 60 seconds. |
-| `/qa` | QA lead | Systematic QA testing with structured reports, health scores, screenshots, and regression tracking. Three modes: full, quick, regression. |
+| `/qa` | QA lead | Systematic QA testing. On a feature branch, auto-analyzes your diff, identifies affected pages, and tests them. Also: full exploration, quick smoke test, regression mode. |
 | `/setup-browser-cookies` | Session manager | Import cookies from your real browser (Comet, Chrome, Arc, Brave, Edge) into the headless session. Test authenticated pages without logging in manually. |
 | `/retro` | Engineering manager | Team-aware retro: your deep-dive + per-person praise and growth opportunities for every contributor. |
 
@@ -63,6 +63,12 @@ You:   /ship
 
 Claude: [Syncs main, runs tests, pushes branch, opens PR — 6 tool calls, done]
 
+You:   /qa
+
+Claude: Analyzing branch diff... 8 files changed, 3 routes affected.
+        [Tests /listings/new, /listings/:id, /api/listings against localhost:3000]
+        All 3 routes working. Upload + enrichment flow passes end to end.
+
 You:   /setup-browser-cookies staging.myapp.com
 
 Claude: Imported 8 cookies for staging.myapp.com from Chrome.
@@ -71,12 +77,6 @@ You:   /qa https://staging.myapp.com --quick
 
 Claude: [Smoke test: homepage + 5 pages, 30 seconds]
         Health Score: 91/100. No critical issues. 1 medium: mobile nav overlap.
-
-You:   /browse staging.myapp.com/listings/new — test the upload flow specifically
-
-Claude: [22 tool calls — navigates routes, fills the upload form, verifies
-        enrichment renders, checks console for errors, screenshots each step]
-        Listing flow works end to end on staging.
 ```
 
 ## Who this is for
@@ -471,11 +471,31 @@ This is my **QA lead mode**.
 
 `/browse` gives the agent eyes. `/qa` gives it a testing methodology.
 
-Where `/browse` is a single command — go here, click this, screenshot that — `/qa` is a full systematic test pass. It explores every reachable page, fills forms, clicks buttons, checks console errors, tests responsive layouts, and produces a structured report with a health score, screenshots as evidence, and ranked issues with repro steps.
+The most common use case: you're on a feature branch, you just finished coding, and you want to verify everything works. Just say `/qa` — it reads your git diff, identifies which pages and routes your changes affect, spins up the browser, and tests each one. No URL required. No manual test plan. It figures out what to test from the code you changed.
 
-Three modes:
+```
+You:   /qa
 
-- **Full** (default) — systematic exploration of the entire app. 5-15 minutes depending on app size. Documents 5-10 well-evidenced issues.
+Claude: Analyzing branch diff against main...
+        12 files changed: 3 controllers, 2 views, 4 services, 3 tests
+
+        Affected routes: /listings/new, /listings/:id, /api/listings
+        Detected app running on localhost:3000.
+
+        [Tests each affected page — navigates, fills forms, clicks buttons,
+        screenshots, checks console errors]
+
+        QA Report: 3 routes tested, all working.
+        - /listings/new: upload + enrichment flow works end to end
+        - /listings/:id: detail page renders correctly
+        - /api/listings: returns 200 with expected shape
+        No console errors. No regressions on adjacent pages.
+```
+
+Four modes:
+
+- **Diff-aware** (automatic on feature branches) — reads `git diff main`, identifies affected pages, tests them specifically. The fastest path from "I just wrote code" to "it works."
+- **Full** — systematic exploration of the entire app. 5-15 minutes depending on app size. Documents 5-10 well-evidenced issues.
 - **Quick** (`--quick`) — 30-second smoke test. Homepage + top 5 nav targets. Loads? Console errors? Broken links?
 - **Regression** (`--regression baseline.json`) — run full mode, then diff against a previous baseline. Which issues are fixed? Which are new? What's the score delta?
 
