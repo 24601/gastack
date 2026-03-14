@@ -22,6 +22,22 @@
 - Old META-based upgrade instructions from qa and setup-browser-cookies SKILL.md files
 - Legacy `/tmp/gstack-latest-version` cache file (cleaned up by `setup` script)
 
+## Unreleased — 2026-03-14
+
+### Changed
+- Enriched 14 command descriptions with specific arg formats, valid values, error behavior, and return types
+- Fixed `header` usage from `<name> <value>` to `<name>:<value>` (matching actual implementation)
+- Added `cookie` usage syntax: `cookie <name>=<value>`
+- Enriched 4 snapshot flag descriptions with defaults, output paths, and behavior details
+- Snapshot flags section now shows long flag names (`-i / --interactive`) alongside short
+- Added ref numbering explanation and output format example to snapshot docs
+- Replaced hand-maintained server.ts help text with auto-generated `generateHelpText()` from COMMAND_DESCRIPTIONS
+- Upgraded LLM eval judge from Haiku to Sonnet 4.6 for more stable scoring
+
+### Added
+- Usage string consistency test: cross-checks `Usage:` patterns in implementation against COMMAND_DESCRIPTIONS
+- Pipe guard test: ensures no command description contains `|` (would break markdown tables)
+
 ## 0.3.3 — 2026-03-13
 
 ### Added
