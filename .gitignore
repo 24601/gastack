@@ -6,3 +6,7 @@ browse/dist/
 *.log
 bun.lock
 *.bun-build
+.env
+.env.local
+.env.*
+!.env.example

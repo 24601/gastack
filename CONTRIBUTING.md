@@ -60,18 +60,80 @@ bun run build
 bin/dev-teardown
 ```
 
-## Running tests
+## Testing & evals
+
+### Setup
 
 ```bash
-bun test                     # Tier 1: browse integration + skill validation (free, <5s)
-bun run test:eval            # Tier 3: LLM-as-judge quality evals (needs ANTHROPIC_API_KEY, ~$0.03)
-bun run test:e2e             # Tier 2: E2E skill tests via Agent SDK (needs SKILL_E2E=1, ~$0.50)
-bun run test:all             # Tier 1 + Tier 2
-bun run dev <cmd>            # run CLI in dev mode, e.g. bun run dev goto https://example.com
-bun run build                # gen docs + compile binaries
+# 1. Copy .env.example and add your API key
+cp .env.example .env
+# Edit .env → set ANTHROPIC_API_KEY=sk-ant-...
+
+# 2. Install deps (if you haven't already)
+bun install
 ```
 
-**Tier 1** (static validation) runs automatically — it parses every `$B` command in SKILL.md files and validates them against the command registry. **Tier 2** (E2E) spawns real Claude sessions and costs money. **Tier 3** (LLM-as-judge) uses Haiku to score generated docs on clarity/completeness/actionability.
+Bun auto-loads `.env` — no extra config. Conductor workspaces inherit `.env` from the main worktree automatically (see "Conductor workspaces" below).
+
+### Test tiers
+
+| Tier | Command | Cost | What it tests |
+|------|---------|------|---------------|
+| 1 — Static | `bun test` | Free | Command validation, snapshot flags, SKILL.md correctness |
+| 2 — E2E | `bun run test:e2e` | ~$0.50 | Full skill execution via Agent SDK |
+| 3 — LLM eval | `bun run test:eval` | ~$0.03 | Doc quality scoring via LLM-as-judge |
+
+```bash
+bun test                     # Tier 1 only (runs on every commit, <5s)
+bun run test:eval            # Tier 3: LLM-as-judge (needs ANTHROPIC_API_KEY in .env)
+bun run test:e2e             # Tier 2: E2E (needs SKILL_E2E=1, can't run inside Claude Code)
+bun run test:all             # Tier 1 + Tier 2
+```
+
+### Tier 1: Static validation (free)
+
+Runs automatically with `bun test`. No API keys needed.
+
+- **Skill parser tests** (`test/skill-parser.test.ts`) — Extracts every `$B` command from SKILL.md bash code blocks and validates against the command registry in `browse/src/commands.ts`. Catches typos, removed commands, and invalid snapshot flags.
+- **Skill validation tests** (`test/skill-validation.test.ts`) — Validates that SKILL.md files reference only real commands and flags, and that command descriptions meet quality thresholds.
+- **Generator tests** (`test/gen-skill-docs.test.ts`) — Tests the template system: verifies placeholders resolve correctly, output includes value hints for flags (e.g. `-d <N>` not just `-d`), enriched descriptions for key commands (e.g. `is` lists valid states, `press` lists key examples).
+
+### Tier 2: E2E via Agent SDK (~$0.50/run)
+
+Spawns a real Claude Code session, invokes `/qa` or `/browse`, and scans tool results for errors. This is the closest thing to "does this skill actually work end-to-end?"
+
+```bash
+# Must run from a plain terminal — can't nest inside Claude Code or Conductor
+SKILL_E2E=1 bun test test/skill-e2e.test.ts
+```
+
+- Gated by `SKILL_E2E=1` env var (prevents accidental expensive runs)
+- Auto-skips if it detects it's running inside Claude Code (Agent SDK can't nest)
+- Saves full conversation transcripts on failure for debugging
+- Tests live in `test/skill-e2e.test.ts`, runner logic in `test/helpers/session-runner.ts`
+
+### Tier 3: LLM-as-judge (~$0.03/run)
+
+Uses Claude Haiku to score generated SKILL.md docs on three dimensions:
+
+- **Clarity** — Can an AI agent understand the instructions without ambiguity?
+- **Completeness** — Are all commands, flags, and usage patterns documented?
+- **Actionability** — Can the agent execute tasks using only the information in the doc?
+
+Each dimension is scored 1-5. Threshold: every dimension must score **≥ 4**. There's also a regression test that compares generated docs against the hand-maintained baseline from `origin/main` — generated must score equal or higher.
+
+```bash
+# Needs ANTHROPIC_API_KEY in .env
+bun run test:eval
+```
+
+- Uses `claude-haiku-4-5` for cost efficiency
+- Tests live in `test/skill-llm-eval.test.ts`
+- Calls the Anthropic API directly (not Agent SDK), so it works from anywhere including inside Claude Code
+
+### CI
+
+A GitHub Action (`.github/workflows/skill-docs.yml`) runs `bun run gen:skill-docs --dry-run` on every push and PR. If the generated SKILL.md files differ from what's committed, CI fails. This catches stale docs before they merge.
 
 Tests run against the browse binary directly — they don't require dev mode.
 
@@ -95,12 +157,26 @@ bun run dev:skill
 
 To add a browse command, add it to `browse/src/commands.ts`. To add a snapshot flag, add it to `SNAPSHOT_FLAGS` in `browse/src/snapshot.ts`. Then rebuild.
 
+## Conductor workspaces
+
+If you're using [Conductor](https://conductor.build) to run multiple Claude Code sessions in parallel, `conductor.json` wires up workspace lifecycle automatically:
+
+| Hook | Script | What it does |
+|------|--------|-------------|
+| `setup` | `bin/dev-setup` | Copies `.env` from main worktree, installs deps, symlinks skills |
+| `archive` | `bin/dev-teardown` | Removes skill symlinks, cleans up `.claude/` directory |
+
+When Conductor creates a new workspace, `bin/dev-setup` runs automatically. It detects the main worktree (via `git worktree list`), copies your `.env` so API keys carry over, and sets up dev mode — no manual steps needed.
+
+**First-time setup:** Put your `ANTHROPIC_API_KEY` in `.env` in the main repo (see `.env.example`). Every Conductor workspace inherits it automatically.
+
 ## Things to know
 
 - **SKILL.md files are generated.** Edit the `.tmpl` template, not the `.md`. Run `bun run gen:skill-docs` to regenerate.
 - **Browse source changes need a rebuild.** If you touch `browse/src/*.ts`, run `bun run build`.
 - **Dev mode shadows your global install.** Project-local skills take priority over `~/.claude/skills/gstack`. `bin/dev-teardown` restores the global one.
-- **Conductor workspaces are independent.** Each workspace is its own clone. Run `bin/dev-setup` in the one you're working in.
+- **Conductor workspaces are independent.** Each workspace is its own git worktree. `bin/dev-setup` runs automatically via `conductor.json`.
+- **`.env` propagates across worktrees.** Set it once in the main repo, all Conductor workspaces get it.
 - **`.claude/skills/` is gitignored.** The symlinks never get committed.
 
 ## Testing a branch in another repo
