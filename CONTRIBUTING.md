@@ -63,16 +63,41 @@ bin/dev-teardown
 ## Running tests
 
 ```bash
-bun test                     # all tests (browse integration + snapshot)
+bun test                     # Tier 1: browse integration + skill validation (free, <5s)
+bun run test:eval            # Tier 3: LLM-as-judge quality evals (needs ANTHROPIC_API_KEY, ~$0.03)
+bun run test:e2e             # Tier 2: E2E skill tests via Agent SDK (needs SKILL_E2E=1, ~$0.50)
+bun run test:all             # Tier 1 + Tier 2
 bun run dev <cmd>            # run CLI in dev mode, e.g. bun run dev goto https://example.com
-bun run build                # compile binary to browse/dist/browse
+bun run build                # gen docs + compile binaries
 ```
+
+**Tier 1** (static validation) runs automatically — it parses every `$B` command in SKILL.md files and validates them against the command registry. **Tier 2** (E2E) spawns real Claude sessions and costs money. **Tier 3** (LLM-as-judge) uses Haiku to score generated docs on clarity/completeness/actionability.
 
 Tests run against the browse binary directly — they don't require dev mode.
 
+## Editing SKILL.md files
+
+SKILL.md files are **generated** from `.tmpl` templates. Don't edit the `.md` directly — your changes will be overwritten on the next build.
+
+```bash
+# 1. Edit the template
+vim SKILL.md.tmpl              # or browse/SKILL.md.tmpl
+
+# 2. Regenerate
+bun run gen:skill-docs
+
+# 3. Check health
+bun run skill:check
+
+# Or use watch mode — auto-regenerates on save
+bun run dev:skill
+```
+
+To add a browse command, add it to `browse/src/commands.ts`. To add a snapshot flag, add it to `SNAPSHOT_FLAGS` in `browse/src/snapshot.ts`. Then rebuild.
+
 ## Things to know
 
-- **SKILL.md changes are instant.** They're just Markdown. Edit, save, invoke.
+- **SKILL.md files are generated.** Edit the `.tmpl` template, not the `.md`. Run `bun run gen:skill-docs` to regenerate.
 - **Browse source changes need a rebuild.** If you touch `browse/src/*.ts`, run `bun run build`.
 - **Dev mode shadows your global install.** Project-local skills take priority over `~/.claude/skills/gstack`. `bin/dev-teardown` restores the global one.
 - **Conductor workspaces are independent.** Each workspace is its own clone. Run `bin/dev-setup` in the one you're working in.
