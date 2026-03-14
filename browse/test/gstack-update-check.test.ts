@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync, mkdirSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -156,6 +156,21 @@ describe('gstack-update-check', () => {
     });
     expect(exitCode).toBe(0);
     expect(stdout).toBe('');
+    const cache = readFileSync(join(stateDir, 'last-update-check'), 'utf-8');
+    expect(cache).toContain('UP_TO_DATE');
+  });
+
+  // ─── Path I: Corrupt cache file ─────────────────────────────
+  test('falls through to remote fetch when cache is corrupt', () => {
+    writeFileSync(join(gstackDir, 'VERSION'), '0.3.3\n');
+    writeFileSync(join(stateDir, 'last-update-check'), 'garbage data here');
+    // Remote says same version — should end up UP_TO_DATE
+    writeFileSync(join(gstackDir, 'REMOTE_VERSION'), '0.3.3\n');
+
+    const { exitCode, stdout } = run();
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe('');
+    // Cache should be overwritten with valid content
     const cache = readFileSync(join(stateDir, 'last-update-check'), 'utf-8');
     expect(cache).toContain('UP_TO_DATE');
   });
