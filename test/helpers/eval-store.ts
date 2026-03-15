@@ -13,6 +13,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { spawnSync } from 'child_process';
 import { getGitInfo as getGitInfoShared, getVersion as getVersionShared } from '../../lib/util';
+import type { CostEntry } from '../../lib/eval-format';
 
 const SCHEMA_VERSION = 1;
 const DEFAULT_EVAL_DIR = path.join(os.homedir(), '.gstack-dev', 'evals');
@@ -50,6 +51,9 @@ export interface EvalTestEntry {
   detected_bugs?: string[];
   missed_bugs?: string[];
 
+  // Per-model cost breakdown
+  costs?: CostEntry[];
+
   error?: string;
 }
 
@@ -67,6 +71,7 @@ export interface EvalResult {
   total_cost_usd: number;
   total_duration_ms: number;
   tests: EvalTestEntry[];
+  costs?: CostEntry[];  // aggregate per-model cost breakdown
   _partial?: boolean;  // true for incremental saves, absent in final
 }
 
@@ -414,6 +419,25 @@ export class EvalCollector {
     const totalDuration = this.tests.reduce((s, t) => s + t.duration_ms, 0);
     const passed = this.tests.filter(t => t.passed).length;
 
+    // Aggregate per-model costs across all tests
+    const costMap = new Map<string, CostEntry>();
+    for (const t of this.tests) {
+      for (const c of t.costs || []) {
+        const existing = costMap.get(c.model);
+        if (existing) {
+          existing.calls += c.calls;
+          existing.input_tokens += c.input_tokens;
+          existing.output_tokens += c.output_tokens;
+          existing.cache_read_input_tokens = (existing.cache_read_input_tokens || 0) + (c.cache_read_input_tokens || 0);
+          existing.cache_creation_input_tokens = (existing.cache_creation_input_tokens || 0) + (c.cache_creation_input_tokens || 0);
+          if (c.cost_usd !== undefined) existing.cost_usd = (existing.cost_usd || 0) + c.cost_usd;
+        } else {
+          costMap.set(c.model, { ...c });
+        }
+      }
+    }
+    const costs = costMap.size > 0 ? [...costMap.values()] : undefined;
+
     const result: EvalResult = {
       schema_version: SCHEMA_VERSION,
       version,
@@ -428,6 +452,7 @@ export class EvalCollector {
       total_cost_usd: Math.round(totalCost * 100) / 100,
       total_duration_ms: totalDuration,
       tests: this.tests,
+      costs,
     };
 
     // Write eval file

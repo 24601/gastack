@@ -629,6 +629,12 @@ bun run eval:watch            # live dashboard during E2E runs
 
 E2E tests stream real-time progress, write machine-readable diagnostics, and persist partial results that survive kills. See CONTRIBUTING.md for the full eval infrastructure.
 
+### Team sync (optional)
+
+For teams, gstack can sync eval results, retro snapshots, QA reports, and ship logs to a shared Supabase store. Without this, everything works locally as before — sync is purely additive.
+
+To set up: copy `.gstack-sync.json.example` to `.gstack-sync.json`, create a Supabase project, run the migrations in `supabase/migrations/`, and fill in your credentials. See `docs/designs/TEAM_COORDINATION_STORE.md` for the full guide.
+
 ## License
 
 MIT

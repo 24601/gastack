@@ -41,6 +41,7 @@ function recordE2E(name: string, suite: string, result: SkillTestResult, extra?:
     exit_reason: result.exitReason,
     timeout_at_turn: result.exitReason === 'timeout' ? result.costEstimate.turnsUsed : undefined,
     last_tool_call: lastTool,
+    costs: result.costs,
     ...extra,
   });
 }
