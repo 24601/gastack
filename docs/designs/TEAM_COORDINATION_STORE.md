@@ -44,7 +44,7 @@ This works for solo developers. For teams on vendored gstack, it means:
 - **Zero shared visibility** into code quality, shipping velocity, or eval regressions
 - **No cross-contributor comparison** — each developer's data is isolated on their machine
 - **No regression detection** — an eval suite can regress and nobody notices until production breaks
-- **Duplicated infrastructure** — Garry has another project with a sophisticated eval system (60+ runners, S3 storage, caching, cost tracking, baselines) locked inside Ruby/Rails that solves the same problems gstack solves in Bun/TS
+- **Duplicated infrastructure** — the author runs another project with a sophisticated eval system (60+ runners, S3 storage, caching, cost tracking, baselines) locked inside Ruby/Rails that solves the same problems gstack solves in Bun/TS
 
 ---
 
@@ -178,7 +178,7 @@ All decisions were made during the CEO-mode plan review on 2026-03-15.
    └─────────────────┘     └─────────────────┘
 ```
 
-### Credential Storage: 3 Layers
+### Config & Credential Storage: 4 Layers
 
 **Layer 1: Project config — `.gstack-sync.json` (committed to repo)**
 
@@ -186,15 +186,37 @@ All decisions were made during the CEO-mode plan review on 2026-03-15.
 {
   "supabase_url": "https://xyzcompany.supabase.co",
   "supabase_anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "team_slug": "xyzcompany",
-  "sync_enabled": true,
-  "sync_transcripts": false
+  "team_slug": "xyzcompany"
 }
 ```
 
 The anon key is **safe to commit**. This is Supabase's design — the anon key only grants access through RLS policies, which require a valid user JWT. It's the same key that ships in every Supabase client-side app. Without a valid user token, the anon key gets you nothing.
 
-**Layer 2: User auth — `~/.gstack/auth.json` (mode 0o600, never committed)**
+Project-level only: Supabase URL, anon key, team slug. No user preferences here — those are per-developer (Layer 2).
+
+**Layer 2: User settings — `~/.gstack/config.yaml` (via `gstack-config`)**
+
+```yaml
+# Existing settings (v0.3.9)
+auto_upgrade: true
+update_check: true
+
+# New sync settings
+sync_enabled: true          # enable/disable team sync (per-user)
+sync_transcripts: false     # opt-in transcript sharing (per-user)
+```
+
+Managed via the existing `gstack-config` CLI (`bin/gstack-config`):
+```bash
+gstack-config get sync_enabled     # → "true" or ""
+gstack-config set sync_enabled true
+gstack-config set sync_transcripts false
+gstack-config list                 # → all settings
+```
+
+Rationale: `sync_enabled` and `sync_transcripts` are **user preferences**, not project config. One developer might want sync off while the rest of the team has it on. `gstack-config` already handles this pattern for `auto_upgrade` and `update_check`.
+
+**Layer 3: User auth — `~/.gstack/auth.json` (mode 0o600, never committed)**
 
 ```json
 {
@@ -211,7 +233,7 @@ The anon key is **safe to commit**. This is Supabase's design — the anon key o
 
 Keyed by `supabase_url` so developers on multiple teams/projects just work. Written with `chmod 0o600` — same pattern as `browse.json` in `browse/src/server.ts`.
 
-**Layer 3: Admin bootstrap — one-time Supabase project setup**
+**Layer 4: Admin bootstrap — one-time Supabase project setup**
 
 ```bash
 # Admin runs once to set up the project:
@@ -226,7 +248,7 @@ CI/automation uses `GSTACK_SUPABASE_ACCESS_TOKEN` env var.
 
 ### Auth Flow
 
-`gstack sync setup` reads URL from `.gstack-sync.json` → opens browser for OAuth or magic link → polls for completion → writes tokens to `~/.gstack/auth.json` (mode 0o600).
+`gstack sync setup` reads URL from `.gstack-sync.json` → opens browser for OAuth or magic link → polls for completion → writes tokens to `~/.gstack/auth.json` (mode 0o600) → sets `sync_enabled=true` via `gstack-config`.
 
 On first successful auth, shows a team welcome: "3 members, 47 eval runs this week, last ship 2h ago."
 
@@ -256,7 +278,7 @@ For skills (retro, review, qa, ship), sync happens via `bin/gstack-sync` called 
 
 ### Opt-in Transcript Sync
 
-When `"sync_transcripts": true` in `.gstack-sync.json`:
+When `sync_transcripts: true` in `~/.gstack/config.yaml` (set via `gstack-config set sync_transcripts true`):
 - `gstack-sync push-transcript` reads `~/.claude/history.jsonl` (new entries since last sync marker)
 - Stores in `session_transcripts` table with RLS policy (admin-only read by default)
 - No scrubbing — trust the team. Opt-in = consent. Same trust model as a shared Slack channel.
@@ -288,7 +310,7 @@ Your eval runners keep their language, their models, their service objects. gsta
 
 ### What We're Porting from an Existing Rails Project
 
-Garry has another project with a production-grade eval infrastructure in Ruby/Rails. The patterns are general-purpose and worth extracting into gstack as framework-agnostic infrastructure:
+The author runs another project with a production-grade eval infrastructure in Ruby/Rails. The patterns are general-purpose and worth extracting into gstack as framework-agnostic infrastructure:
 
 - **60+ eval runners** with YAML test cases
 - **Multi-judge LLM evaluation** — multiple judge profiles scoring on 8+ quality criteria
@@ -338,14 +360,20 @@ and A/B comparison testing.
 {
   "schema_version": 1,
   "label": "dev_fix-terseness_standard",
+  "timestamp": "2026-03-15T10:30:00Z",
   "git_sha": "abc123",
   "git_branch": "dev/fix-terseness",
+  "prompt_sha": "a08ff469",
   "hostname": "dev-machine",
   "tier": "standard",
   "total": 18,
   "passed": 17,
   "failed": 1,
   "duration_seconds": 893.4,
+  "by_category": {
+    "post_generation": { "passed": 16, "total": 17 },
+    "tool_usage": { "passed": 1, "total": 1 }
+  },
   "all_results": [
     {
       "name": "must_cite_sources",
@@ -354,6 +382,7 @@ and A/B comparison testing.
       "duration_ms": 45000,
       "failures": [],
       "judge_scores": { "accuracy": 0.85, "voice_fidelity": 0.72 },
+      "response_preview": "The proposed legislation would...",
       "output": {},
       "comparison": null
     }
@@ -385,7 +414,7 @@ populate different keys. gstack stores as-is (JSONB) for display/comparison:
     "items": [{"id": "claim_1", "severity": "yellow", "commentary": "..."}],
     "chunks": ["chunk 1 text", "chunk 2 text"],
     "clusters": [{"theme": "Housing", "articles": ["..."]}],
-    "memories": [{"content": "Lives in SF", "category": "personal"}],
+    "memories": [{"content": "Enjoys cycling", "category": "personal"}],
     "extracted_fields": {"occupation": "engineer", "city": "Oakland"},
     "title": "Generated title",
     "structured_content": "Full article body..."
@@ -416,12 +445,23 @@ populate different keys. gstack stores as-is (JSONB) for display/comparison:
   "failures": [
     {
       "type": "threshold",
+      "expectation_type": "voice_check",
+      "message": "Voice check failed: 2 of 5 criteria below threshold",
       "criterion": "voice_fidelity",
       "expected": 0.7,
-      "actual": 0.58
+      "actual": 0.58,
+      "details": [
+        {"criterion": "no_hedging", "score": 0.3, "threshold": 0.7},
+        {"criterion": "direct_tone", "score": 0.4, "threshold": 0.6}
+      ],
+      "scores": {
+        "no_hedging": 0.3, "no_filler": 0.6, "direct_tone": 0.4,
+        "uses_specifics": 0.8, "operator_energy": 0.9
+      }
     },
     {
       "type": "deterministic",
+      "expectation_type": "body_contains",
       "check": "body_contains",
       "pattern": "Series B",
       "message": "Pattern not found in output"
@@ -429,6 +469,10 @@ populate different keys. gstack stores as-is (JSONB) for display/comparison:
   ]
 }
 ```
+
+Fields: `type` = generic class (`threshold` | `deterministic`). `expectation_type` = domain-specific
+check name from the YAML case. `details` = per-criterion breakdown for multi-criteria checks.
+`scores` = ALL scores (passing + failing) for context. `message` = human-readable summary.
 
 ### YAML Test Case Format
 
@@ -611,6 +655,10 @@ expectations:
       no_hedging: 0.6
       direct_tone: 0.6
       uses_specifics: 0.6
+  - type: quality_check
+    judge_profile: strict       # named profile (defined in judge-profiles.yaml)
+    criteria:
+      accuracy: 0.8             # profile can override default thresholds
 
 # ── A/B testing (optional) ─────────────────────────
 # comparison:
@@ -739,9 +787,30 @@ gstack eval cache verify           # Check all entries for validity
 gstack eval cache clear [suite]    # Clear all or per-suite
 ```
 
-Env vars: `EVAL_CACHE=0` (disable), `EVAL_CACHE_CLEAR=1` (clear before run).
+Env vars: `EVAL_CACHE=0` (disable), `EVAL_CACHE_CLEAR=1` (clear before run),
+`EVAL_JUDGE_CACHE=0` (skip cached judge scores — re-run LLM judges even if cached).
+
+Judge responses are cached separately from eval data. This lets you re-run deterministic
+checks (text matching, length, tool calling) without re-calling expensive LLM judges.
 
 Ported from `eval_cache.rb` — same atomic write (tmp+rename), same version/validation, same SHA computation.
+
+### Multiprocess Worker Support
+
+For large test suites (60+ cases), eval workers run in parallel processes:
+
+```
+~/.gstack/eval-partials/{suite}/worker_{pid}.json
+```
+
+Each worker writes partial results. `gstack eval push` merges them before upload:
+1. Workers write `worker_{pid}.json` atomically (tmp+rename)
+2. Push reads all `worker_*.json` in the partials directory
+3. Deduplicates by test name (keeps longest `duration_ms`)
+4. Merges into a single result JSON
+5. Pushes merged result to Supabase
+
+Env var: `EVAL_WORKERS=4` (number of parallel processes, default 1).
 
 ### Eval Cost Tracker
 
@@ -770,11 +839,36 @@ Label = EVAL_LABEL env || sanitized_git_branch
 Append tier suffix: _fast, _full (omit for standard)
 ```
 
+### Eval Tier & Run Scopes
+
+Two orthogonal tier concepts:
+
+**Run scope** — how much of the test suite to execute:
+```
+EVAL_TIER=quick      # Subset of cases (fast smoke test)
+EVAL_TIER=standard   # Full suite (default)
+EVAL_TIER=full       # Full suite + expensive multi-judge checks
+```
+
+**Judge model tier** — which model judges use:
+```
+EVAL_JUDGE_TIER=fast|standard|full
+Aliases: haiku→fast, sonnet→standard, opus→full
+```
+
+**Debug output:**
+```
+EVAL_VERBOSE=1       # Persistent logging to ~/.gstack/log/evals/
+                     # Format: YYYYMMDD-{test-name}-{random}.txt
+                     # Includes full untruncated LLM inputs/outputs
+```
+
 ### CLI Commands
 
 ```bash
 # Result management
 gstack eval push <file.json>       # Push result to Supabase + local store
+                                   # Dedup: skips insert if git_sha+label+tier already exists
 gstack eval list [label]           # List all results (local + Supabase)
 gstack eval compare [a] [b]       # Compare two runs — color-coded score deltas
 gstack eval baselines [date]       # Generate markdown baseline report
@@ -1041,6 +1135,7 @@ order by created_at desc;
 | QA push | `qa/SKILL.md.tmpl` Phase 6 | After baseline, call `gstack-sync push-qa` |
 | Ship push | `ship/SKILL.md.tmpl` new Step 9 | Write ship log + push |
 | Config reuse | `browse/src/config.ts` | Import `getRemoteSlug()`, `getGitRoot()` |
+| User settings | `bin/gstack-config` | Reuse for sync preferences (`sync_enabled`, `sync_transcripts`) |
 | Atomic write | `eval-store.ts:413-416` | Extract shared `atomicWriteJSON()` utility |
 | Eval watch | `scripts/eval-watch.ts` | Adapt for browser-based SSE dashboard |
 | Comparison | `eval-store.ts:167` `compareEvalResults()` | Extend with color-coded diff + cross-team |
@@ -1265,7 +1360,9 @@ All 16 error paths are rescued. 0 critical gaps.
 ```
 $ gstack sync status
 ─────────────────
-  Connected:     yes (https://xyzcompany.supabase.co)
+  Project:       .gstack-sync.json (supabase_url: https://xyzcompany.supabase.co)
+  User settings: sync_enabled=true, sync_transcripts=false (via gstack-config)
+  Connected:     yes
   Authenticated: yes (dev@company.com, team: xyzcompany)
   Last push:     2 min ago (eval_runs)
   Last pull:     1h ago
@@ -1302,6 +1399,7 @@ or nothing (sync not configured).
 | `formatComparison()` | `eval-store.ts:267` | Extend with color diff |
 | `llm-judge.ts` | `test/helpers/llm-judge.ts` | Extend with multi-judge |
 | eval-watch.ts | `scripts/eval-watch.ts` | Adapt for browser SSE |
+| `gstack-config` get/set/list | `bin/gstack-config` | User settings for sync preferences (v0.3.9) |
 
 ---
 
