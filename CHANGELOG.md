@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.10 — 2026-03-15
+
+### Added
+- **Per-model cost tracking** — eval results now include `costs[]` with exact per-model token usage (input, output, cache read, cache creation) and API-reported cost. Extracted from `resultLine.modelUsage` in `claude -p` NDJSON stream. `computeCosts()` prefers exact `cost_usd` over MODEL_PRICING estimates (~4x more accurate with prompt caching).
+- **LLM judge caching** — SHA-based caching for LLM-as-judge eval calls via `eval-cache.ts`. Cache keyed by `model:prompt`, so unchanged SKILL.md content skips API calls entirely. ~$0.18/run savings. Set `EVAL_CACHE=0` to force re-run.
+- **Dynamic model selection** — `EVAL_JUDGE_TIER` env var controls which Claude model runs judge evals (haiku/sonnet/opus, default: sonnet). `EVAL_TIER` pins the E2E test model via `--model` flag to `claude -p`.
+- **`bun run eval:trend`** — per-test pass rate tracking over last N runs. Classifies tests as stable-pass, stable-fail, flaky, improving, or degrading. Sparkline table with `--limit`, `--tier`, `--test` filters. Answers "is /retro getting more reliable?" instantly.
+- **CostEntry extended** — `cache_read_input_tokens`, `cache_creation_input_tokens`, `cost_usd` optional fields for accurate cache-aware cost reporting.
+- 22 new tests: 10 cache/tier integration (llm-judge.test.ts), 12 trend classification (lib-eval-trend.test.ts).
+
+### Changed
+- `callJudge()` and `judge()` now return `{ result, meta }` with `JudgeMeta` (model, tokens, cached flag). `outcomeJudge()` retains simple return type for E2E callers.
+- `EvalCollector.finalize()` aggregates per-test `costs[]` into result-level cost breakdown.
+- `cli-eval.ts` main block guarded with `import.meta.main` to prevent execution on import.
+- `eval:summary` now hints to run `eval:trend` when flaky tests are detected.
+- All 8 LLM eval test sites updated from hard-coded `cost_usd: 0.02` to real API-reported costs.
+- Regression test refactored from direct `Anthropic()` client to `callJudge()` (benefits from cache + tier).
+
 ## 0.3.9 — 2026-03-15
 
 ### Added
