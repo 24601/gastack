@@ -118,6 +118,50 @@ export function getVersion(): string {
   }
 }
 
+// --- Eval I/O ---
+
+export const EVAL_DIR = path.join(GSTACK_DEV_DIR, 'evals');
+
+/** Format ISO timestamp to "YYYY-MM-DD HH:MM" for display. */
+export function formatTimestamp(iso: string): string {
+  return iso.replace('T', ' ').slice(0, 16);
+}
+
+/**
+ * List JSON eval files in the eval directory, sorted by filename descending (newest first).
+ * Returns full paths. Returns empty array if directory doesn't exist.
+ */
+export function listEvalFiles(evalDir?: string): string[] {
+  const dir = evalDir || EVAL_DIR;
+  try {
+    const files = fs.readdirSync(dir)
+      .filter(f => f.endsWith('.json') && !f.startsWith('_'));
+    files.sort().reverse();
+    return files.map(f => path.join(dir, f));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Load and parse all eval result JSON files from the eval directory.
+ * Skips files that fail to parse. Sorted newest-first by timestamp.
+ * Optional limit returns only the N most recent.
+ */
+export function loadEvalResults<T = unknown>(evalDir?: string, limit?: number): T[] {
+  const files = listEvalFiles(evalDir);
+  const results: Array<{ data: T; timestamp: string }> = [];
+  for (const file of files) {
+    try {
+      const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+      results.push({ data, timestamp: data.timestamp || '' });
+    } catch { continue; }
+  }
+  results.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const sliced = limit ? results.slice(0, limit) : results;
+  return sliced.map(r => r.data);
+}
+
 // --- String helpers ---
 
 /** Sanitize a name for use as a filename: strip leading slashes, replace / with - */

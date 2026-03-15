@@ -15,6 +15,10 @@ import {
   getRemoteSlug,
   getVersion,
   sanitizeForFilename,
+  formatTimestamp,
+  listEvalFiles,
+  loadEvalResults,
+  EVAL_DIR,
 } from '../lib/util';
 
 function tmpDir(): string {
@@ -143,6 +147,94 @@ describe('lib/util', () => {
 
     test('handles clean names unchanged', () => {
       expect(sanitizeForFilename('simple')).toBe('simple');
+    });
+  });
+
+  describe('formatTimestamp', () => {
+    test('formats ISO timestamp to date and time', () => {
+      expect(formatTimestamp('2025-05-01T12:30:45.123Z')).toBe('2025-05-01 12:30');
+    });
+
+    test('handles already-formatted strings gracefully', () => {
+      expect(formatTimestamp('2025-05-01 12:30')).toBe('2025-05-01 12:30');
+    });
+
+    test('handles empty string', () => {
+      expect(formatTimestamp('')).toBe('');
+    });
+  });
+
+  describe('listEvalFiles', () => {
+    test('returns empty array for nonexistent dir', () => {
+      expect(listEvalFiles('/nonexistent/dir')).toEqual([]);
+    });
+
+    test('returns sorted JSON files (newest first)', () => {
+      const dir = tmpDir();
+      fs.writeFileSync(path.join(dir, 'a-2025-01.json'), '{}');
+      fs.writeFileSync(path.join(dir, 'b-2025-02.json'), '{}');
+      fs.writeFileSync(path.join(dir, 'c-2025-03.json'), '{}');
+      fs.writeFileSync(path.join(dir, 'not-json.txt'), 'skip');
+
+      const files = listEvalFiles(dir);
+      expect(files.length).toBe(3);
+      // Sorted reverse alphabetically (newest first)
+      expect(path.basename(files[0])).toBe('c-2025-03.json');
+      expect(path.basename(files[2])).toBe('a-2025-01.json');
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test('skips _partial files', () => {
+      const dir = tmpDir();
+      fs.writeFileSync(path.join(dir, 'run.json'), '{}');
+      fs.writeFileSync(path.join(dir, '_partial-e2e.json'), '{}');
+
+      const files = listEvalFiles(dir);
+      expect(files.length).toBe(1);
+      expect(path.basename(files[0])).toBe('run.json');
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+  });
+
+  describe('loadEvalResults', () => {
+    test('loads and parses JSON files sorted by timestamp', () => {
+      const dir = tmpDir();
+      fs.writeFileSync(path.join(dir, 'old.json'), JSON.stringify({ timestamp: '2025-01-01T00:00:00Z', value: 'old' }));
+      fs.writeFileSync(path.join(dir, 'new.json'), JSON.stringify({ timestamp: '2025-05-01T00:00:00Z', value: 'new' }));
+
+      const results = loadEvalResults<{ timestamp: string; value: string }>(dir);
+      expect(results.length).toBe(2);
+      expect(results[0].value).toBe('new'); // newest first
+      expect(results[1].value).toBe('old');
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test('respects limit parameter', () => {
+      const dir = tmpDir();
+      for (let i = 0; i < 10; i++) {
+        fs.writeFileSync(
+          path.join(dir, `run-${i}.json`),
+          JSON.stringify({ timestamp: `2025-01-${String(i + 1).padStart(2, '0')}T00:00:00Z` }),
+        );
+      }
+
+      const results = loadEvalResults(dir, 3);
+      expect(results.length).toBe(3);
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test('skips corrupt JSON files', () => {
+      const dir = tmpDir();
+      fs.writeFileSync(path.join(dir, 'good.json'), JSON.stringify({ timestamp: '2025-01-01T00:00:00Z' }));
+      fs.writeFileSync(path.join(dir, 'bad.json'), 'not json');
+
+      const results = loadEvalResults(dir);
+      expect(results.length).toBe(1);
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test('returns empty for nonexistent dir', () => {
+      expect(loadEvalResults('/nonexistent')).toEqual([]);
     });
   });
 });
