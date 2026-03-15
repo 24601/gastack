@@ -9,20 +9,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { atomicWriteSync, sanitizeForFilename, GSTACK_DEV_DIR } from '../../lib/util';
 
-const GSTACK_DEV_DIR = path.join(os.homedir(), '.gstack-dev');
 const HEARTBEAT_PATH = path.join(GSTACK_DEV_DIR, 'e2e-live.json');
 
 /** Sanitize test name for use as filename: strip leading slashes, replace / with - */
 export function sanitizeTestName(name: string): string {
-  return name.replace(/^\/+/, '').replace(/\//g, '-');
-}
-
-/** Atomic write: write to .tmp then rename. Non-fatal on error. */
-function atomicWriteSync(filePath: string, data: string): void {
-  const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, data);
-  fs.renameSync(tmp, filePath);
+  return sanitizeForFilename(name);
 }
 
 export interface CostEstimate {

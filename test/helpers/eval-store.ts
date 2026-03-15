@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { spawnSync } from 'child_process';
+import { getGitInfo as getGitInfoShared, getVersion as getVersionShared } from '../../lib/util';
 
 const SCHEMA_VERSION = 1;
 const DEFAULT_EVAL_DIR = path.join(os.homedir(), '.gstack-dev', 'evals');
@@ -345,26 +346,11 @@ export function formatComparison(c: ComparisonResult): string {
 // --- EvalCollector ---
 
 function getGitInfo(): { branch: string; sha: string } {
-  try {
-    const branch = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: 'pipe', timeout: 5000 });
-    const sha = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { stdio: 'pipe', timeout: 5000 });
-    return {
-      branch: branch.stdout?.toString().trim() || 'unknown',
-      sha: sha.stdout?.toString().trim() || 'unknown',
-    };
-  } catch {
-    return { branch: 'unknown', sha: 'unknown' };
-  }
+  return getGitInfoShared();
 }
 
 function getVersion(): string {
-  try {
-    const pkgPath = path.resolve(__dirname, '..', '..', 'package.json');
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    return pkg.version || 'unknown';
-  } catch {
-    return 'unknown';
-  }
+  return getVersionShared();
 }
 
 export class EvalCollector {
@@ -468,6 +454,14 @@ export class EvalCollector {
     } catch (err: any) {
       process.stderr.write(`\nCompare error: ${err.message}\n`);
     }
+
+    // Team sync: push eval result (non-fatal, non-blocking)
+    try {
+      const { pushEvalRun } = await import('../../lib/sync');
+      pushEvalRun(result as unknown as Record<string, unknown>).then(ok => {
+        if (ok) process.stderr.write('Synced eval to team store ✓\n');
+      }).catch(() => { /* queued for retry */ });
+    } catch { /* sync module not available — skip */ }
 
     return filepath;
   }
