@@ -10,6 +10,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { atomicWriteSync, sanitizeForFilename, GSTACK_DEV_DIR } from '../../lib/util';
+import type { CostEntry } from '../../lib/eval-format';
+import { resolveTier, tierToModel } from '../../lib/eval-tier';
 
 const HEARTBEAT_PATH = path.join(GSTACK_DEV_DIR, 'e2e-live.json');
 
@@ -34,6 +36,7 @@ export interface SkillTestResult {
   output: string;
   costEstimate: CostEstimate;
   transcript: any[];
+  costs: CostEntry[];
 }
 
 const BROWSE_ERROR_PATTERNS = [
@@ -135,8 +138,11 @@ export async function runSkillTest(options: {
 
   // Spawn claude -p with streaming NDJSON output. Prompt piped via stdin to
   // avoid shell escaping issues. --verbose is required for stream-json mode.
+  // Model pinned via EVAL_TIER env var (default: sonnet).
+  const evalModel = tierToModel(resolveTier());
   const args = [
     '-p',
+    '--model', evalModel,
     '--output-format', 'stream-json',
     '--verbose',
     '--dangerously-skip-permissions',
@@ -323,5 +329,21 @@ export async function runSkillTest(options: {
     turnsUsed,
   };
 
-  return { toolCalls, browseErrors, exitReason, duration, output: resultLine?.result || '', costEstimate, transcript };
+  // Extract per-model costs from resultLine.modelUsage (camelCase → snake_case)
+  const costs: CostEntry[] = [];
+  if (resultLine?.modelUsage) {
+    for (const [model, usage] of Object.entries(resultLine.modelUsage as Record<string, any>)) {
+      costs.push({
+        model,
+        calls: 1,
+        input_tokens: usage.inputTokens || 0,
+        output_tokens: usage.outputTokens || 0,
+        cache_read_input_tokens: usage.cacheReadInputTokens || 0,
+        cache_creation_input_tokens: usage.cacheCreationInputTokens || 0,
+        cost_usd: usage.costUSD,
+      });
+    }
+  }
+
+  return { toolCalls, browseErrors, exitReason, duration, output: resultLine?.result || '', costEstimate, transcript, costs };
 }

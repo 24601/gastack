@@ -55,6 +55,9 @@ function getPricing(model: string): { input: number; output: number } {
 export function computeCosts(costs: CostEntry[]): CostDashboard {
   const byModel = new Map<string, CostSummary>();
 
+  // Track exact cost_usd sums per model (from API-provided costs)
+  const exactCosts = new Map<string, number>();
+
   for (const entry of costs) {
     const existing = byModel.get(entry.model);
     if (existing) {
@@ -70,9 +73,12 @@ export function computeCosts(costs: CostEntry[]): CostDashboard {
         estimated_cost_usd: 0,
       });
     }
+    if (entry.cost_usd !== undefined) {
+      exactCosts.set(entry.model, (exactCosts.get(entry.model) || 0) + entry.cost_usd);
+    }
   }
 
-  // Calculate costs
+  // Calculate costs — prefer exact cost_usd (accounts for cache discounts)
   let total = 0;
   let atFast = 0;
   let atFull = 0;
@@ -80,13 +86,18 @@ export function computeCosts(costs: CostEntry[]): CostDashboard {
   const fullPricing = MODEL_PRICING['claude-opus-4-6'] || FALLBACK_PRICING;
 
   for (const summary of byModel.values()) {
-    const pricing = getPricing(summary.model);
-    summary.estimated_cost_usd =
-      (summary.input_tokens / 1_000_000) * pricing.input +
-      (summary.output_tokens / 1_000_000) * pricing.output;
+    const exact = exactCosts.get(summary.model);
+    if (exact !== undefined) {
+      summary.estimated_cost_usd = exact;
+    } else {
+      const pricing = getPricing(summary.model);
+      summary.estimated_cost_usd =
+        (summary.input_tokens / 1_000_000) * pricing.input +
+        (summary.output_tokens / 1_000_000) * pricing.output;
+    }
     total += summary.estimated_cost_usd;
 
-    // What-if at fast/full tiers
+    // What-if at fast/full tiers (always from token counts)
     atFast +=
       (summary.input_tokens / 1_000_000) * fastPricing.input +
       (summary.output_tokens / 1_000_000) * fastPricing.output;
