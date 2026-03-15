@@ -1,4 +1,9 @@
 {
+  "_comment": "OPTIONAL: Team sync configuration for shared eval/retro/QA data via Supabase.",
+  "_docs": "See docs/designs/TEAM_COORDINATION_STORE.md for full setup guide.",
+  "_what_you_get": "Shared eval dashboards, cross-team trend tracking, retro aggregation, QA report history. Without this file, everything works locally — sync is purely additive.",
+  "_setup": "1. Create a Supabase project. 2. Run supabase/migrations/*.sql in order. 3. Copy this file to .gstack-sync.json and fill in your values. 4. Set GSTACK_SUPABASE_ACCESS_TOKEN or run gstack sync login.",
+
   "supabase_url": "https://YOUR_PROJECT.supabase.co",
   "supabase_anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.YOUR_ANON_KEY_HERE",
   "team_slug": "your-team-name"
