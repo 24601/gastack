@@ -213,7 +213,22 @@ export function getCookiePickerHTML(serverPort: number): string {
     border-top: 1px solid #222;
     font-size: 12px;
     color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
+  .btn-import-all {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: #4ade80;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-import-all:hover { border-color: #4ade80; background: #0a2a14; }
+  .btn-import-all:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
   /* ─── Imported Panel ──────────────────── */
   .imported-empty {
@@ -299,7 +314,7 @@ export function getCookiePickerHTML(serverPort: number): string {
     <div class="domain-list" id="source-domains">
       <div class="loading-row"><span class="spinner"></span> Detecting browsers...</div>
     </div>
-    <div class="panel-footer" id="source-footer"></div>
+    <div class="panel-footer" id="source-footer"><span id="source-footer-text"></span><button class="btn-import-all" id="btn-import-all" style="display:none">Import All</button></div>
   </div>
 
   <!-- Right Panel: Imported -->
@@ -327,7 +342,8 @@ export function getCookiePickerHTML(serverPort: number): string {
   const $search = document.getElementById('search');
   const $sourceDomains = document.getElementById('source-domains');
   const $importedDomains = document.getElementById('imported-domains');
-  const $sourceFooter = document.getElementById('source-footer');
+  const $sourceFooter = document.getElementById('source-footer-text');
+  const $btnImportAll = document.getElementById('btn-import-all');
   const $importedFooter = document.getElementById('imported-footer');
   const $banner = document.getElementById('banner');
 
@@ -519,6 +535,16 @@ export function getCookiePickerHTML(serverPort: number): string {
     const totalCookies = allDomains.reduce((s, d) => s + d.count, 0);
     $sourceFooter.textContent = totalDomains + ' domains · ' + totalCookies.toLocaleString() + ' cookies';
 
+    // Show/hide Import All button
+    const unimported = filtered.filter(d => !(d.domain in importedSet) && !inflight[d.domain]);
+    if (unimported.length > 0) {
+      $btnImportAll.style.display = '';
+      $btnImportAll.disabled = false;
+      $btnImportAll.textContent = 'Import All (' + unimported.length + ')';
+    } else {
+      $btnImportAll.style.display = 'none';
+    }
+
     // Click handlers
     $sourceDomains.querySelectorAll('.btn-add[data-domain]').forEach(btn => {
       btn.addEventListener('click', () => importDomain(btn.dataset.domain));
@@ -552,6 +578,42 @@ export function getCookiePickerHTML(serverPort: number): string {
       renderSourceDomains();
     }
   }
+
+  // ─── Import All ───────────────────────
+  async function importAll() {
+    const query = $search.value.toLowerCase();
+    const filtered = query
+      ? allDomains.filter(d => d.domain.toLowerCase().includes(query))
+      : allDomains;
+    const toImport = filtered.filter(d => !(d.domain in importedSet) && !inflight[d.domain]);
+    if (toImport.length === 0) return;
+
+    $btnImportAll.disabled = true;
+    $btnImportAll.textContent = 'Importing...';
+
+    const domains = toImport.map(d => d.domain);
+    try {
+      const data = await api('/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ browser: activeBrowser, domains: domains, profile: activeProfile }),
+      });
+
+      if (data.domainCounts) {
+        for (const [d, count] of Object.entries(data.domainCounts)) {
+          importedSet[d] = (importedSet[d] || 0) + count;
+        }
+      }
+      renderImported();
+    } catch (err) {
+      showBanner('Import all failed: ' + err.message, 'error',
+        err.action === 'retry' ? () => importAll() : null);
+    } finally {
+      renderSourceDomains();
+    }
+  }
+
+  $btnImportAll.addEventListener('click', importAll);
 
   // ─── Render Imported ───────────────────
   function renderImported() {
