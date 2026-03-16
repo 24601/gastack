@@ -176,6 +176,7 @@ describe('Update check preamble', () => {
     'ship/SKILL.md', 'review/SKILL.md',
     'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
     'retro/SKILL.md',
+    'brainstorm/SKILL.md', 'debug/SKILL.md',
   ];
 
   for (const skill of skillsWithUpdateCheck) {
@@ -421,6 +422,7 @@ describe('v0.4.1 preamble features', () => {
     'ship/SKILL.md', 'review/SKILL.md',
     'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
     'retro/SKILL.md',
+    'brainstorm/SKILL.md', 'debug/SKILL.md',
   ];
 
   for (const skill of skillsWithPreamble) {
@@ -435,6 +437,34 @@ describe('v0.4.1 preamble features', () => {
       expect(content).toContain('_SESSIONS');
       expect(content).toContain('ELI16');
     });
+  }
+
+  for (const skill of skillsWithPreamble) {
+    test(`${skill} contains escalation protocol`, () => {
+      const content = fs.readFileSync(path.join(ROOT, skill), 'utf-8');
+      expect(content).toContain('DONE_WITH_CONCERNS');
+      expect(content).toContain('BLOCKED');
+      expect(content).toContain('NEEDS_CONTEXT');
+    });
+  }
+});
+
+// --- Structural tests for new skills ---
+
+describe('brainstorm skill structure', () => {
+  const content = fs.readFileSync(path.join(ROOT, 'brainstorm', 'SKILL.md'), 'utf-8');
+  for (const section of ['Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Phase 6',
+                          'Design Doc', 'Supersedes', 'APPROVED', 'Premise Challenge',
+                          'Alternatives', 'Smart-skip']) {
+    test(`contains ${section}`, () => expect(content).toContain(section));
+  }
+});
+
+describe('debug skill structure', () => {
+  const content = fs.readFileSync(path.join(ROOT, 'debug', 'SKILL.md'), 'utf-8');
+  for (const section of ['Iron Law', 'Root Cause', 'Pattern Analysis', 'Hypothesis',
+                          'DEBUG REPORT', '3-strike', 'BLOCKED']) {
+    test(`contains ${section}`, () => expect(content).toContain(section));
   }
 });
 

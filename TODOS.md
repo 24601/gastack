@@ -374,6 +374,32 @@
 **Priority:** P3
 **Depends on:** Ref staleness Parts 1+2 (shipped)
 
+## Brainstorm / Design
+
+### Design docs → Supabase team store sync
+
+**What:** Add design docs (`*-design-*.md`) to the Supabase sync pipeline alongside test plans, retro snapshots, and QA reports.
+
+**Why:** Cross-team design discovery at scale. Local `~/.gstack/projects/$SLUG/` keyword-grep discovery works for same-machine users now, but Supabase sync makes it work across the whole team. Duplicate ideas surface, everyone sees what's been explored.
+
+**Context:** /brainstorm writes design docs to `~/.gstack/projects/$SLUG/`. The team store already syncs test plans, retro snapshots, QA reports. Design docs follow the same pattern — just add a sync adapter.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** `garrytan/team-supabase-store` branch landing on main
+
+### /plan-design-review skill
+
+**What:** A visual/UX-focused design review skill that consumes /brainstorm design docs and evaluates mockups, wireframes, and UI decisions. Completes the review trilogy — product (/plan-ceo-review), engineering (/plan-eng-review), design (/plan-design-review).
+
+**Why:** Full workflow coverage for visual/UX projects. The brainstorm design doc artifact is the input contract.
+
+**Context:** /brainstorm handoff already mentions this skill. The design doc at `~/.gstack/projects/` is the input.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** `garrytan/design` branch landing on main
+
 ## Completed
 
 ### Phase 1: Foundations (v0.2.0)
