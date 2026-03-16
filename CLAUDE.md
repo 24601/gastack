@@ -67,6 +67,23 @@ SKILL.md files are **generated** from `.tmpl` templates. To update docs:
 To add a new browse command: add it to `browse/src/commands.ts` and rebuild.
 To add a snapshot flag: add it to `SNAPSHOT_FLAGS` in `browse/src/snapshot.ts` and rebuild.
 
+## Writing SKILL templates
+
+SKILL.md.tmpl files are **prompt templates read by Claude**, not bash scripts.
+Each bash code block runs in a separate shell — variables do not persist between blocks.
+
+Rules:
+- **Use natural language for logic and state.** Don't use shell variables to pass
+  state between code blocks. Instead, tell Claude what to remember and reference
+  it in prose (e.g., "the base branch detected in Step 0").
+- **Don't hardcode branch names.** Detect `main`/`master`/etc dynamically via
+  `gh pr view` or `gh repo view`. Use `{{BASE_BRANCH_DETECT}}` for PR-targeting
+  skills. Use "the base branch" in prose, `<base>` in code block placeholders.
+- **Keep bash blocks self-contained.** Each code block should work independently.
+  If a block needs context from a previous step, restate it in the prose above.
+- **Express conditionals as English.** Instead of nested `if/elif/else` in bash,
+  write numbered decision steps: "1. If X, do Y. 2. Otherwise, do Z."
+
 ## Browser interaction
 
 When you need to interact with a browser (QA, dogfooding, cookie setup), use the
@@ -102,6 +119,21 @@ CHANGELOG.md is **for users**, not contributors. Write it like product release n
 - Every entry should make someone think "oh nice, I want to try that."
 - No jargon: say "every question now tells you which project and branch you're in" not
   "AskUserQuestion format standardized across skill templates via preamble resolver."
+
+## E2E eval failure blame protocol
+
+When an E2E eval fails during `/ship` or any other workflow, **never claim "not
+related to our changes" without proving it.** These systems have invisible couplings —
+a preamble text change affects agent behavior, a new helper changes timing, a
+regenerated SKILL.md shifts prompt context.
+
+**Required before attributing a failure to "pre-existing":**
+1. Run the same eval on main (or base branch) and show it fails there too
+2. If it passes on main but fails on the branch — it IS your change. Trace the blame.
+3. If you can't run on main, say "unverified — may or may not be related" and flag it
+   as a risk in the PR body
+
+"Pre-existing" without receipts is a lazy claim. Prove it or don't say it.
 
 ## Deploying to the active skill
 

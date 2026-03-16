@@ -2,7 +2,7 @@
 name: ship
 version: 1.0.0
 description: |
-  Ship workflow: merge main, run tests, review diff, bump VERSION, update CHANGELOG, commit, push, create PR.
+  Ship workflow: detect + merge base branch, run tests, review diff, bump VERSION, update CHANGELOG, commit, push, create PR.
 allowed-tools:
   - Bash
   - Read
@@ -43,12 +43,15 @@ Per-skill instructions may add additional formatting rules on top of this baseli
 
 ## Contributor Mode
 
-If `_CONTRIB` is `true`: you are in **contributor mode**. When you hit friction with **gstack itself** (not the user's app), file a field report. Think: "hey, I was trying to do X with gstack and it didn't work / was confusing / was annoying. Here's what happened."
+If `_CONTRIB` is `true`: you are in **contributor mode**. You're a gstack user who also helps make it better.
 
-**gstack issues:** browse command fails/wrong output, snapshot missing elements, skill instructions unclear or misleading, binary crash/hang, unhelpful error message, any rough edge or annoyance — even minor stuff.
-**NOT gstack issues:** user's app bugs, network errors to user's URL, auth failures on user's site.
+**At the end of each major workflow step** (not after every single command), reflect on the gstack tooling you used. Rate your experience 0 to 10. If it wasn't a 10, think about why. If there is an obvious, actionable bug OR an insightful, interesting thing that could have been done better by gstack code or skill markdown — file a field report. Maybe our contributor will help make us better!
 
-**To file:** write `~/.gstack/contributor-logs/{slug}.md` with this structure:
+**Calibration — this is the bar:** For example, `$B js "await fetch(...)"` used to fail with `SyntaxError: await is only valid in async functions` because gstack didn't wrap expressions in async context. Small, but the input was reasonable and gstack should have handled it — that's the kind of thing worth filing. Things less consequential than this, ignore.
+
+**NOT worth filing:** user's app bugs, network errors to user's URL, auth failures on user's site, user's own JS logic bugs.
+
+**To file:** write `~/.gstack/contributor-logs/{slug}.md` with **all sections below** (do not truncate — include every section through the Date/Version footer):
 
 ```
 # {Title}
@@ -57,20 +60,23 @@ Hey gstack team — ran into this while using /{skill-name}:
 
 **What I was trying to do:** {what the user/agent was attempting}
 **What happened instead:** {what actually happened}
-**How annoying (1-5):** {1=meh, 3=friction, 5=blocker}
+**My rating:** {0-10} — {one sentence on why it wasn't a 10}
 
 ## Steps to reproduce
 1. {step}
 
 ## Raw output
-(wrap any error messages or unexpected output in a markdown code block)
+```
+{paste the actual error or unexpected output here}
+```
+
+## What would make this a 10
+{one sentence: what gstack should have done differently}
 
 **Date:** {YYYY-MM-DD} | **Version:** {gstack version} | **Skill:** /{skill}
 ```
 
-Then run: `mkdir -p ~/.gstack/contributor-logs && open ~/.gstack/contributor-logs/{slug}.md`
-
-Slug: lowercase, hyphens, max 60 chars (e.g. `browse-snapshot-ref-gap`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"
+Slug: lowercase, hyphens, max 60 chars (e.g. `browse-js-no-await`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"
 
 ## Completion Status Protocol
 
@@ -97,12 +103,31 @@ ATTEMPTED: [what you tried]
 RECOMMENDATION: [what the user should do next]
 ```
 
+## Step 0: Detect base branch
+
+Determine which branch this PR targets. Use the result as "the base branch" in all subsequent steps.
+
+1. Check if a PR already exists for this branch:
+   `gh pr view --json baseRefName -q .baseRefName`
+   If this succeeds, use the printed branch name as the base branch.
+
+2. If no PR exists (command fails), detect the repo's default branch:
+   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
+
+3. If both commands fail, fall back to `main`.
+
+Print the detected base branch name. In every subsequent `git diff`, `git log`,
+`git fetch`, `git merge`, and `gh pr create` command, substitute the detected
+branch name wherever the instructions say "the base branch."
+
+---
+
 # Ship: Fully Automated Ship Workflow
 
 You are running the `/ship` workflow. This is a **non-interactive, fully automated** workflow. Do NOT ask for confirmation at any step. The user said `/ship` which means DO IT. Run straight through and output the PR URL at the end.
 
 **Only stop for:**
-- On `main` branch (abort)
+- On the base branch (abort)
 - Merge conflicts that can't be auto-resolved (stop, show conflicts)
 - Test failures (stop, show failures)
 - Pre-landing review finds CRITICAL issues and user chooses to fix (not acknowledge or skip)
@@ -123,20 +148,20 @@ You are running the `/ship` workflow. This is a **non-interactive, fully automat
 
 ## Step 1: Pre-flight
 
-1. Check the current branch. If on `main`, **abort**: "You're on main. Ship from a feature branch."
+1. Check the current branch. If on the base branch or the repo's default branch, **abort**: "You're on the base branch. Ship from a feature branch."
 
 2. Run `git status` (never use `-uall`). Uncommitted changes are always included — no need to ask.
 
-3. Run `git diff main...HEAD --stat` and `git log main..HEAD --oneline` to understand what's being shipped.
+3. Run `git diff <base>...HEAD --stat` and `git log <base>..HEAD --oneline` to understand what's being shipped.
 
 ---
 
-## Step 2: Merge origin/main (BEFORE tests)
+## Step 2: Merge the base branch (BEFORE tests)
 
-Fetch and merge `origin/main` into the feature branch so tests run against the merged state:
+Fetch and merge the base branch into the feature branch so tests run against the merged state:
 
 ```bash
-git fetch origin main && git merge origin/main --no-edit
+git fetch origin <base> && git merge origin/<base> --no-edit
 ```
 
 **If there are merge conflicts:** Try to auto-resolve if they are simple (VERSION, schema.rb, CHANGELOG ordering). If conflicts are complex or ambiguous, **STOP** and show them.
@@ -174,7 +199,7 @@ Evals are mandatory when prompt-related files change. Skip this step entirely if
 **1. Check if the diff touches prompt-related files:**
 
 ```bash
-git diff origin/main --name-only
+git diff origin/<base> --name-only
 ```
 
 Match against these patterns (from CLAUDE.md):
@@ -235,7 +260,7 @@ Review the diff for structural issues that tests don't catch.
 
 1. Read `.claude/skills/review/checklist.md`. If the file cannot be read, **STOP** and report the error.
 
-2. Run `git diff origin/main` to get the full diff (scoped to feature changes against the freshly-fetched remote main).
+2. Run `git diff origin/<base>` to get the full diff (scoped to feature changes against the freshly-fetched base branch).
 
 3. Apply the review checklist in two passes:
    - **Pass 1 (CRITICAL):** SQL & Data Safety, LLM Output Trust Boundary
@@ -303,7 +328,7 @@ For each classified comment:
 1. Read the current `VERSION` file (4-digit format: `MAJOR.MINOR.PATCH.MICRO`)
 
 2. **Auto-decide the bump level based on the diff:**
-   - Count lines changed (`git diff origin/main...HEAD --stat | tail -1`)
+   - Count lines changed (`git diff origin/<base>...HEAD --stat | tail -1`)
    - **MICRO** (4th digit): < 50 lines changed, trivial tweaks, typos, config
    - **PATCH** (3rd digit): 50+ lines changed, bug fixes, small-medium features
    - **MINOR** (2nd digit): **ASK the user** — only for major features or significant architectural changes
@@ -322,8 +347,8 @@ For each classified comment:
 1. Read `CHANGELOG.md` header to know the format.
 
 2. Auto-generate the entry from **ALL commits on the branch** (not just recent ones):
-   - Use `git log main..HEAD --oneline` to see every commit being shipped
-   - Use `git diff main...HEAD` to see the full diff against main
+   - Use `git log <base>..HEAD --oneline` to see every commit being shipped
+   - Use `git diff <base>...HEAD` to see the full diff against the base branch
    - The CHANGELOG entry must be comprehensive of ALL changes going into the PR
    - If existing CHANGELOG entries on the branch already cover some commits, replace them with one unified entry for the new version
    - Categorize changes into applicable sections:
@@ -371,8 +396,8 @@ Read TODOS.md and verify it follows the recommended structure:
 This step is fully automatic — no user interaction.
 
 Use the diff and commit history already gathered in earlier steps:
-- `git diff main...HEAD` (full diff against main)
-- `git log main..HEAD --oneline` (all commits being shipped)
+- `git diff <base>...HEAD` (full diff against the base branch)
+- `git log <base>..HEAD --oneline` (all commits being shipped)
 
 For each TODO item, check if the changes in this PR complete it by:
 - Matching commit messages against the TODO title and description
@@ -469,7 +494,7 @@ git push -u origin <branch-name>
 Create a pull request using `gh`:
 
 ```bash
-gh pr create --title "<type>: <summary>" --body "$(cat <<'EOF'
+gh pr create --base <base> --title "<type>: <summary>" --body "$(cat <<'EOF'
 ## Summary
 <bullet points from CHANGELOG>
 

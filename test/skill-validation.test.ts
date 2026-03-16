@@ -389,6 +389,64 @@ describe('Greptile history format consistency', () => {
   });
 });
 
+// --- Hardcoded branch name detection in templates ---
+
+describe('No hardcoded branch names in SKILL templates', () => {
+  const tmplFiles = [
+    'ship/SKILL.md.tmpl',
+    'review/SKILL.md.tmpl',
+    'qa/SKILL.md.tmpl',
+    'plan-ceo-review/SKILL.md.tmpl',
+    'retro/SKILL.md.tmpl',
+  ];
+
+  // Patterns that indicate hardcoded 'main' in git commands
+  const gitMainPatterns = [
+    /\bgit\s+diff\s+(?:origin\/)?main\b/,
+    /\bgit\s+log\s+(?:origin\/)?main\b/,
+    /\bgit\s+fetch\s+origin\s+main\b/,
+    /\bgit\s+merge\s+origin\/main\b/,
+    /\borigin\/main\b/,
+  ];
+
+  // Lines that are allowed to mention 'main' (fallback logic, prose)
+  const allowlist = [
+    /fall\s*back\s+to\s+`main`/i,
+    /fall\s*back\s+to\s+`?main`?/i,
+    /typically\s+`?main`?/i,
+    /If\s+on\s+`main`/i,  // old pattern — should not exist
+  ];
+
+  for (const tmplFile of tmplFiles) {
+    test(`${tmplFile} has no hardcoded 'main' in git commands`, () => {
+      const filePath = path.join(ROOT, tmplFile);
+      if (!fs.existsSync(filePath)) return;
+      const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
+      const violations: string[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const isAllowlisted = allowlist.some(p => p.test(line));
+        if (isAllowlisted) continue;
+
+        for (const pattern of gitMainPatterns) {
+          if (pattern.test(line)) {
+            violations.push(`Line ${i + 1}: ${line.trim()}`);
+            break;
+          }
+        }
+      }
+
+      if (violations.length > 0) {
+        throw new Error(
+          `${tmplFile} has hardcoded 'main' in git commands:\n` +
+          violations.map(v => `  ${v}`).join('\n')
+        );
+      }
+    });
+  }
+});
+
 // --- Part 7b: TODOS-format.md reference consistency ---
 
 describe('TODOS-format.md reference consistency', () => {
@@ -465,6 +523,44 @@ describe('debug skill structure', () => {
   for (const section of ['Iron Law', 'Root Cause', 'Pattern Analysis', 'Hypothesis',
                           'DEBUG REPORT', '3-strike', 'BLOCKED']) {
     test(`contains ${section}`, () => expect(content).toContain(section));
+  }
+});
+
+// --- Contributor mode preamble structure validation ---
+
+describe('Contributor mode preamble structure', () => {
+  const skillsWithPreamble = [
+    'SKILL.md', 'browse/SKILL.md', 'qa/SKILL.md',
+    'qa-only/SKILL.md',
+    'setup-browser-cookies/SKILL.md',
+    'ship/SKILL.md', 'review/SKILL.md',
+    'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
+    'retro/SKILL.md',
+  ];
+
+  for (const skill of skillsWithPreamble) {
+    test(`${skill} has 0-10 rating in contributor mode`, () => {
+      const content = fs.readFileSync(path.join(ROOT, skill), 'utf-8');
+      expect(content).toContain('0 to 10');
+      expect(content).toContain('My rating');
+    });
+
+    test(`${skill} has calibration example`, () => {
+      const content = fs.readFileSync(path.join(ROOT, skill), 'utf-8');
+      expect(content).toContain('Calibration');
+      expect(content).toContain('the bar');
+    });
+
+    test(`${skill} has "what would make this a 10" field`, () => {
+      const content = fs.readFileSync(path.join(ROOT, skill), 'utf-8');
+      expect(content).toContain('What would make this a 10');
+    });
+
+    test(`${skill} uses periodic reflection (not per-command)`, () => {
+      const content = fs.readFileSync(path.join(ROOT, skill), 'utf-8');
+      expect(content).toContain('workflow step');
+      expect(content).not.toContain('After you use gstack-provided CLIs');
+    });
   }
 });
 

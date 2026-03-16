@@ -13,6 +13,11 @@ import * as os from 'os';
 const ROOT = path.resolve(import.meta.dir, '..');
 
 // Skip unless EVALS=1. Session runner strips CLAUDE* env vars to avoid nested session issues.
+//
+// BLAME PROTOCOL: When an eval fails, do NOT claim "pre-existing" or "not related
+// to our changes" without proof. Run the same eval on main to verify. These tests
+// have invisible couplings — preamble text, SKILL.md content, and timing all affect
+// agent behavior. See CLAUDE.md "E2E eval failure blame protocol" for details.
 const evalsEnabled = !!process.env.EVALS;
 const describeE2E = evalsEnabled ? describe : describe.skip;
 
@@ -322,10 +327,16 @@ File a contributor report about this issue. Then tell me what you filed.`,
     const logFiles = fs.readdirSync(logsDir).filter(f => f.endsWith('.md'));
     expect(logFiles.length).toBeGreaterThan(0);
 
+    // Verify new reflection-based format
     const logContent = fs.readFileSync(path.join(logsDir, logFiles[0]), 'utf-8');
     expect(logContent).toContain('Hey gstack team');
     expect(logContent).toContain('What I was trying to do');
     expect(logContent).toContain('What happened instead');
+    expect(logContent).toMatch(/rating/i);
+    // Verify report has repro steps (agent may use "Steps to reproduce", "Repro Steps", etc.)
+    expect(logContent).toMatch(/repro|steps to reproduce|how to reproduce/i);
+    // Verify report has date/version footer (agent may format differently)
+    expect(logContent).toMatch(/date.*2026|2026.*date/i);
 
     // Clean up
     try { fs.rmSync(contribDir, { recursive: true, force: true }); } catch {}
@@ -424,16 +435,20 @@ describeE2E('QA skill E2E', () => {
 
   test('/qa quick completes without browse errors', async () => {
     const result = await runSkillTest({
-      prompt: `You have a browse binary at ${browseBin}. Assign it to B variable like: B="${browseBin}"
+      prompt: `B="${browseBin}"
+
+The test server is already running at: ${testServer.url}
+Target page: ${testServer.url}/basic.html
 
 Read the file qa/SKILL.md for the QA workflow instructions.
 
 Run a Quick-depth QA test on ${testServer.url}/basic.html
 Do NOT use AskUserQuestion — run Quick tier directly.
+Do NOT try to start a server or discover ports — the URL above is ready.
 Write your report to ${qaDir}/qa-reports/qa-report.md`,
       workingDirectory: qaDir,
       maxTurns: 35,
-      timeout: 180_000,
+      timeout: 240_000,
       testName: 'qa-quick',
       runId,
     });
@@ -448,7 +463,7 @@ Write your report to ${qaDir}/qa-reports/qa-report.md`,
     }
     // Accept error_max_turns — the agent doing thorough QA work is not a failure
     expect(['success', 'error_max_turns']).toContain(result.exitReason);
-  }, 240_000);
+  }, 300_000);
 });
 
 // --- B5: Review skill E2E ---
@@ -1342,6 +1357,193 @@ Write your review to ${planDir}/review-output.md`,
     // Soft assertion: we expect an artifact but agent compliance is not guaranteed
     expect(newFiles.length).toBeGreaterThanOrEqual(1);
   }, 420_000);
+});
+
+// --- Base branch detection smoke tests ---
+
+describeE2E('Base branch detection', () => {
+  let baseBranchDir: string;
+  const run = (cmd: string, args: string[], cwd: string) =>
+    spawnSync(cmd, args, { cwd, stdio: 'pipe', timeout: 5000 });
+
+  beforeAll(() => {
+    baseBranchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-basebranch-'));
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(baseBranchDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test('/review detects base branch and diffs against it', async () => {
+    const dir = path.join(baseBranchDir, 'review-base');
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Create git repo with a feature branch off main
+    run('git', ['init'], dir);
+    run('git', ['config', 'user.email', 'test@test.com'], dir);
+    run('git', ['config', 'user.name', 'Test'], dir);
+
+    fs.writeFileSync(path.join(dir, 'app.rb'), '# clean base\nclass App\nend\n');
+    run('git', ['add', 'app.rb'], dir);
+    run('git', ['commit', '-m', 'initial commit'], dir);
+
+    // Create feature branch with a change
+    run('git', ['checkout', '-b', 'feature/test-review'], dir);
+    fs.writeFileSync(path.join(dir, 'app.rb'), '# clean base\nclass App\n  def hello; "world"; end\nend\n');
+    run('git', ['add', 'app.rb'], dir);
+    run('git', ['commit', '-m', 'feat: add hello method'], dir);
+
+    // Copy review skill files
+    fs.copyFileSync(path.join(ROOT, 'review', 'SKILL.md'), path.join(dir, 'review-SKILL.md'));
+    fs.copyFileSync(path.join(ROOT, 'review', 'checklist.md'), path.join(dir, 'review-checklist.md'));
+    fs.copyFileSync(path.join(ROOT, 'review', 'greptile-triage.md'), path.join(dir, 'review-greptile-triage.md'));
+
+    const result = await runSkillTest({
+      prompt: `You are in a git repo on a feature branch with changes.
+Read review-SKILL.md for the review workflow instructions.
+Also read review-checklist.md and apply it.
+
+IMPORTANT: Follow Step 0 to detect the base branch. Since there is no remote, gh commands will fail — fall back to main.
+Then run the review against the detected base branch.
+Write your findings to ${dir}/review-output.md`,
+      workingDirectory: dir,
+      maxTurns: 15,
+      timeout: 90_000,
+      testName: 'review-base-branch',
+      runId,
+    });
+
+    logCost('/review base-branch', result);
+    recordE2E('/review base branch detection', 'Base branch detection', result);
+    expect(result.exitReason).toBe('success');
+
+    // Verify the review used "base branch" language (from Step 0)
+    const toolOutputs = result.toolCalls.map(tc => tc.output || '').join('\n');
+    const allOutput = (result.output || '') + toolOutputs;
+    // The agent should have run git diff against main (the fallback)
+    const usedGitDiff = result.toolCalls.some(tc =>
+      tc.tool === 'Bash' && typeof tc.input === 'string' && tc.input.includes('git diff')
+    );
+    expect(usedGitDiff).toBe(true);
+  }, 120_000);
+
+  test('/ship Step 0-1 detects base branch without destructive actions', async () => {
+    const dir = path.join(baseBranchDir, 'ship-base');
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Create git repo with feature branch
+    run('git', ['init'], dir);
+    run('git', ['config', 'user.email', 'test@test.com'], dir);
+    run('git', ['config', 'user.name', 'Test'], dir);
+
+    fs.writeFileSync(path.join(dir, 'app.ts'), 'console.log("v1");\n');
+    run('git', ['add', 'app.ts'], dir);
+    run('git', ['commit', '-m', 'initial'], dir);
+
+    run('git', ['checkout', '-b', 'feature/ship-test'], dir);
+    fs.writeFileSync(path.join(dir, 'app.ts'), 'console.log("v2");\n');
+    run('git', ['add', 'app.ts'], dir);
+    run('git', ['commit', '-m', 'feat: update to v2'], dir);
+
+    // Copy ship skill
+    fs.copyFileSync(path.join(ROOT, 'ship', 'SKILL.md'), path.join(dir, 'ship-SKILL.md'));
+
+    const result = await runSkillTest({
+      prompt: `Read ship-SKILL.md for the ship workflow.
+
+Run ONLY Step 0 (Detect base branch) and Step 1 (Pre-flight) from the ship workflow.
+Since there is no remote, gh commands will fail — fall back to main.
+
+After completing Step 0 and Step 1, STOP. Do NOT proceed to Step 2 or beyond.
+Do NOT push, create PRs, or modify VERSION/CHANGELOG.
+
+Write a summary of what you detected to ${dir}/ship-preflight.md including:
+- The detected base branch name
+- The current branch name
+- The diff stat against the base branch`,
+      workingDirectory: dir,
+      maxTurns: 10,
+      timeout: 60_000,
+      testName: 'ship-base-branch',
+      runId,
+    });
+
+    logCost('/ship base-branch', result);
+    recordE2E('/ship base branch detection', 'Base branch detection', result);
+    expect(result.exitReason).toBe('success');
+
+    // Verify preflight output was written
+    const preflightPath = path.join(dir, 'ship-preflight.md');
+    if (fs.existsSync(preflightPath)) {
+      const content = fs.readFileSync(preflightPath, 'utf-8');
+      expect(content.length).toBeGreaterThan(20);
+      // Should mention the branch name
+      expect(content.toLowerCase()).toMatch(/main|base/);
+    }
+
+    // Verify no destructive actions — no push, no PR creation
+    const destructiveTools = result.toolCalls.filter(tc =>
+      tc.tool === 'Bash' && typeof tc.input === 'string' &&
+      (tc.input.includes('git push') || tc.input.includes('gh pr create'))
+    );
+    expect(destructiveTools).toHaveLength(0);
+  }, 90_000);
+
+  test('/retro detects default branch for git queries', async () => {
+    const dir = path.join(baseBranchDir, 'retro-base');
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Create git repo with commit history
+    run('git', ['init'], dir);
+    run('git', ['config', 'user.email', 'dev@example.com'], dir);
+    run('git', ['config', 'user.name', 'Dev'], dir);
+
+    fs.writeFileSync(path.join(dir, 'app.ts'), 'console.log("hello");\n');
+    run('git', ['add', 'app.ts'], dir);
+    run('git', ['commit', '-m', 'feat: initial app', '--date', '2026-03-14T09:00:00'], dir);
+
+    fs.writeFileSync(path.join(dir, 'auth.ts'), 'export function login() {}\n');
+    run('git', ['add', 'auth.ts'], dir);
+    run('git', ['commit', '-m', 'feat: add auth', '--date', '2026-03-15T10:00:00'], dir);
+
+    fs.writeFileSync(path.join(dir, 'test.ts'), 'test("it works", () => {});\n');
+    run('git', ['add', 'test.ts'], dir);
+    run('git', ['commit', '-m', 'test: add tests', '--date', '2026-03-16T11:00:00'], dir);
+
+    // Copy retro skill
+    fs.mkdirSync(path.join(dir, 'retro'), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, 'retro', 'SKILL.md'), path.join(dir, 'retro', 'SKILL.md'));
+
+    const result = await runSkillTest({
+      prompt: `Read retro/SKILL.md for instructions on how to run a retrospective.
+
+IMPORTANT: Follow the "Detect default branch" step first. Since there is no remote, gh will fail — fall back to main.
+Then use the detected branch name for all git queries.
+
+Run /retro for the last 7 days of this git repo. Skip any AskUserQuestion calls — this is non-interactive.
+This is a local-only repo so use the local branch (main) instead of origin/main for all git log commands.
+
+Write your retrospective to ${dir}/retro-output.md`,
+      workingDirectory: dir,
+      maxTurns: 25,
+      timeout: 240_000,
+      testName: 'retro-base-branch',
+      runId,
+    });
+
+    logCost('/retro base-branch', result);
+    recordE2E('/retro default branch detection', 'Base branch detection', result, {
+      passed: ['success', 'error_max_turns'].includes(result.exitReason),
+    });
+    expect(['success', 'error_max_turns']).toContain(result.exitReason);
+
+    // Verify retro output was produced
+    const retroPath = path.join(dir, 'retro-output.md');
+    if (fs.existsSync(retroPath)) {
+      const content = fs.readFileSync(retroPath, 'utf-8');
+      expect(content.length).toBeGreaterThan(100);
+    }
+  }, 300_000);
 });
 
 // --- Deferred skill E2E tests (destructive or require interactive UI) ---
