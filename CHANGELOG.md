@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.11 — 2026-03-15
+
+### Added
+- **Contributor mode** — set `gstack_contributor: true` in `~/.gstack/config.yaml` and Claude Code automatically files field reports to `~/.gstack/contributor-logs/` when gstack itself misbehaves. Reports include what you were doing, what went wrong, annoyance level (1-5), repro steps, and raw output. Opens the report for review. Max 3 per session, deduped by slug.
+- **Concurrent session tracking** — gstack detects how many sessions are active in a 2-hour window. When 3+ sessions are running simultaneously, all skills enter "ELI16 mode": every AskUserQuestion re-grounds the user on project, branch, current task, and the specific question — because context-switching is real.
+- **Universal RECOMMENDATION format** — every AskUserQuestion across all skills now follows: context → question → `RECOMMENDATION: Choose X because ___` → options. Consistent everywhere. Plan-review skills reference this baseline and add their own rules on top.
+- **Enum & Value Completeness** review category — new CRITICAL check in `/review` that traces new enum values, status strings, and type constants through every consumer outside the diff. Catches the class of bugs where a value is added but not handled in all case/switch chains, allowlists, or frontend-backend contracts.
+
+### Changed
+- Renamed `{{UPDATE_CHECK}}` placeholder to `{{PREAMBLE}}` across all 10 skill templates. The preamble now includes update check, session tracking, contributor mode, and AskUserQuestion format in a single startup block.
+- DRY'd plan-ceo-review and plan-eng-review AskUserQuestion formatting rules to reference the preamble baseline instead of duplicating instructions.
+- Rewrote CONTRIBUTING.md with contributor workflow, cross-project testing guide, and Conductor workspace docs.
+- Added vendored symlink awareness section to CLAUDE.md.
+
 ## 0.3.10 — 2026-03-15
 
 ### Added
