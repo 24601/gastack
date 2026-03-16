@@ -179,7 +179,7 @@ gen-skill-docs.ts      (reads source code metadata)
 SKILL.md               (committed, auto-generated sections)
 ```
 
-Templates contain the workflows, tips, and examples that require human judgment. The `{{COMMAND_REFERENCE}}` and `{{SNAPSHOT_FLAGS}}` placeholders are filled from `commands.ts` and `snapshot.ts` at build time. This is structurally sound — if a command exists in code, it appears in docs. If it doesn't exist, it can't appear.
+Templates contain the workflows, tips, and examples that require human judgment. Placeholders like `{{COMMAND_REFERENCE}}`, `{{SNAPSHOT_FLAGS}}`, `{{UPDATE_CHECK}}`, `{{BROWSE_SETUP}}`, and `{{BASE_BRANCH_DETECT}}` are filled from `commands.ts`, `snapshot.ts`, and `gen-skill-docs.ts` at build time. `{{BASE_BRANCH_DETECT}}` provides dynamic base branch detection for PR-targeting skills (ship, review, qa, plan-ceo-review) so they work with stacked branches and non-main targets.
 
 ### Why committed, not generated at runtime?
 
