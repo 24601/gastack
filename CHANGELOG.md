@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.10 — 2026-03-15
+
+### Added
+- **`{{BASE_BRANCH_DETECT}}` resolver** — DRY placeholder in `gen-skill-docs.ts` for dynamic base branch detection. Detects via `gh pr view` (existing PR base) → `gh repo view` (repo default) → fallback to `main`.
+- **"Writing SKILL templates" guidance** in CLAUDE.md — rules for natural language over bash-isms, dynamic branch detection, self-contained code blocks.
+- **Hardcoded-main regression test** in `skill-validation.test.ts` — scans `.tmpl` files for hardcoded `main` in git commands with allowlisted exceptions.
+- **Resolver content test** in `gen-skill-docs.test.ts` — verifies `BASE_BRANCH_DETECT` output contains the 3-step detection chain.
+
+### Fixed
+- **Ship skill detects base branch dynamically** — replaces ~14 hardcoded `main` references. Fixes stacked branches and Conductor workspaces targeting non-main branches. Adds `--base <base>` to `gh pr create`.
+- **Review, QA, plan-ceo-review detect base branch** — same `{{BASE_BRANCH_DETECT}}` pattern applied to all PR-targeting skills.
+- **Retro detects default branch** — simpler inline detection (`gh repo view defaultBranchRef`) replacing ~11 hardcoded `origin/main` references. Handles repos using `master` or other default branch names.
+- **QA bash-isms cleaned up** — removed `REPORT_DIR` shell variable, simplified port detection from bash conditional chaining to natural language.
+
+### Changed
+- **gstack-upgrade template** — added explicit cross-step prose for `INSTALL_DIR` references between bash blocks.
+- ARCHITECTURE.md and CONTRIBUTING.md updated with new placeholder documentation.
+
 ## 0.3.9 — 2026-03-15
 
 ### Added
