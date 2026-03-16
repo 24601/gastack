@@ -2,18 +2,16 @@
 
 ## 0.4.1 — 2026-03-16
 
-### For users
-
-- **Contributor mode.** Run `gstack-config set gstack_contributor true` and gstack starts filing field reports when it hits its own bugs. You'll see a casual "hey gstack team, this didn't work" note appear in `~/.gstack/contributor-logs/` — open your fork and fix it.
-- **Session awareness.** If you're running 3+ gstack sessions at once, every question now re-grounds you: project, branch, what you're working on, what it's asking. No more "wait, which window is this?"
-- **Consistent recommendations.** Every question gstack asks you now ends with a clear `RECOMMENDATION: Choose X because ___` before the options. Same format everywhere.
-- **Enum completeness checks in /review.** New critical review category that traces new enum values, status strings, and type constants through every consumer outside the diff. Catches the "added a value but forgot to handle it in the switch statement" class of bugs.
+- **gstack now notices when it screws up.** Turn on contributor mode (`gstack-config set gstack_contributor true`) and gstack automatically writes up what went wrong — what you were doing, what broke, repro steps. Next time something annoys you, the bug report is already written. Fork gstack and fix it yourself.
+- **Juggling multiple sessions? gstack keeps up.** When you have 3+ gstack windows open, every question now tells you which project, which branch, and what you were working on. No more staring at a question thinking "wait, which window is this?"
+- **Every question now comes with a recommendation.** Instead of dumping options on you and making you think, gstack tells you what it would pick and why. Same clear format across every skill.
+- **/review now catches forgotten enum handlers.** Add a new status, tier, or type constant? /review traces it through every switch statement, allowlist, and filter in your codebase — not just the files you changed. Catches the "added the value but forgot to handle it" class of bugs before they ship.
 
 ### For contributors
 
-- Renamed `{{UPDATE_CHECK}}` placeholder to `{{PREAMBLE}}` across all skill templates — single startup block now handles update check, session tracking, contributor mode, and question formatting.
-- DRY'd plan-ceo-review and plan-eng-review question formatting to reference the preamble baseline.
-- Added vendored symlink awareness docs to CLAUDE.md.
+- Renamed `{{UPDATE_CHECK}}` to `{{PREAMBLE}}` across all 11 skill templates — one startup block now handles update check, session tracking, contributor mode, and question formatting.
+- DRY'd plan-ceo-review and plan-eng-review question formatting to reference the preamble baseline instead of duplicating rules.
+- Added CHANGELOG style guide and vendored symlink awareness docs to CLAUDE.md.
 
 ## 0.4.0 — 2026-03-16
 
