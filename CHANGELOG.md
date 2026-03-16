@@ -1,22 +1,42 @@
 # Changelog
 
-## 0.3.10 — 2026-03-15
+## 0.4.1 — 2026-03-16
+
+- **gstack now notices when it screws up.** Turn on contributor mode (`gstack-config set gstack_contributor true`) and gstack automatically writes up what went wrong — what you were doing, what broke, repro steps. Next time something annoys you, the bug report is already written. Fork gstack and fix it yourself.
+- **Juggling multiple sessions? gstack keeps up.** When you have 3+ gstack windows open, every question now tells you which project, which branch, and what you were working on. No more staring at a question thinking "wait, which window is this?"
+- **Every question now comes with a recommendation.** Instead of dumping options on you and making you think, gstack tells you what it would pick and why. Same clear format across every skill.
+- **/review now catches forgotten enum handlers.** Add a new status, tier, or type constant? /review traces it through every switch statement, allowlist, and filter in your codebase — not just the files you changed. Catches the "added the value but forgot to handle it" class of bugs before they ship.
+
+### For contributors
+
+- Renamed `{{UPDATE_CHECK}}` to `{{PREAMBLE}}` across all 11 skill templates — one startup block now handles update check, session tracking, contributor mode, and question formatting.
+- DRY'd plan-ceo-review and plan-eng-review question formatting to reference the preamble baseline instead of duplicating rules.
+- Added CHANGELOG style guide and vendored symlink awareness docs to CLAUDE.md.
+
+## 0.4.0 — 2026-03-16
 
 ### Added
-- **`{{BASE_BRANCH_DETECT}}` resolver** — DRY placeholder in `gen-skill-docs.ts` for dynamic base branch detection. Detects via `gh pr view` (existing PR base) → `gh repo view` (repo default) → fallback to `main`.
-- **"Writing SKILL templates" guidance** in CLAUDE.md — rules for natural language over bash-isms, dynamic branch detection, self-contained code blocks.
-- **Hardcoded-main regression test** in `skill-validation.test.ts` — scans `.tmpl` files for hardcoded `main` in git commands with allowlisted exceptions.
-- **Resolver content test** in `gen-skill-docs.test.ts` — verifies `BASE_BRANCH_DETECT` output contains the 3-step detection chain.
-
-### Fixed
-- **Ship skill detects base branch dynamically** — replaces ~14 hardcoded `main` references. Fixes stacked branches and Conductor workspaces targeting non-main branches. Adds `--base <base>` to `gh pr create`.
-- **Review, QA, plan-ceo-review detect base branch** — same `{{BASE_BRANCH_DETECT}}` pattern applied to all PR-targeting skills.
-- **Retro detects default branch** — simpler inline detection (`gh repo view defaultBranchRef`) replacing ~11 hardcoded `origin/main` references. Handles repos using `master` or other default branch names.
-- **QA bash-isms cleaned up** — removed `REPORT_DIR` shell variable, simplified port detection from bash conditional chaining to natural language.
+- **QA-only skill** (`/qa-only`) — report-only QA mode that finds and documents bugs without making fixes. Hand off a clean bug report to your team without the agent touching your code.
+- **QA fix loop** — `/qa` now runs a find-fix-verify cycle: discover bugs, fix them, commit, re-navigate to confirm the fix took. One command to go from broken to shipped.
+- **Plan-to-QA artifact flow** — `/plan-eng-review` writes test-plan artifacts that `/qa` picks up automatically. Your engineering review now feeds directly into QA testing with no manual copy-paste.
+- **`{{QA_METHODOLOGY}}` DRY placeholder** — shared QA methodology block injected into both `/qa` and `/qa-only` templates. Keeps both skills in sync when you update testing standards.
+- **Eval efficiency metrics** — turns, duration, and cost now displayed across all eval surfaces with natural-language **Takeaway** commentary. See at a glance whether your prompt changes made the agent faster or slower.
+- **`generateCommentary()` engine** — interprets comparison deltas so you don't have to: flags regressions, notes improvements, and produces an overall efficiency summary.
+- **Eval list columns** — `bun run eval:list` now shows Turns and Duration per run. Spot expensive or slow runs instantly.
+- **Eval summary per-test efficiency** — `bun run eval:summary` shows average turns/duration/cost per test across runs. Identify which tests are costing you the most over time.
+- **`judgePassed()` unit tests** — extracted and tested the pass/fail judgment logic.
+- **3 new E2E tests** — qa-only no-fix guardrail, qa fix loop with commit verification, plan-eng-review test-plan artifact.
+- **Browser ref staleness detection** — `resolveRef()` now checks element count to detect stale refs after page mutations. SPA navigation no longer causes 30-second timeouts on missing elements.
+- 3 new snapshot tests for ref staleness.
 
 ### Changed
-- **gstack-upgrade template** — added explicit cross-step prose for `INSTALL_DIR` references between bash blocks.
-- ARCHITECTURE.md and CONTRIBUTING.md updated with new placeholder documentation.
+- QA skill prompt restructured with explicit two-cycle workflow (find → fix → verify).
+- `formatComparison()` now shows per-test turns and duration deltas alongside cost.
+- `printSummary()` shows turns and duration columns.
+- `eval-store.test.ts` fixed pre-existing `_partial` file assertion bug.
+
+### Fixed
+- Browser ref staleness — refs collected before page mutation (e.g. SPA navigation) are now detected and re-collected. Eliminates a class of flaky QA failures on dynamic sites.
 
 ## 0.3.9 — 2026-03-15
 
