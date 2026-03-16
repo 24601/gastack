@@ -456,6 +456,33 @@ EOF
 
 ---
 
+## Step 8.5: Sync to Team (non-fatal)
+
+After the PR is created, write a ship log and sync to the team store. This step is entirely silent if sync is not configured.
+
+1. Write ship metadata to a temp file:
+```bash
+cat > /tmp/gstack-ship-log.json << 'SHIPEOF'
+{
+  "version": "<new version from Step 4>",
+  "branch": "<current branch>",
+  "pr_url": "<PR URL from Step 8>",
+  "review_findings": { "critical": 0, "informational": 0 },
+  "greptile_stats": { "total": 0, "valid": 0, "fixed": 0, "fp": 0 },
+  "todos_completed": [],
+  "test_results": { "pass": true, "test_count": 0 }
+}
+SHIPEOF
+```
+Substitute actual values from the preceding steps. Use `0` for Greptile fields if no Greptile comments were found.
+
+2. Push (non-fatal):
+```bash
+~/.claude/skills/gstack/bin/gstack-sync push-ship /tmp/gstack-ship-log.json 2>/dev/null && echo "Synced to team ✓" || true
+```
+
+---
+
 ## Important Rules
 
 - **Never skip tests.** If tests fail, stop.
