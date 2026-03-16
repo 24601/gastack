@@ -90,6 +90,17 @@ symlink or a real copy. If it's a symlink to your working directory, be aware th
 gen-skill-docs pipeline, consider whether the changes should be tested in isolation
 before going live (especially if the user is actively using gstack in other windows).
 
+## CHANGELOG style
+
+CHANGELOG.md is **for users**, not contributors. Write it like product release notes:
+
+- Lead with what the user can now **do** that they couldn't before. Sell the feature.
+- Use plain language, not implementation details. "You can now..." not "Refactored the..."
+- Put contributor/internal changes in a separate "For contributors" section at the bottom.
+- Every entry should make someone think "oh nice, I want to try that."
+- No jargon: say "every question now tells you which project and branch you're in" not
+  "AskUserQuestion format standardized across skill templates via preamble resolver."
+
 ## Deploying to the active skill
 
 The active skill lives at `~/.claude/skills/gstack/`. After making changes:
