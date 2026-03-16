@@ -425,6 +425,12 @@ Substitute actual values from the preceding steps. Use `0` for Greptile fields i
 ~/.claude/skills/gstack/bin/gstack-sync push-transcript 2>/dev/null || true
 ```
 
+3. Leaderboard callout (non-fatal): After sync, show the user their position on the team leaderboard this week:
+```bash
+~/.claude/skills/gstack/bin/gstack-eval leaderboard 2>/dev/null | head -15 || true
+```
+If leaderboard data is available, print the table. If sync is not configured or no data exists, silently skip.
+
 ---
 
 ## Important Rules
