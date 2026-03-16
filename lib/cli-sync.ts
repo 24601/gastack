@@ -6,12 +6,13 @@
 import * as fs from 'fs';
 import { getTeamConfig, resolveSyncConfig, clearAuthTokens, isSyncConfigured } from './sync-config';
 import { runDeviceAuth } from './auth';
-import { pushEvalRun, pushRetro, pushQAReport, pushShipLog, pullTable, drainQueue, getSyncStatus } from './sync';
+import { pushEvalRun, pushRetro, pushQAReport, pushShipLog, pushGreptileTriage, pushHeartbeat, pullTable, drainQueue, getSyncStatus } from './sync';
 import { readJSON } from './util';
 
-const command = process.argv[2];
+// --- Main (only when run directly, not imported) ---
 
 async function main() {
+  const command = process.argv[2];
   switch (command) {
     case 'setup':
       await cmdSetup();
@@ -30,6 +31,15 @@ async function main() {
       break;
     case 'push-ship':
       await cmdPushFile('ship', process.argv[3]);
+      break;
+    case 'push-greptile':
+      await cmdPushFile('greptile', process.argv[3]);
+      break;
+    case 'test':
+      await cmdTest();
+      break;
+    case 'show':
+      await cmdShow(process.argv.slice(3));
       break;
     case 'pull':
       await cmdPull();
@@ -121,6 +131,9 @@ async function cmdPushFile(type: string, filePath: string): Promise<void> {
     case 'ship':
       ok = await pushShipLog(data);
       break;
+    case 'greptile':
+      ok = await pushGreptileTriage(data);
+      break;
   }
 
   if (ok) {
@@ -165,7 +178,235 @@ function cmdLogout(): void {
   console.log(`Cleared auth tokens for ${team.supabase_url}`);
 }
 
-main().catch(err => {
-  console.error(err.message);
-  process.exit(1);
-});
+// --- sync test ---
+
+async function cmdTest(): Promise<void> {
+  console.log('gstack sync test');
+  console.log('─'.repeat(40));
+
+  // Step 1: Config
+  const team = getTeamConfig();
+  if (!team) {
+    console.log('  1. Config:        FAIL — no .gstack-sync.json');
+    console.log('\n  See docs/TEAM_SYNC_SETUP.md for setup instructions.');
+    process.exit(1);
+  }
+  console.log(`  1. Config:        ok (team: ${team.team_slug})`);
+
+  // Step 2: Auth
+  const config = resolveSyncConfig();
+  if (!config) {
+    console.log('  2. Auth:          FAIL — not authenticated');
+    console.log('\n  Run: gstack-sync setup');
+    process.exit(1);
+  }
+  console.log(`  2. Auth:          ok (${config.auth.email || config.auth.user_id})`);
+
+  // Step 3: Push heartbeat
+  const t0 = Date.now();
+  const pushOk = await pushHeartbeat();
+  const pushMs = Date.now() - t0;
+  if (!pushOk) {
+    console.log(`  3. Push:          FAIL (${pushMs}ms)`);
+    console.log('\n  Check that Supabase migrations have been run (especially 005_sync_heartbeats.sql).');
+    console.log('  See docs/TEAM_SYNC_SETUP.md for details.');
+    process.exit(1);
+  }
+  console.log(`  3. Push:          ok (${pushMs}ms)`);
+
+  // Step 4: Pull
+  const t1 = Date.now();
+  const rows = await pullTable('sync_heartbeats');
+  const pullMs = Date.now() - t1;
+  if (rows.length === 0) {
+    console.log(`  4. Pull:          FAIL — no rows returned (${pullMs}ms)`);
+    process.exit(1);
+  }
+  console.log(`  4. Pull:          ok (${rows.length} heartbeats, ${pullMs}ms)`);
+
+  console.log('─'.repeat(40));
+  console.log('  Sync test passed ✓');
+}
+
+// --- sync show ---
+
+/** Format a relative time string (e.g., "2 hours ago"). */
+export function formatRelativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return 'just now';
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
+  return `${Math.round(ms / 86_400_000)}d ago`;
+}
+
+/** Format team summary dashboard from pulled data. Pure function for testing. */
+export function formatTeamSummary(opts: {
+  teamSlug: string;
+  evalRuns: Record<string, unknown>[];
+  shipLogs: Record<string, unknown>[];
+  retroSnapshots: Record<string, unknown>[];
+  queueSize: number;
+  cacheLastPull: string | null;
+}): string {
+  const lines: string[] = [];
+  const { teamSlug, evalRuns, shipLogs, retroSnapshots, queueSize, cacheLastPull } = opts;
+
+  lines.push('');
+  lines.push(`Team: ${teamSlug}`);
+  lines.push('═'.repeat(50));
+
+  // Eval runs (last 7 days)
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const recentEvals = evalRuns.filter(r => (r.timestamp as string) > weekAgo);
+  const evalContributors = new Set(recentEvals.map(r => r.user_id).filter(Boolean));
+  lines.push(`  Eval runs (7d):   ${recentEvals.length} runs, ${evalContributors.size} contributors`);
+
+  // Ship velocity (last 7 days)
+  const recentShips = shipLogs.filter(r => (r.created_at as string || r.timestamp as string || '') > weekAgo);
+  lines.push(`  Ship velocity:    ${recentShips.length} PRs this week`);
+
+  // Detection rate (from recent evals)
+  const detectionRates = recentEvals
+    .flatMap(r => ((r.tests as any[]) || []).filter(t => t.detection_rate != null).map(t => t.detection_rate as number));
+  if (detectionRates.length > 0) {
+    const avg = detectionRates.reduce((a, b) => a + b, 0) / detectionRates.length;
+    lines.push(`  Avg detection:    ${avg.toFixed(1)} bugs`);
+  }
+
+  // Latest retro
+  if (retroSnapshots.length > 0) {
+    const latest = retroSnapshots[0];
+    const streak = (latest as any).streak_days;
+    const date = (latest as any).date || (latest as any).timestamp;
+    lines.push(`  Latest retro:     ${date ? String(date).slice(0, 10) : 'unknown'}${streak ? ` (streak: ${streak}d)` : ''}`);
+  }
+
+  // Queue + cache
+  lines.push(`  Sync queue:       ${queueSize} items`);
+  lines.push(`  Last pull:        ${cacheLastPull ? formatRelativeTime(cacheLastPull) : 'never'}`);
+
+  lines.push('═'.repeat(50));
+  lines.push('');
+  return lines.join('\n');
+}
+
+/** Format eval runs table. Pure function for testing. */
+export function formatEvalTable(evalRuns: Record<string, unknown>[]): string {
+  if (evalRuns.length === 0) return 'No eval runs yet.\n';
+  const lines: string[] = [];
+  lines.push('');
+  lines.push('Recent Eval Runs');
+  lines.push('═'.repeat(80));
+  lines.push(
+    '  ' +
+    'Date'.padEnd(13) +
+    'User'.padEnd(20) +
+    'Branch'.padEnd(22) +
+    'Pass'.padEnd(8) +
+    'Cost'.padEnd(8) +
+    'Tier'
+  );
+  lines.push('─'.repeat(80));
+
+  for (const r of evalRuns.slice(0, 20)) {
+    const date = String(r.timestamp || '').slice(0, 10);
+    const user = String(r.email || r.user_id || '').slice(0, 18).padEnd(20);
+    const branch = String(r.branch || '').slice(0, 20).padEnd(22);
+    const pass = `${r.passed || 0}/${r.total_tests || 0}`.padEnd(8);
+    const cost = `$${Number(r.total_cost_usd || 0).toFixed(2)}`.padEnd(8);
+    const tier = String(r.tier || 'e2e');
+    lines.push(`  ${date.padEnd(13)}${user}${branch}${pass}${cost}${tier}`);
+  }
+
+  lines.push('─'.repeat(80));
+  lines.push('');
+  return lines.join('\n');
+}
+
+/** Format ship logs table. Pure function for testing. */
+export function formatShipTable(shipLogs: Record<string, unknown>[]): string {
+  if (shipLogs.length === 0) return 'No ship logs yet.\n';
+  const lines: string[] = [];
+  lines.push('');
+  lines.push('Recent Ship Logs');
+  lines.push('═'.repeat(70));
+  lines.push(
+    '  ' +
+    'Date'.padEnd(13) +
+    'Version'.padEnd(12) +
+    'Branch'.padEnd(25) +
+    'PR'
+  );
+  lines.push('─'.repeat(70));
+
+  for (const r of shipLogs.slice(0, 20)) {
+    const date = String(r.created_at || r.timestamp || '').slice(0, 10);
+    const version = String(r.version || '').padEnd(12);
+    const branch = String(r.branch || '').slice(0, 23).padEnd(25);
+    const pr = String(r.pr_url || '');
+    lines.push(`  ${date.padEnd(13)}${version}${branch}${pr}`);
+  }
+
+  lines.push('─'.repeat(70));
+  lines.push('');
+  return lines.join('\n');
+}
+
+async function cmdShow(args: string[]): Promise<void> {
+  if (!isSyncConfigured()) {
+    console.error('Sync not configured. Run gstack-sync setup first.');
+    console.error('See docs/TEAM_SYNC_SETUP.md for setup instructions.');
+    process.exit(1);
+  }
+
+  const sub = args[0];
+  const team = getTeamConfig()!;
+
+  if (sub === 'evals') {
+    const rows = await pullTable('eval_runs');
+    console.log(formatEvalTable(rows));
+    return;
+  }
+
+  if (sub === 'ships') {
+    const rows = await pullTable('ship_logs');
+    console.log(formatShipTable(rows));
+    return;
+  }
+
+  if (sub === 'retros') {
+    const rows = await pullTable('retro_snapshots');
+    if (rows.length === 0) { console.log('No retro snapshots yet.'); return; }
+    for (const r of rows.slice(0, 10)) {
+      const date = String((r as any).date || (r as any).timestamp || '').slice(0, 10);
+      const streak = (r as any).streak_days;
+      const commits = (r as any).metrics?.commits;
+      console.log(`  ${date}  ${commits ? commits + ' commits' : ''}  ${streak ? 'streak: ' + streak + 'd' : ''}`);
+    }
+    return;
+  }
+
+  // Default: summary dashboard
+  const status = await getSyncStatus();
+  const [evalRuns, shipLogs, retroSnapshots] = await Promise.all([
+    pullTable('eval_runs'),
+    pullTable('ship_logs'),
+    pullTable('retro_snapshots'),
+  ]);
+
+  console.log(formatTeamSummary({
+    teamSlug: team.team_slug,
+    evalRuns,
+    shipLogs,
+    retroSnapshots,
+    queueSize: status.queueSize,
+    cacheLastPull: status.cacheLastPull,
+  }));
+}
+
+if (import.meta.main) {
+  main().catch(err => {
+    console.error(err.message);
+    process.exit(1);
+  });
+}

@@ -154,77 +154,63 @@ export async function pushRow(table: string, data: Record<string, unknown>): Pro
   }
 }
 
-/** Push an eval run result to Supabase. */
-export async function pushEvalRun(evalResult: Record<string, unknown>): Promise<boolean> {
+/**
+ * Common push helper: resolves sync config, injects team/user/repo fields, and pushes.
+ * Returns false (silently) if sync is not configured.
+ */
+function pushWithSync(
+  table: string,
+  data: Record<string, unknown>,
+  opts?: { addRepoSlug?: boolean; addHostname?: boolean },
+): Promise<boolean> {
   const config = resolveSyncConfig();
-  if (!config) return false;
-
-  const data = {
+  if (!config) return Promise.resolve(false);
+  const row: Record<string, unknown> = {
     team_id: config.auth.team_id,
-    repo_slug: getRemoteSlug(),
     user_id: config.auth.user_id,
+    ...data,
+  };
+  if (opts?.addRepoSlug !== false) row.repo_slug = getRemoteSlug();
+  if (opts?.addHostname) row.hostname = os.hostname();
+  return pushRow(table, row);
+}
+
+/** Push an eval run result to Supabase. Strips transcripts to keep payload small. */
+export async function pushEvalRun(evalResult: Record<string, unknown>): Promise<boolean> {
+  return pushWithSync('eval_runs', {
     hostname: os.hostname(),
     ...evalResult,
-    // Strip full transcripts to keep payload small
     tests: (evalResult.tests as any[])?.map(t => ({
       ...t,
       transcript: undefined,
       prompt: t.prompt ? t.prompt.slice(0, 500) : undefined,
     })),
-  };
-
-  return pushRow('eval_runs', data);
+  });
 }
 
 /** Push a retro snapshot to Supabase. */
-export async function pushRetro(retroData: Record<string, unknown>): Promise<boolean> {
-  const config = resolveSyncConfig();
-  if (!config) return false;
-
-  return pushRow('retro_snapshots', {
-    team_id: config.auth.team_id,
-    repo_slug: getRemoteSlug(),
-    user_id: config.auth.user_id,
-    ...retroData,
-  });
+export function pushRetro(retroData: Record<string, unknown>): Promise<boolean> {
+  return pushWithSync('retro_snapshots', retroData);
 }
 
 /** Push a QA report to Supabase. */
-export async function pushQAReport(qaData: Record<string, unknown>): Promise<boolean> {
-  const config = resolveSyncConfig();
-  if (!config) return false;
-
-  return pushRow('qa_reports', {
-    team_id: config.auth.team_id,
-    repo_slug: getRemoteSlug(),
-    user_id: config.auth.user_id,
-    ...qaData,
-  });
+export function pushQAReport(qaData: Record<string, unknown>): Promise<boolean> {
+  return pushWithSync('qa_reports', qaData);
 }
 
 /** Push a ship log to Supabase. */
-export async function pushShipLog(shipData: Record<string, unknown>): Promise<boolean> {
-  const config = resolveSyncConfig();
-  if (!config) return false;
-
-  return pushRow('ship_logs', {
-    team_id: config.auth.team_id,
-    repo_slug: getRemoteSlug(),
-    user_id: config.auth.user_id,
-    ...shipData,
-  });
+export function pushShipLog(shipData: Record<string, unknown>): Promise<boolean> {
+  return pushWithSync('ship_logs', shipData);
 }
 
 /** Push a Greptile triage entry to Supabase. */
-export async function pushGreptileTriage(triageData: Record<string, unknown>): Promise<boolean> {
-  const config = resolveSyncConfig();
-  if (!config) return false;
+export function pushGreptileTriage(triageData: Record<string, unknown>): Promise<boolean> {
+  return pushWithSync('greptile_triage', triageData, { addRepoSlug: false });
+}
 
-  return pushRow('greptile_triage', {
-    team_id: config.auth.team_id,
-    user_id: config.auth.user_id,
-    ...triageData,
-  });
+/** Push a sync heartbeat (for connectivity testing). */
+export function pushHeartbeat(): Promise<boolean> {
+  return pushWithSync('sync_heartbeats', { hostname: os.hostname() }, { addRepoSlug: false });
 }
 
 // --- Pull operations ---
