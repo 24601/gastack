@@ -157,19 +157,19 @@ export function getDashboardHTML(supabaseUrl: string, anonKey: string): string {
         <div class="stat-card"><div class="label">Active Now</div><div class="value" id="stat-active-now">-</div></div>
         <div class="stat-card"><div class="label">Cost This Week</div><div class="value" id="stat-cost-week">-</div></div>
       </div>
-      <div class="panel"><h3>Recent Eval Runs</h3><table id="tbl-overview-evals"><thead><tr><th>Date</th><th>Branch</th><th>Pass Rate</th><th>Cost</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-overview-evals" style="display:none">No data yet</div></div>
-      <div class="panel"><h3>Recent Ships</h3><table id="tbl-overview-ships"><thead><tr><th>Date</th><th>Version</th><th>Branch</th><th>PR</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-overview-ships" style="display:none">No data yet</div></div>
+      <div class="panel"><h3>Recent Eval Runs</h3><table id="tbl-overview-evals"><thead><tr><th>Date</th><th>Branch</th><th>Pass Rate</th><th>Cost</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-overview-evals" style="display:none">No eval runs yet. Push results with: gstack eval push result.json</div></div>
+      <div class="panel"><h3>Recent Ships</h3><table id="tbl-overview-ships"><thead><tr><th>Date</th><th>Version</th><th>Branch</th><th>PR</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-overview-ships" style="display:none">No ships yet. Ship your first PR with: /ship</div></div>
     </div>
 
     <!-- Evals -->
     <div class="tab-panel" id="panel-evals">
       <div class="panel"><h3>Pass Rate Trend</h3><div class="chart-container" id="chart-sparkline"></div></div>
-      <div class="panel"><h3>Recent Eval Runs</h3><table id="tbl-evals"><thead><tr><th>Date</th><th>User</th><th>Branch</th><th>Pass Rate</th><th>Cost</th><th>Tier</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-evals" style="display:none">No data yet</div></div>
+      <div class="panel"><h3>Recent Eval Runs</h3><table id="tbl-evals"><thead><tr><th>Date</th><th>User</th><th>Branch</th><th>Pass Rate</th><th>Cost</th><th>Tier</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-evals" style="display:none">No eval data yet. Run your test suite and push results: gstack eval push result.json</div></div>
     </div>
 
     <!-- Ships -->
     <div class="tab-panel" id="panel-ships">
-      <div class="panel"><h3>Recent Ships</h3><table id="tbl-ships"><thead><tr><th>Date</th><th>Version</th><th>Branch</th><th>PR</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-ships" style="display:none">No data yet</div></div>
+      <div class="panel"><h3>Recent Ships</h3><table id="tbl-ships"><thead><tr><th>Date</th><th>Version</th><th>Branch</th><th>PR</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-ships" style="display:none">No ships yet. Use /ship to create PRs with full review and version bumps.</div></div>
       <div class="panel"><h3>Ships Per Person This Week</h3><div class="chart-container" id="chart-ships-per-person"></div></div>
     </div>
 
@@ -183,12 +183,12 @@ export function getDashboardHTML(supabaseUrl: string, anonKey: string): string {
 
     <!-- Leaderboard -->
     <div class="tab-panel" id="panel-leaderboard">
-      <div class="panel"><h3>This Week</h3><table id="tbl-leaderboard"><thead><tr><th>#</th><th>Who</th><th>Ships</th><th>Evals</th><th>Sessions</th><th>Pass Rate</th><th>Cost</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-leaderboard" style="display:none">No data yet</div></div>
+      <div class="panel"><h3>This Week</h3><table id="tbl-leaderboard"><thead><tr><th>#</th><th>Who</th><th>Ships</th><th>Evals</th><th>Sessions</th><th>Pass Rate</th><th>Cost</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-leaderboard" style="display:none">No activity this week yet. Ship, run evals, or start a Claude session to appear here.</div></div>
     </div>
 
     <!-- QA -->
     <div class="tab-panel" id="panel-qa">
-      <div class="panel"><h3>Recent QA Reports</h3><table id="tbl-qa"><thead><tr><th>Date</th><th>Repo</th><th>Health Score</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-qa" style="display:none">No data yet</div></div>
+      <div class="panel"><h3>Recent QA Reports</h3><table id="tbl-qa"><thead><tr><th>Date</th><th>Repo</th><th>Health Score</th></tr></thead><tbody></tbody></table><div class="panel-empty" id="empty-qa" style="display:none">No QA reports yet. Run /qa on a web app to generate your first health score.</div></div>
     </div>
   </div>
 </div>
@@ -394,12 +394,12 @@ export function getDashboardHTML(supabaseUrl: string, anonKey: string): string {
   }
 
   // ================================================================
-  // Auto-refresh (30s, pauses when tab hidden)
+  // Auto-refresh (60s, pauses when tab hidden)
   // ================================================================
 
   function startAutoRefresh() {
     stopAutoRefresh();
-    refreshTimer = setInterval(() => { fetchAll(); }, 30000);
+    refreshTimer = setInterval(() => { fetchAll(); }, 60000);
   }
 
   function stopAutoRefresh() {
@@ -527,7 +527,7 @@ export function getDashboardHTML(supabaseUrl: string, anonKey: string): string {
   function renderSparkline(containerId, values) {
     const el = document.getElementById(containerId);
     if (!el) return;
-    if (!values || values.length === 0) { el.innerHTML = '<span class="panel-empty">No data yet</span>'; return; }
+    if (!values || values.length === 0) { el.innerHTML = '<span class="panel-empty">No data points yet. Run evals to see pass rate trends.</span>'; return; }
 
     const W = 600, H = 120, PAD = 30;
     const max = Math.max(...values, 1);
@@ -559,7 +559,7 @@ export function getDashboardHTML(supabaseUrl: string, anonKey: string): string {
   function renderHBarChart(containerId, items) {
     const el = document.getElementById(containerId);
     if (!el) return;
-    if (!items || items.length === 0) { el.innerHTML = '<span class="panel-empty">No data yet</span>'; return; }
+    if (!items || items.length === 0) { el.innerHTML = '<span class="panel-empty">No activity to chart yet. Ship PRs to see the breakdown.</span>'; return; }
 
     const W = 600, barH = 28, gap = 6;
     const H = items.length * (barH + gap) + 20;
@@ -583,7 +583,7 @@ export function getDashboardHTML(supabaseUrl: string, anonKey: string): string {
   function renderVBarChart(containerId, items) {
     const el = document.getElementById(containerId);
     if (!el) return;
-    if (!items || items.length === 0) { el.innerHTML = '<span class="panel-empty">No data yet</span>'; return; }
+    if (!items || items.length === 0) { el.innerHTML = '<span class="panel-empty">No cost data yet. Eval costs appear here after runs are pushed.</span>'; return; }
 
     const W = 600, H = 180, PAD_BOTTOM = 40, PAD_TOP = 20, PAD_LEFT = 50;
     const maxVal = Math.max(...items.map(function(d) { return d.value; }), 0.01);
@@ -806,13 +806,37 @@ export function getDashboardHTML(supabaseUrl: string, anonKey: string): string {
         board[uid].sessions++;
       });
     }
-    // Online status from heartbeats
+    // Online status from heartbeats (also capture repo_slug)
     if (data.heartbeats) {
       data.heartbeats.forEach(function(h) {
         const uid = h.user_id || h.hostname;
         if (uid && board[uid] && withinMinutes(h.timestamp, 15)) {
           board[uid].online = true;
+          if (h.repo_slug) board[uid].repo = h.repo_slug;
         }
+      });
+    }
+
+    // Compute streak badges from ship_logs (consecutive ship days this week)
+    const streaks = {};
+    if (data.shipLogs) {
+      const byUser = {};
+      data.shipLogs.filter(function(r) { return new Date(r.created_at) >= ws; }).forEach(function(r) {
+        const uid = r.user_id || 'unknown';
+        if (!byUser[uid]) byUser[uid] = new Set();
+        byUser[uid].add(new Date(r.created_at).toISOString().slice(0, 10));
+      });
+      Object.keys(byUser).forEach(function(uid) {
+        const dates = Array.from(byUser[uid]).sort();
+        let maxRun = 1, run = 1;
+        for (let i = 1; i < dates.length; i++) {
+          const prev = new Date(dates[i - 1]);
+          const curr = new Date(dates[i]);
+          const diffDays = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+          if (diffDays === 1) { run++; if (run > maxRun) maxRun = run; }
+          else { run = 1; }
+        }
+        streaks[uid] = maxRun;
       });
     }
 
@@ -824,9 +848,12 @@ export function getDashboardHTML(supabaseUrl: string, anonKey: string): string {
     const tbody = clearTbody('tbl-leaderboard');
     sorted.forEach(function(entry, i) {
       const rate = entry.total_tests ? ((entry.passed / entry.total_tests) * 100).toFixed(0) + '%' : '-';
+      const streak = streaks[entry.uid] || 0;
+      const streakBadge = streak >= 5 ? '\u{1F525}\u{1F525} ' : (streak >= 3 ? '\u{1F525} ' : '');
+      const displayName = entry.uid.slice(0, 8) + (entry.repo ? ' &mdash; ' + escapeHTML(entry.repo) : '');
       const nameCell = entry.online
-        ? { html: '<span class="online-dot"></span>' + escapeHTML(entry.uid.slice(0, 8)) }
-        : entry.uid.slice(0, 8);
+        ? { html: '<span class="online-dot"></span>' + streakBadge + displayName }
+        : { html: streakBadge + displayName };
       tbody.appendChild(makeRow([
         i + 1,
         nameCell,

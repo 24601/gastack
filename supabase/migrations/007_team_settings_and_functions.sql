@@ -35,6 +35,12 @@ create policy "admin_write_settings" on team_settings
     )
   );
 
+-- Add CHECK constraint on teams.slug if not already present
+do $$ begin
+  alter table teams add constraint chk_team_slug check (slug ~ '^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$');
+exception when duplicate_object then null;
+end $$;
+
 -- ─── alert_cooldowns ────────────────────────────────────────
 
 create table if not exists alert_cooldowns (
@@ -75,6 +81,9 @@ begin
   end if;
   if team_name is null or length(trim(team_name)) = 0 then
     raise exception 'team_name cannot be empty';
+  end if;
+  if team_slug !~ '^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$' then
+    raise exception 'team_slug must be 2-50 chars, lowercase alphanumeric and hyphens only, must start and end with alphanumeric';
   end if;
   if auth.uid() is null then
     raise exception 'must be authenticated';

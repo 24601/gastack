@@ -79,8 +79,12 @@ export function formatDigestMessage(data: DigestData): string {
 
 Deno.serve(async (_req: Request) => {
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceKey) {
+      console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars');
+      return new Response('OK (missing env vars)', { status: 200 });
+    }
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();

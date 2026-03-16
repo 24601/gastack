@@ -35,6 +35,11 @@ async function getValidToken(): Promise<{ token: string; config: ReturnType<type
     return null;
   }
 
+  if (config.auth.expires_at && isTokenExpired(config.auth.expires_at)) {
+    console.error('Auth token expired. Run: gstack sync setup');
+    return null;
+  }
+
   return { token, config };
 }
 

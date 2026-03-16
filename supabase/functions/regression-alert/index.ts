@@ -71,8 +71,12 @@ Deno.serve(async (req: Request) => {
       return new Response('OK (skipped: total_tests=0)', { status: 200 });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceKey) {
+      console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars');
+      return new Response('OK (missing env vars)', { status: 200 });
+    }
     const supabase = createClient(supabaseUrl, serviceKey);
 
     // Check cooldown (5-min dedup)
