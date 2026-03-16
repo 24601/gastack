@@ -73,6 +73,31 @@ Then run: `mkdir -p ~/.gstack/contributor-logs && open ~/.gstack/contributor-log
 
 Slug: lowercase, hyphens, max 60 chars (e.g. `browse-snapshot-ref-gap`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"
 
+## Completion Status Protocol
+
+When completing a skill workflow, report status using one of:
+- **DONE** — All steps completed successfully. Evidence provided for each claim.
+- **DONE_WITH_CONCERNS** — Completed, but with issues the user should know about. List each concern.
+- **BLOCKED** — Cannot proceed. State what is blocking and what was tried.
+- **NEEDS_CONTEXT** — Missing information required to continue. State exactly what you need.
+
+### Escalation
+
+It is always OK to stop and say "this is too hard for me" or "I'm not confident in this result."
+
+Bad work is worse than no work. You will not be penalized for escalating.
+- If you have attempted a task 3 times without success, STOP and escalate.
+- If you are uncertain about a security-sensitive change, STOP and escalate.
+- If the scope of work exceeds what you can verify, STOP and escalate.
+
+Escalation format:
+```
+STATUS: BLOCKED | NEEDS_CONTEXT
+REASON: [1-2 sentences]
+ATTEMPTED: [what you tried]
+RECOMMENDATION: [what the user should do next]
+```
+
 # Pre-Landing PR Review
 
 You are running the `/review` workflow. Analyze the current branch's diff against main for structural issues that tests don't catch.
@@ -84,6 +109,40 @@ You are running the `/review` workflow. Analyze the current branch's diff agains
 1. Run `git branch --show-current` to get the current branch.
 2. If on `main`, output: **"Nothing to review — you're on main or have no changes against main."** and stop.
 3. Run `git fetch origin main --quiet && git diff origin/main --stat` to check if there's a diff. If no diff, output the same message and stop.
+
+---
+
+## Step 1.5: Scope Drift Detection
+
+Before reviewing code quality, check: **did they build what was requested — nothing more, nothing less?**
+
+1. Read `TODOS.md` (if it exists). Read PR description (`gh pr view --json body --jq .body 2>/dev/null || true`).
+   Read commit messages (`git log origin/main..HEAD --oneline`).
+   **If no PR exists:** rely on commit messages and TODOS.md for stated intent — this is the common case since /review runs before /ship creates the PR.
+2. Identify the **stated intent** — what was this branch supposed to accomplish?
+3. Run `git diff origin/main --stat` and compare the files changed against the stated intent.
+4. Evaluate with skepticism:
+
+   **SCOPE CREEP detection:**
+   - Files changed that are unrelated to the stated intent
+   - New features or refactors not mentioned in the plan
+   - "While I was in there..." changes that expand blast radius
+
+   **MISSING REQUIREMENTS detection:**
+   - Requirements from TODOS.md/PR description not addressed in the diff
+   - Test coverage gaps for stated requirements
+   - Partial implementations (started but not finished)
+
+5. Output (before the main review begins):
+   ```
+   Scope Check: [CLEAN / DRIFT DETECTED / REQUIREMENTS MISSING]
+   Intent: <1-line summary of what was requested>
+   Delivered: <1-line summary of what the diff actually does>
+   [If drift: list each out-of-scope change]
+   [If missing: list each unaddressed requirement]
+   ```
+
+6. This is **INFORMATIONAL** — does not block the review. Proceed to Step 2.
 
 ---
 
@@ -138,6 +197,16 @@ Follow the output format specified in the checklist. Respect the suppressions �
   After all critical questions are answered, output a summary of what the user chose for each issue. If the user chose A (fix) on any issue, apply the recommended fixes. If only B/C were chosen, no action needed.
 - If only non-critical issues found: output findings. No further action needed.
 - If no issues found: output `Pre-Landing Review: No issues found.`
+
+### Verification of claims
+
+Before producing the final review output:
+- If you claim "this pattern is safe" → cite the specific line proving safety
+- If you claim "this is handled elsewhere" → read and cite the handling code
+- If you claim "tests cover this" → name the test file and method
+- Never say "likely handled" or "probably tested" — verify or flag as unknown
+
+**Rationalization prevention:** "This looks fine" is not a finding. Either cite evidence it IS fine, or flag it as unverified.
 
 ### Greptile comment resolution
 
