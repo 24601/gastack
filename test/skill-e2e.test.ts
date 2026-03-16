@@ -13,6 +13,11 @@ import * as os from 'os';
 const ROOT = path.resolve(import.meta.dir, '..');
 
 // Skip unless EVALS=1. Session runner strips CLAUDE* env vars to avoid nested session issues.
+//
+// BLAME PROTOCOL: When an eval fails, do NOT claim "pre-existing" or "not related
+// to our changes" without proof. Run the same eval on main to verify. These tests
+// have invisible couplings — preamble text, SKILL.md content, and timing all affect
+// agent behavior. See CLAUDE.md "E2E eval failure blame protocol" for details.
 const evalsEnabled = !!process.env.EVALS;
 const describeE2E = evalsEnabled ? describe : describe.skip;
 
