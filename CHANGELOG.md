@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.0 — 2026-03-16
+
+### Added
+- **QA-only skill** (`/qa-only`) — report-only QA mode that finds and documents bugs without making fixes. Uses `allowedTools` to block `Edit` tool entirely.
+- **QA fix loop** — `/qa` now runs a find-fix-verify cycle: discover bugs, fix them, commit, re-navigate to confirm the fix took.
+- **Plan-to-QA artifact flow** — `/plan-eng-review` writes test-plan artifacts to `~/.gstack/projects/<slug>/` that `/qa` picks up for targeted testing.
+- **`{{QA_METHODOLOGY}}` DRY placeholder** — shared QA methodology block injected into both `/qa` and `/qa-only` SKILL.md templates via gen-skill-docs.
+- **Eval efficiency metrics** — turns, duration, and cost now displayed across all eval surfaces (summary, comparison, list, watch). Comparison output includes natural-language **Takeaway** commentary interpreting deltas.
+- **`generateCommentary()` engine** — pure function that interprets comparison deltas: flags regressions, notes improvements, reports per-test efficiency changes, and produces overall summary.
+- **Eval list columns** — `bun run eval:list` now shows Turns and Duration per run.
+- **Eval summary per-test efficiency** — `bun run eval:summary` shows average turns/duration/cost per test across runs.
+- **`judgePassed()` unit tests** — extracted and tested the pass/fail judgment logic.
+- **3 new E2E tests** — qa-only no-fix guardrail, qa fix loop with commit verification, plan-eng-review test-plan artifact.
+- **Browser ref staleness detection** — `resolveRef()` now checks element count to detect stale refs after page mutations.
+- 3 new snapshot tests for ref staleness.
+
+### Changed
+- QA skill prompt restructured with explicit two-cycle workflow (find → fix → verify).
+- `formatComparison()` now shows per-test turns and duration deltas alongside cost.
+- `printSummary()` shows turns and duration columns.
+- `eval-store.test.ts` fixed pre-existing `_partial` file assertion bug.
+
+### Fixed
+- Browser ref staleness — refs collected before page mutation (e.g. SPA navigation) are now detected and re-collected.
+
 ## 0.3.9 — 2026-03-15
 
 ### Added
