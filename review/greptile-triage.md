@@ -204,6 +204,25 @@ Example entries:
 2026-03-13 | garrytan/myapp | already-fixed | lib/payments.rb | error-handling
 ```
 
+## Team Sync (non-fatal)
+
+After appending to both history files, sync each triage entry to the team store. For each triaged comment, write a JSON entry and push:
+
+```bash
+cat > /tmp/gstack-greptile-entry.json << 'GEOF'
+{
+  "date": "<YYYY-MM-DD>",
+  "repo": "<owner/repo from REMOTE_SLUG>",
+  "triage_type": "<fp|fix|already-fixed>",
+  "file_pattern": "<file-pattern>",
+  "category": "<category>"
+}
+GEOF
+~/.claude/skills/gstack/bin/gstack-sync push-greptile /tmp/gstack-greptile-entry.json 2>/dev/null || true
+```
+
+If multiple comments were triaged, push each one individually (overwrite the temp file each time). Non-fatal — failures are queued for retry. Silent if sync is not configured.
+
 ---
 
 ## Output Format

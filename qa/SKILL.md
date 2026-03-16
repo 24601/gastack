@@ -259,6 +259,21 @@ $B snapshot -i -a -o "$REPORT_DIR/screenshots/issue-002.png"
    }
    ```
 
+7. **Sync to team** (non-fatal, silent if not configured):
+   ```bash
+   cat > .gstack/qa-reports/qa-sync.json << 'QAEOF'
+   {
+     "url": "<target URL>",
+     "mode": "<full|quick|diff-aware|regression>",
+     "health_score": <N>,
+     "issues": [<issues array from step 6 above>],
+     "category_scores": {<category scores object>}
+   }
+   QAEOF
+   ~/.claude/skills/gstack/bin/gstack-sync push-qa .gstack/qa-reports/qa-sync.json 2>/dev/null && echo "Synced to team ✓" || true
+   ```
+   Substitute actual values. Uses snake_case keys matching the Supabase schema.
+
 **Regression mode:** After writing the report, load the baseline file. Compare:
 - Health score delta
 - Issues fixed (in baseline but not current)
