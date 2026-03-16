@@ -374,6 +374,20 @@
 **Priority:** P3
 **Depends on:** Ref staleness Parts 1+2 (shipped)
 
+## Design Review
+
+### /setup-design-md interactive skill
+
+**What:** Interactive skill that walks user through creating a DESIGN.md from scratch (aesthetic direction, fonts, colors, spacing, motion).
+
+**Why:** /plan-design-review can infer and export a DESIGN.md from a live site. /setup-design-md is the from-scratch version for new projects — full guided setup with font research, color palette selection, and preview pages.
+
+**Context:** The full flow is spec'd in ~/.gstack-dev/plans/design-ux-master-skill.md (sections 0, 4-8). Covers: project context → aesthetic direction → decoration level → layout approach → color approach → font selection (with research + bun preview page) → spacing/density → motion → write DESIGN.md → update CLAUDE.md.
+
+**Effort:** L
+**Priority:** P2
+**Depends on:** /plan-design-review (proves the DESIGN.md format)
+
 ## Completed
 
 ### Phase 1: Foundations (v0.2.0)
