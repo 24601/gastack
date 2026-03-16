@@ -312,7 +312,11 @@ File a contributor report about this issue. Then tell me what you filed.`,
     });
 
     logCost('contributor mode', result);
-    recordE2E('contributor mode report', 'Skill E2E tests', result);
+    // Override passed: this test intentionally triggers a browse error (nonexistent binary)
+    // so browseErrors will be non-empty — that's expected, not a failure
+    recordE2E('contributor mode report', 'Skill E2E tests', result, {
+      passed: result.exitReason === 'success',
+    });
 
     // Verify a contributor log was created with expected format
     const logFiles = fs.readdirSync(logsDir).filter(f => f.endsWith('.md'));
