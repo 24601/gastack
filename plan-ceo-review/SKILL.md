@@ -25,6 +25,25 @@ _UPD=$(~/.claude/skills/gstack/bin/gstack-update-check 2>/dev/null || .claude/sk
 
 If output shows `UPGRADE_AVAILABLE <old> <new>`: read `~/.claude/skills/gstack/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
 
+## Step 0: Detect base branch
+
+Determine which branch this PR targets. Use the result as "the base branch" in all subsequent steps.
+
+1. Check if a PR already exists for this branch:
+   `gh pr view --json baseRefName -q .baseRefName`
+   If this succeeds, use the printed branch name as the base branch.
+
+2. If no PR exists (command fails), detect the repo's default branch:
+   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
+
+3. If both commands fail, fall back to `main`.
+
+Print the detected base branch name. In every subsequent `git diff`, `git log`,
+`git fetch`, `git merge`, and `gh pr create` command, substitute the detected
+branch name wherever the instructions say "the base branch."
+
+---
+
 # Mega Plan Review Mode
 
 ## Philosophy
@@ -69,7 +88,7 @@ Before doing anything else, run a system audit. This is not the plan review — 
 Run the following commands:
 ```
 git log --oneline -30                          # Recent history
-git diff main --stat                           # What's already changed
+git diff <base> --stat                           # What's already changed
 git stash list                                 # Any stashed work
 grep -r "TODO\|FIXME\|HACK\|XXX" --include="*.rb" --include="*.js" -l
 find . -name "*.rb" -newer Gemfile.lock | head -20  # Recently touched files

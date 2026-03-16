@@ -16,6 +16,8 @@ allowed-tools:
 
 {{UPDATE_CHECK}}
 
+{{BASE_BRANCH_DETECT}}
+
 # /qa: Systematic QA Testing
 
 You are a QA engineer. Test web applications like a real user — click everything, fill every form, check every state. Produce a structured report with evidence.
@@ -41,8 +43,7 @@ You are a QA engineer. Test web applications like a real user — click everythi
 **Create output directories:**
 
 ```bash
-REPORT_DIR=".gstack/qa-reports"
-mkdir -p "$REPORT_DIR/screenshots"
+mkdir -p .gstack/qa-reports/screenshots
 ```
 
 ---
@@ -55,8 +56,8 @@ This is the **primary mode** for developers verifying their work. When the user 
 
 1. **Analyze the branch diff** to understand what changed:
    ```bash
-   git diff main...HEAD --name-only
-   git log main..HEAD --oneline
+   git diff <base>...HEAD --name-only
+   git log <base>..HEAD --oneline
    ```
 
 2. **Identify affected pages/routes** from the changed files:
@@ -69,11 +70,10 @@ This is the **primary mode** for developers verifying their work. When the user 
 
 3. **Detect the running app** — check common local dev ports:
    ```bash
-   $B goto http://localhost:3000 2>/dev/null && echo "Found app on :3000" || \
-   $B goto http://localhost:4000 2>/dev/null && echo "Found app on :4000" || \
-   $B goto http://localhost:8080 2>/dev/null && echo "Found app on :8080"
+   # Try common dev ports in order — stop at the first that loads
+   $B goto http://localhost:3000
    ```
-   If no local app is found, check for a staging/preview URL in the PR or environment. If nothing works, ask the user for the URL.
+   If port 3000 fails, try 4000, then 8080. If none work, ask the user for the URL.
 
 4. **Test each affected page/route:**
    - Navigate to the page

@@ -25,6 +25,25 @@ _UPD=$(~/.claude/skills/gstack/bin/gstack-update-check 2>/dev/null || .claude/sk
 
 If output shows `UPGRADE_AVAILABLE <old> <new>`: read `~/.claude/skills/gstack/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
 
+## Step 0: Detect base branch
+
+Determine which branch this PR targets. Use the result as "the base branch" in all subsequent steps.
+
+1. Check if a PR already exists for this branch:
+   `gh pr view --json baseRefName -q .baseRefName`
+   If this succeeds, use the printed branch name as the base branch.
+
+2. If no PR exists (command fails), detect the repo's default branch:
+   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
+
+3. If both commands fail, fall back to `main`.
+
+Print the detected base branch name. In every subsequent `git diff`, `git log`,
+`git fetch`, `git merge`, and `gh pr create` command, substitute the detected
+branch name wherever the instructions say "the base branch."
+
+---
+
 # /qa: Systematic QA Testing
 
 You are a QA engineer. Test web applications like a real user — click everything, fill every form, check every state. Produce a structured report with evidence.
@@ -67,8 +86,7 @@ If `NEEDS_SETUP`:
 **Create output directories:**
 
 ```bash
-REPORT_DIR=".gstack/qa-reports"
-mkdir -p "$REPORT_DIR/screenshots"
+mkdir -p .gstack/qa-reports/screenshots
 ```
 
 ---
@@ -81,8 +99,8 @@ This is the **primary mode** for developers verifying their work. When the user 
 
 1. **Analyze the branch diff** to understand what changed:
    ```bash
-   git diff main...HEAD --name-only
-   git log main..HEAD --oneline
+   git diff <base>...HEAD --name-only
+   git log <base>..HEAD --oneline
    ```
 
 2. **Identify affected pages/routes** from the changed files:
@@ -95,11 +113,10 @@ This is the **primary mode** for developers verifying their work. When the user 
 
 3. **Detect the running app** — check common local dev ports:
    ```bash
-   $B goto http://localhost:3000 2>/dev/null && echo "Found app on :3000" || \
-   $B goto http://localhost:4000 2>/dev/null && echo "Found app on :4000" || \
-   $B goto http://localhost:8080 2>/dev/null && echo "Found app on :8080"
+   # Try common dev ports in order — stop at the first that loads
+   $B goto http://localhost:3000
    ```
-   If no local app is found, check for a staging/preview URL in the PR or environment. If nothing works, ask the user for the URL.
+   If port 3000 fails, try 4000, then 8080. If none work, ask the user for the URL.
 
 4. **Test each affected page/route:**
    - Navigate to the page
