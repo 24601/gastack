@@ -48,12 +48,15 @@ Per-skill instructions may add additional formatting rules on top of this baseli
 
 ## Contributor Mode
 
-If `_CONTRIB` is `true`: you are in **contributor mode**. When you hit friction with **gstack itself** (not the user's app), file a field report. Think: "hey, I was trying to do X with gstack and it didn't work / was confusing / was annoying. Here's what happened."
+If `_CONTRIB` is `true`: you are in **contributor mode**. You're a gstack user who also helps make it better.
 
-**gstack issues:** browse command fails/wrong output, snapshot missing elements, skill instructions unclear or misleading, binary crash/hang, unhelpful error message, any rough edge or annoyance — even minor stuff.
-**NOT gstack issues:** user's app bugs, network errors to user's URL, auth failures on user's site.
+**At the end of each major workflow step** (not after every single command), reflect on the gstack tooling you used. Rate your experience 0 to 10. If it wasn't a 10, think about why. If there is an obvious, actionable bug OR an insightful, interesting thing that could have been done better by gstack code or skill markdown — file a field report. Maybe our contributor will help make us better!
 
-**To file:** write `~/.gstack/contributor-logs/{slug}.md` with this structure:
+**Calibration — this is the bar:** For example, `$B js "await fetch(...)"` used to fail with `SyntaxError: await is only valid in async functions` because gstack didn't wrap expressions in async context. Small, but the input was reasonable and gstack should have handled it — that's the kind of thing worth filing. Things less consequential than this, ignore.
+
+**NOT worth filing:** user's app bugs, network errors to user's URL, auth failures on user's site, user's own JS logic bugs.
+
+**To file:** write `~/.gstack/contributor-logs/{slug}.md`:
 
 ```
 # {Title}
@@ -62,20 +65,21 @@ Hey gstack team — ran into this while using /{skill-name}:
 
 **What I was trying to do:** {what the user/agent was attempting}
 **What happened instead:** {what actually happened}
-**How annoying (1-5):** {1=meh, 3=friction, 5=blocker}
+**My rating:** {0-10} — {one sentence on why it wasn't a 10}
 
 ## Steps to reproduce
 1. {step}
 
 ## Raw output
-(wrap any error messages or unexpected output in a markdown code block)
+(error messages or unexpected output in a code block)
+
+## What would make this a 10
+{one sentence: what gstack should have done differently}
 
 **Date:** {YYYY-MM-DD} | **Version:** {gstack version} | **Skill:** /{skill}
 ```
 
-Then run: `mkdir -p ~/.gstack/contributor-logs && open ~/.gstack/contributor-logs/{slug}.md`
-
-Slug: lowercase, hyphens, max 60 chars (e.g. `browse-snapshot-ref-gap`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"
+Slug: lowercase, hyphens, max 60 chars (e.g. `browse-js-no-await`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"
 
 # /qa: Test → Fix → Verify
 
@@ -215,6 +219,219 @@ Run full mode, then load `baseline.json` from a previous run. Diff: which issues
 ## Workflow
 
 ### Phase 1: Initialize
+
+1. Find browse binary (see Setup above)
+2. Create output directories
+3. Copy report template from `qa/templates/qa-report-template.md` to output dir
+4. Start timer for duration tracking
+
+### Phase 2: Authenticate (if needed)
+
+**If the user specified auth credentials:**
+
+```bash
+$B goto <login-url>
+$B snapshot -i                    # find the login form
+$B fill @e3 "user@example.com"
+$B fill @e4 "[REDACTED]"         # NEVER include real passwords in report
+$B click @e5                      # submit
+$B snapshot -D                    # verify login succeeded
+```
+
+**If the user provided a cookie file:**
+
+```bash
+$B cookie-import cookies.json
+$B goto <target-url>
+```
+
+**If 2FA/OTP is required:** Ask the user for the code and wait.
+
+**If CAPTCHA blocks you:** Tell the user: "Please complete the CAPTCHA in the browser, then tell me to continue."
+
+### Phase 3: Orient
+
+Get a map of the application:
+
+```bash
+$B goto <target-url>
+$B snapshot -i -a -o "$REPORT_DIR/screenshots/initial.png"
+$B links                          # map navigation structure
+$B console --errors               # any errors on landing?
+```
+
+**Detect framework** (note in report metadata):
+- `__next` in HTML or `_next/data` requests → Next.js
+- `csrf-token` meta tag → Rails
+- `wp-content` in URLs → WordPress
+- Client-side routing with no page reloads → SPA
+
+**For SPAs:** The `links` command may return few results because navigation is client-side. Use `snapshot -i` to find nav elements (buttons, menu items) instead.
+
+### Phase 4: Explore
+
+Visit pages systematically. At each page:
+
+```bash
+$B goto <page-url>
+$B snapshot -i -a -o "$REPORT_DIR/screenshots/page-name.png"
+$B console --errors
+```
+
+Then follow the **per-page exploration checklist** (see `qa/references/issue-taxonomy.md`):
+
+1. **Visual scan** — Look at the annotated screenshot for layout issues
+2. **Interactive elements** — Click buttons, links, controls. Do they work?
+3. **Forms** — Fill and submit. Test empty, invalid, edge cases
+4. **Navigation** — Check all paths in and out
+5. **States** — Empty state, loading, error, overflow
+6. **Console** — Any new JS errors after interactions?
+7. **Responsiveness** — Check mobile viewport if relevant:
+   ```bash
+   $B viewport 375x812
+   $B screenshot "$REPORT_DIR/screenshots/page-mobile.png"
+   $B viewport 1280x720
+   ```
+
+**Depth judgment:** Spend more time on core features (homepage, dashboard, checkout, search) and less on secondary pages (about, terms, privacy).
+
+**Quick mode:** Only visit homepage + top 5 navigation targets from the Orient phase. Skip the per-page checklist — just check: loads? Console errors? Broken links visible?
+
+### Phase 5: Document
+
+Document each issue **immediately when found** — don't batch them.
+
+**Two evidence tiers:**
+
+**Interactive bugs** (broken flows, dead buttons, form failures):
+1. Take a screenshot before the action
+2. Perform the action
+3. Take a screenshot showing the result
+4. Use `snapshot -D` to show what changed
+5. Write repro steps referencing screenshots
+
+```bash
+$B screenshot "$REPORT_DIR/screenshots/issue-001-step-1.png"
+$B click @e5
+$B screenshot "$REPORT_DIR/screenshots/issue-001-result.png"
+$B snapshot -D
+```
+
+**Static bugs** (typos, layout issues, missing images):
+1. Take a single annotated screenshot showing the problem
+2. Describe what's wrong
+
+```bash
+$B snapshot -i -a -o "$REPORT_DIR/screenshots/issue-002.png"
+```
+
+**Write each issue to the report immediately** using the template format from `qa/templates/qa-report-template.md`.
+
+### Phase 6: Wrap Up
+
+1. **Compute health score** using the rubric below
+2. **Write "Top 3 Things to Fix"** — the 3 highest-severity issues
+3. **Write console health summary** — aggregate all console errors seen across pages
+4. **Update severity counts** in the summary table
+5. **Fill in report metadata** — date, duration, pages visited, screenshot count, framework
+6. **Save baseline** — write `baseline.json` with:
+   ```json
+   {
+     "date": "YYYY-MM-DD",
+     "url": "<target>",
+     "healthScore": N,
+     "issues": [{ "id": "ISSUE-001", "title": "...", "severity": "...", "category": "..." }],
+     "categoryScores": { "console": N, "links": N, ... }
+   }
+   ```
+
+**Regression mode:** After writing the report, load the baseline file. Compare:
+- Health score delta
+- Issues fixed (in baseline but not current)
+- New issues (in current but not baseline)
+- Append the regression section to the report
+
+---
+
+## Health Score Rubric
+
+Compute each category score (0-100), then take the weighted average.
+
+### Console (weight: 15%)
+- 0 errors → 100
+- 1-3 errors → 70
+- 4-10 errors → 40
+- 10+ errors → 10
+
+### Links (weight: 10%)
+- 0 broken → 100
+- Each broken link → -15 (minimum 0)
+
+### Per-Category Scoring (Visual, Functional, UX, Content, Performance, Accessibility)
+Each category starts at 100. Deduct per finding:
+- Critical issue → -25
+- High issue → -15
+- Medium issue → -8
+- Low issue → -3
+Minimum 0 per category.
+
+### Weights
+| Category | Weight |
+|----------|--------|
+| Console | 15% |
+| Links | 10% |
+| Visual | 10% |
+| Functional | 20% |
+| UX | 15% |
+| Performance | 10% |
+| Content | 5% |
+| Accessibility | 15% |
+
+### Final Score
+`score = Σ (category_score × weight)`
+
+---
+
+## Framework-Specific Guidance
+
+### Next.js
+- Check console for hydration errors (`Hydration failed`, `Text content did not match`)
+- Monitor `_next/data` requests in network — 404s indicate broken data fetching
+- Test client-side navigation (click links, don't just `goto`) — catches routing issues
+- Check for CLS (Cumulative Layout Shift) on pages with dynamic content
+
+### Rails
+- Check for N+1 query warnings in console (if development mode)
+- Verify CSRF token presence in forms
+- Test Turbo/Stimulus integration — do page transitions work smoothly?
+- Check for flash messages appearing and dismissing correctly
+
+### WordPress
+- Check for plugin conflicts (JS errors from different plugins)
+- Verify admin bar visibility for logged-in users
+- Test REST API endpoints (`/wp-json/`)
+- Check for mixed content warnings (common with WP)
+
+### General SPA (React, Vue, Angular)
+- Use `snapshot -i` for navigation — `links` command misses client-side routes
+- Check for stale state (navigate away and back — does data refresh?)
+- Test browser back/forward — does the app handle history correctly?
+- Check for memory leaks (monitor console after extended use)
+
+---
+
+## Important Rules
+
+1. **Repro is everything.** Every issue needs at least one screenshot. No exceptions.
+2. **Verify before documenting.** Retry the issue once to confirm it's reproducible, not a fluke.
+3. **Never include credentials.** Write `[REDACTED]` for passwords in repro steps.
+4. **Write incrementally.** Append each issue to the report as you find it. Don't batch.
+5. **Never read source code.** Test as a user, not a developer.
+6. **Check console after every interaction.** JS errors that don't surface visually are still bugs.
+7. **Test like a user.** Use realistic data. Walk through complete workflows end-to-end.
+8. **Depth over breadth.** 5-10 well-documented issues with evidence > 20 vague descriptions.
+9. **Never delete output files.** Screenshots and reports accumulate — that's intentional.
+10. **Use `snapshot -C` for tricky UIs.** Finds clickable divs that the accessibility tree misses.
 
 1. Find browse binary (see Setup above)
 2. Create output directories
