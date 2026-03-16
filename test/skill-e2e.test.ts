@@ -326,6 +326,74 @@ File a contributor report about this issue. Then tell me what you filed.`,
     // Clean up
     try { fs.rmSync(contribDir, { recursive: true, force: true }); } catch {}
   }, 90_000);
+
+  test('session awareness adds ELI16 context when _SESSIONS >= 3', async () => {
+    const sessionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-session-'));
+
+    // Set up a git repo so there's project/branch context to reference
+    const run = (cmd: string, args: string[]) =>
+      spawnSync(cmd, args, { cwd: sessionDir, stdio: 'pipe', timeout: 5000 });
+    run('git', ['init']);
+    run('git', ['config', 'user.email', 'test@test.com']);
+    run('git', ['config', 'user.name', 'Test']);
+    fs.writeFileSync(path.join(sessionDir, 'app.rb'), '# my app\n');
+    run('git', ['add', '.']);
+    run('git', ['commit', '-m', 'init']);
+    run('git', ['checkout', '-b', 'feature/add-payments']);
+    // Add a remote so the agent can derive a project name
+    run('git', ['remote', 'add', 'origin', 'https://github.com/acme/billing-app.git']);
+
+    // Extract AskUserQuestion format instructions from generated SKILL.md
+    const skillMd = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
+    const aqStart = skillMd.indexOf('## AskUserQuestion Format');
+    const aqEnd = skillMd.indexOf('\n## ', aqStart + 1);
+    const aqBlock = skillMd.slice(aqStart, aqEnd > 0 ? aqEnd : undefined);
+
+    const outputPath = path.join(sessionDir, 'question-output.md');
+
+    const result = await runSkillTest({
+      prompt: `You are running a gstack skill. The session preamble detected _SESSIONS=4 (the user has 4 gstack windows open).
+
+${aqBlock}
+
+You are on branch feature/add-payments in the billing-app project. You were reviewing a plan to add Stripe integration.
+
+You've hit a decision point: the plan doesn't specify whether to use Stripe Checkout (hosted) or Stripe Elements (embedded). You need to ask the user which approach to use.
+
+Since this is non-interactive, DO NOT actually call AskUserQuestion. Instead, write the EXACT text you would display to the user (the full AskUserQuestion content) to the file: ${outputPath}
+
+Remember: _SESSIONS=4, so ELI16 mode is active. The user is juggling multiple windows and may not remember what this conversation is about. Re-ground them.`,
+      workingDirectory: sessionDir,
+      maxTurns: 8,
+      timeout: 60_000,
+      testName: 'session-awareness',
+      runId,
+    });
+
+    logCost('session awareness', result);
+    recordE2E('session awareness ELI16', 'Skill E2E tests', result);
+
+    // Verify the output contains ELI16 re-grounding context
+    if (fs.existsSync(outputPath)) {
+      const output = fs.readFileSync(outputPath, 'utf-8');
+      const lower = output.toLowerCase();
+      // Must mention project name
+      expect(lower.includes('billing') || lower.includes('acme')).toBe(true);
+      // Must mention branch
+      expect(lower.includes('payment') || lower.includes('feature')).toBe(true);
+      // Must mention what we're working on
+      expect(lower.includes('stripe') || lower.includes('checkout') || lower.includes('payment')).toBe(true);
+      // Must have a RECOMMENDATION
+      expect(output).toContain('RECOMMENDATION');
+    } else {
+      // Check agent output as fallback
+      const output = result.output || '';
+      expect(output).toContain('RECOMMENDATION');
+    }
+
+    // Clean up
+    try { fs.rmSync(sessionDir, { recursive: true, force: true }); } catch {}
+  }, 90_000);
 });
 
 // --- B4: QA skill E2E ---
