@@ -438,6 +438,78 @@ Write your review findings to ${reviewDir}/review-output.md`,
   }, 120_000);
 });
 
+// --- Review: Enum completeness E2E ---
+
+describeE2E('Review enum completeness E2E', () => {
+  let enumDir: string;
+
+  beforeAll(() => {
+    enumDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-enum-'));
+
+    const run = (cmd: string, args: string[]) =>
+      spawnSync(cmd, args, { cwd: enumDir, stdio: 'pipe', timeout: 5000 });
+
+    run('git', ['init']);
+    run('git', ['config', 'user.email', 'test@test.com']);
+    run('git', ['config', 'user.name', 'Test']);
+
+    // Commit baseline on main — order model with 4 statuses
+    const baseContent = fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'review-eval-enum.rb'), 'utf-8');
+    fs.writeFileSync(path.join(enumDir, 'order.rb'), baseContent);
+    run('git', ['add', 'order.rb']);
+    run('git', ['commit', '-m', 'initial order model']);
+
+    // Feature branch adds "returned" status but misses handlers
+    run('git', ['checkout', '-b', 'feature/add-returned-status']);
+    const diffContent = fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'review-eval-enum-diff.rb'), 'utf-8');
+    fs.writeFileSync(path.join(enumDir, 'order.rb'), diffContent);
+    run('git', ['add', 'order.rb']);
+    run('git', ['commit', '-m', 'add returned status']);
+
+    // Copy review skill files
+    fs.copyFileSync(path.join(ROOT, 'review', 'SKILL.md'), path.join(enumDir, 'review-SKILL.md'));
+    fs.copyFileSync(path.join(ROOT, 'review', 'checklist.md'), path.join(enumDir, 'review-checklist.md'));
+    fs.copyFileSync(path.join(ROOT, 'review', 'greptile-triage.md'), path.join(enumDir, 'review-greptile-triage.md'));
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(enumDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test('/review catches missing enum handlers for new status value', async () => {
+    const result = await runSkillTest({
+      prompt: `You are in a git repo on branch feature/add-returned-status with changes against main.
+Read review-SKILL.md for the review workflow instructions.
+Also read review-checklist.md and apply it — pay special attention to the Enum & Value Completeness section.
+Run /review on the current diff (git diff main...HEAD).
+Write your review findings to ${enumDir}/review-output.md
+
+The diff adds a new "returned" status to the Order model. Your job is to check if all consumers handle it.`,
+      workingDirectory: enumDir,
+      maxTurns: 15,
+      timeout: 90_000,
+      testName: 'review-enum-completeness',
+      runId,
+    });
+
+    logCost('/review enum', result);
+    recordE2E('/review enum completeness', 'Review enum completeness E2E', result);
+    expect(result.exitReason).toBe('success');
+
+    // Verify the review caught the missing enum handlers
+    const reviewPath = path.join(enumDir, 'review-output.md');
+    if (fs.existsSync(reviewPath)) {
+      const review = fs.readFileSync(reviewPath, 'utf-8');
+      // Should mention the missing "returned" handling in at least one of the methods
+      const mentionsReturned = review.toLowerCase().includes('returned');
+      const mentionsEnum = review.toLowerCase().includes('enum') || review.toLowerCase().includes('status');
+      const mentionsCritical = review.toLowerCase().includes('critical');
+      expect(mentionsReturned).toBe(true);
+      expect(mentionsEnum || mentionsCritical).toBe(true);
+    }
+  }, 120_000);
+});
+
 // --- B6/B7/B8: Planted-bug outcome evals ---
 
 // Outcome evals also need ANTHROPIC_API_KEY for the LLM judge
