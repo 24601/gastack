@@ -118,20 +118,6 @@ One feature. Six commands. CEO taste → architecture → review → ship → QA
 
 ---
 
-## My journey and why this exists
-
-I have a full time busy job as CEO of Y Combinator. And I am coding a lot. Like, a lot a lot. I was stranded in Austin due to weather and I was coding. My mom was in the hospital and not too lucid for most of it, and I was coding by her bedside too. She's ok now.
-
-Is it really possible for a CEO to be coding all the time? I think it will have to be. The CEO has to set the future of the company. All companies will need to adapt to a faster world and do more. It's not about doing less and cheaper. It's about doing more and making 10x better products and services.
-
-Is 16k LOC/day sustainable for me? We're going to find out if I can manage to get to L8 software factory. But you can tell the models are about to get much much better. L8 is barely possible today. But everyone will be there soon.
-
-I want to be one of the people who helps all of you do it with me.
-
-gstack is how I do it. It's the exact system I use every day. I'm upgrading it live, in public, and sharing everything I learn. There is nothing to sell here. No monetization, no premium tier, no waitlist. Just me trying to figure out the future and bringing everyone along for the ride.
-
----
-
 ## 10 sessions at once
 
 gstack is powerful with one session. It is transformative with ten.
