@@ -176,7 +176,7 @@ The models are getting better fast. The people who figure out how to work with t
 |-----|---------------|
 | [Skill Deep Dives](docs/skills.md) | Philosophy, examples, and workflow for every skill |
 | [Greptile Integration](docs/greptile.md) | PR review triage with [Greptile](https://greptile.com) |
-| [Contributor Mode](docs/contributor-mode.md) | How to help improve gstack |
+| [How to Contribute](docs/contributor-mode.md) | How to help improve gstack |
 | [Browser Reference](BROWSER.md) | Full command reference for `/browse` |
 | [Architecture](ARCHITECTURE.md) | Design decisions and system internals |
 | [Contributing](CONTRIBUTING.md) | Dev setup, testing, and dev mode |
