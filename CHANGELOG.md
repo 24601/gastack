@@ -1,30 +1,92 @@
 # Changelog
 
-## 0.6.0 — 2026-03-16
+## 0.6.1 — 2026-03-17 — Boil the Lake
 
-### Added
-- **New `/office-hours` skill — think before you build.** YC-style office hours that run before planning. Asks clarifying questions one at a time, challenges your premises, forces you to consider 2-3 implementation approaches, then writes a design doc. The design doc feeds directly into `/plan-ceo-review` and `/plan-eng-review`. You can now do `office-hours → plan → implement → review → QA → ship → retro` — the full lifecycle.
-- **New `/debug` skill — find the root cause, not the symptom.** Systematic debugging with an Iron Law: no fixes without root cause investigation first. Traces data flow, matches against known bug patterns, tests hypotheses one at a time. If 3 fixes fail, it stops and questions the architecture instead of thrashing.
-- **Every skill now knows when to stop.** New escalation protocol across all skills: DONE, DONE_WITH_CONCERNS, BLOCKED, NEEDS_CONTEXT. "It is always OK to stop and say 'this is too hard for me.' Bad work is worse than no work."
-- **/ship now re-verifies before pushing.** New verification gate (Step 6.5): if code changed during review fixes, tests must pass again before push. No more "should work now" — run it and prove it.
-- **/review now catches scope drift.** Before reviewing code quality, Step 1.5 compares the diff against TODOS.md and commit messages. Flags files changed that weren't in the plan, and requirements that weren't addressed in the diff.
-- **/review now cites evidence for every claim.** "This pattern is safe" requires a line reference. "Tests cover this" requires a test name. No more "probably handled."
-- **/plan-ceo-review now forces you to consider alternatives.** Step 0C-bis requires 2-3 implementation approaches before mode selection — one minimal, one ideal. You pick the approach, then the review runs against it.
-- **Design docs flow downstream automatically.** `/office-hours` writes design docs to `~/.gstack/projects/`. `/plan-ceo-review` and `/plan-eng-review` discover and read them during their pre-review audits. Branch-filtered lookup with fallback.
-- **Design lineage tracking.** Run office hours on the same feature twice? The second design doc links to the first via a `Supersedes:` field. Trace how your design evolved.
+Every gstack skill now follows the **Completeness Principle**: always recommend the
+full implementation when AI makes the marginal cost near-zero. No more "Choose B
+because it's 90% of the value" when option A is 70 lines more code.
 
-### Fixed
-- Branch names with `/` (like `garrytan/better-process`) no longer break artifact filenames. Fixed in `/office-hours` and `/plan-eng-review` test plan artifacts.
+Read the philosophy: https://garryslist.org/posts/boil-the-ocean
+
+- **Completeness scoring**: every AskUserQuestion option now shows a completeness
+  score (1-10), biasing toward the complete solution
+- **Dual time estimates**: effort estimates show both human-team and CC+gstack time
+  (e.g., "human: ~2 weeks / CC: ~1 hour") with a task-type compression reference table
+- **Anti-pattern examples**: concrete "don't do this" gallery in the preamble so the
+  principle isn't abstract
+- **First-time onboarding**: new users see a one-time introduction linking to the
+  essay, with option to open in browser
+- **Review completeness gaps**: `/review` now flags shortcut implementations where the
+  complete version costs <30 min CC time
+- **Lake Score**: CEO and Eng review completion summaries show how many recommendations
+  chose the complete option vs shortcuts
+- **CEO + Eng review dual-time**: temporal interrogation, effort estimates, and delight
+  opportunities all show both human and CC time scales
+
+## 0.6.0.1 — 2026-03-17
+
+- **`/gstack-upgrade` now catches stale vendored copies automatically.** If your global gstack is up to date but the vendored copy in your project is behind, `/gstack-upgrade` detects the mismatch and syncs it. No more manually asking "did we vendor it?" — it just tells you and offers to update.
+- **Upgrade sync is safer.** If `./setup` fails while syncing a vendored copy, gstack restores the previous version from backup instead of leaving a broken install.
 
 ### For contributors
-- New structural tests for `/office-hours` (Phase headers, Design Doc, Supersedes, Smart-skip) and `/debug` (Iron Law, Root Cause, Pattern Analysis, Hypothesis, DEBUG REPORT, 3-strike).
-- Escalation protocol assertions added to all preamble skills (DONE_WITH_CONCERNS, BLOCKED, NEEDS_CONTEXT).
-- Two new TODOs: design docs → Supabase team store sync (P2), /plan-design-review skill (P2).
+
+- Standalone usage section in `gstack-upgrade/SKILL.md.tmpl` now references Steps 2 and 4.5 (DRY) instead of duplicating detection/sync bash blocks. Added one new version-comparison bash block.
+- Update check fallback in standalone mode now matches the preamble pattern (global path → local path → `|| true`).
+
+## 0.6.0 — 2026-03-17
+
+- **100% test coverage is the key to great vibe coding.** gstack now bootstraps test frameworks from scratch when your project doesn't have one. Detects your runtime, researches the best framework, asks you to pick, installs it, writes 3-5 real tests for your actual code, sets up CI/CD (GitHub Actions), creates TESTING.md, and adds test culture instructions to CLAUDE.md. Every Claude Code session after that writes tests naturally.
+- **Every bug fix now gets a regression test.** When `/qa` fixes a bug and verifies it, Phase 8e.5 automatically generates a regression test that catches the exact scenario that broke. Tests include full attribution tracing back to the QA report. Auto-incrementing filenames prevent collisions across sessions.
+- **Ship with confidence — coverage audit shows what's tested and what's not.** `/ship` Step 3.4 builds a code path map from your diff, searches for corresponding tests, and produces an ASCII coverage diagram with quality stars (★★★ = edge cases + errors, ★★ = happy path, ★ = smoke test). Gaps get tests auto-generated. PR body shows "Tests: 42 → 47 (+5 new)".
+- **Your retro tracks test health.** `/retro` now shows total test files, tests added this period, regression test commits, and trend deltas. If test ratio drops below 20%, it flags it as a growth area.
+- **Design reviews generate regression tests too.** `/qa-design-review` Phase 8e.5 skips CSS-only fixes (those are caught by re-running the design audit) but writes tests for JavaScript behavior changes like broken dropdowns or animation failures.
+
+### For contributors
+
+- Added `generateTestBootstrap()` resolver to `gen-skill-docs.ts` (~155 lines). Registered as `{{TEST_BOOTSTRAP}}` in the RESOLVERS map. Inserted into qa, ship (Step 2.5), and qa-design-review templates.
+- Phase 8e.5 regression test generation added to `qa/SKILL.md.tmpl` (46 lines) and CSS-aware variant to `qa-design-review/SKILL.md.tmpl` (12 lines). Rule 13 amended to allow creating new test files.
+- Step 3.4 test coverage audit added to `ship/SKILL.md.tmpl` (88 lines) with quality scoring rubric and ASCII diagram format.
+- Test health tracking added to `retro/SKILL.md.tmpl`: 3 new data gathering commands, metrics row, narrative section, JSON schema field.
+- `qa-only/SKILL.md.tmpl` gets recommendation note when no test framework detected.
+- `qa-report-template.md` gains Regression Tests section with deferred test specs.
+- ARCHITECTURE.md placeholder table updated with `{{TEST_BOOTSTRAP}}` and `{{REVIEW_DASHBOARD}}`.
+- WebSearch added to allowed-tools for qa, ship, qa-design-review.
+- 26 new validation tests, 2 new E2E evals (bootstrap + coverage audit).
+- 2 new P3 TODOs: CI/CD for non-GitHub providers, auto-upgrade weak tests.
+
+## 0.5.4 — 2026-03-17
+
+- **Engineering review is always the full review now.** `/plan-eng-review` no longer asks you to choose between "big change" and "small change" modes. Every plan gets the full interactive walkthrough (architecture, code quality, tests, performance). Scope reduction is only suggested when the complexity check actually triggers — not as a standing menu option.
+- **Ship stops asking about reviews once you've answered.** When `/ship` asks about missing reviews and you say "ship anyway" or "not relevant," that decision is saved for the branch. No more getting re-asked every time you re-run `/ship` after a pre-landing fix.
+
+### For contributors
+
+- Removed SMALL_CHANGE / BIG_CHANGE / SCOPE_REDUCTION menu from `plan-eng-review/SKILL.md.tmpl`. Scope reduction is now proactive (triggered by complexity check) rather than a menu item.
+- Added review gate override persistence to `ship/SKILL.md.tmpl` — writes `ship-review-override` entries to `$BRANCH-reviews.jsonl` so subsequent `/ship` runs skip the gate.
+- Updated 2 E2E test prompts to match new flow.
+
+## 0.5.3 — 2026-03-17
+
+- **You're always in control — even when dreaming big.** `/plan-ceo-review` now presents every scope expansion as an individual decision you opt into. EXPANSION mode recommends enthusiastically, but you say yes or no to each idea. No more "the agent went wild and added 5 features I didn't ask for."
+- **New mode: SELECTIVE EXPANSION.** Hold your current scope as the baseline, but see what else is possible. The agent surfaces expansion opportunities one by one with neutral recommendations — you cherry-pick the ones worth doing. Perfect for iterating on existing features where you want rigor but also want to be tempted by adjacent improvements.
+- **Your CEO review visions are saved, not lost.** Expansion ideas, cherry-pick decisions, and 10x visions are now persisted to `~/.gstack/projects/{repo}/ceo-plans/` as structured design documents. Stale plans get archived automatically. If a vision is exceptional, you can promote it to `docs/designs/` in your repo for the team.
+
+- **Smarter ship gates.** `/ship` no longer nags you about CEO and Design reviews when they're not relevant. Eng Review is the only required gate (and you can disable even that with `gstack-config set skip_eng_review true`). CEO Review is recommended for big product changes; Design Review for UI work. The dashboard still shows all three — it just won't block you for the optional ones.
+
+### For contributors
+
+- Added SELECTIVE EXPANSION mode to `plan-ceo-review/SKILL.md.tmpl` with cherry-pick ceremony, neutral recommendation posture, and HOLD SCOPE baseline.
+- Rewrote EXPANSION mode's Step 0D to include opt-in ceremony — distill vision into discrete proposals, present each as AskUserQuestion.
+- Added CEO plan persistence (0D-POST step): structured markdown with YAML frontmatter (`status: ACTIVE/ARCHIVED/PROMOTED`), scope decisions table, archival flow.
+- Added `docs/designs` promotion step after Review Log.
+- Mode Quick Reference table expanded to 4 columns.
+- Review Readiness Dashboard: Eng Review required (overridable via `skip_eng_review` config), CEO/Design optional with agent judgment.
+- New tests: CEO review mode validation (4 modes, persistence, promotion), SELECTIVE EXPANSION E2E test.
 
 ## 0.5.2 — 2026-03-17
 
 - **Your design consultant now takes creative risks.** `/design-consultation` doesn't just propose a safe, coherent system — it explicitly breaks down SAFE CHOICES (category baseline) vs. RISKS (where your product stands out). You pick which rules to break. Every risk comes with a rationale for why it works and what it costs.
-- **See the competition before you choose.** When you opt into research, the agent browses competitor sites with screenshots and accessibility tree analysis — not just web search results. You see what the landscape looks like before making design decisions.
+- **See the landscape before you choose.** When you opt into research, the agent browses real sites in your space with screenshots and accessibility tree analysis — not just web search results. You see what's out there before making design decisions.
 - **Preview pages that look like your product.** The preview page now renders realistic product mockups — dashboards with sidebar nav and data tables, marketing pages with hero sections, settings pages with forms — not just font swatches and color palettes.
 
 ## 0.5.1 — 2026-03-17
