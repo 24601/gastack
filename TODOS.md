@@ -376,17 +376,11 @@
 
 ## Design Review
 
-### /setup-design-md interactive skill
+### /design-consultation interactive skill — SHIPPED
 
-**What:** Interactive skill that walks user through creating a DESIGN.md from scratch (aesthetic direction, fonts, colors, spacing, motion).
+~~**What:** Interactive skill that walks user through creating a DESIGN.md from scratch.~~
 
-**Why:** /plan-design-review can infer and export a DESIGN.md from a live site. /setup-design-md is the from-scratch version for new projects — full guided setup with font research, color palette selection, and preview pages.
-
-**Context:** The full flow is spec'd in ~/.gstack-dev/plans/design-ux-master-skill.md (sections 0, 4-8). Covers: project context → aesthetic direction → decoration level → layout approach → color approach → font selection (with research + bun preview page) → spacing/density → motion → write DESIGN.md → update CLAUDE.md.
-
-**Effort:** L
-**Priority:** P2
-**Depends on:** /plan-design-review (proves the DESIGN.md format)
+Shipped as `/design-consultation` on garrytan/design branch. Renamed from `/setup-design-md` to reflect the consultant approach (agent proposes a complete coherent system, user adjusts). Includes competitive research via WebSearch, combined font+color preview page, coherence validation, and LLM-judged E2E tests.
 
 ## Completed
 
