@@ -873,6 +873,7 @@ function findTemplates(): string[] {
     path.join(ROOT, 'gstack-upgrade', 'SKILL.md.tmpl'),
     path.join(ROOT, 'plan-design-review', 'SKILL.md.tmpl'),
     path.join(ROOT, 'qa-design-review', 'SKILL.md.tmpl'),
+    path.join(ROOT, 'design-consultation', 'SKILL.md.tmpl'),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) templates.push(p);
