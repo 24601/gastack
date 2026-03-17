@@ -62,18 +62,18 @@ Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
               selection. Add SELECT FOR UPDATE? → You: yes
         Pre-Landing Review: 3 issues — 2 auto-fixed, 1 fixed.
 
-You:    /ship
-Claude: Tests: 42 → 51 (+9 new)
-        Coverage: 14/14 code paths tested (100%)
-        PR: github.com/you/app/pull/42
-
 You:    /qa https://staging.myapp.com
 Claude: Upload → classify → enrich → draft: end to end ✓
         Mobile upload: ✓  |  Slow connection: ✓  |  Bad image: ✓
         Regression test generated: test/qa-regression-001.test.ts
+
+You:    /ship
+Claude: Tests: 42 → 51 (+9 new)
+        Coverage: 14/14 code paths tested (100%)
+        PR: github.com/you/app/pull/42
 ```
 
-One feature. Six commands. CEO taste → architecture → review → ship → QA. The agent found a race condition I would have missed, auto-fixed two issues I didn't even think about, wrote 9 tests, and generated a regression test from QA. That is not a copilot. That is a team.
+One feature. Six commands. CEO taste → architecture → review → QA → ship. The agent found a race condition I would have missed, auto-fixed two issues I didn't even think about, wrote 9 tests, and generated a regression test from QA. That is not a copilot. That is a team.
 
 ---
 
