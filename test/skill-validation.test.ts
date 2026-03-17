@@ -206,6 +206,7 @@ describe('Update check preamble', () => {
     'retro/SKILL.md',
     'plan-design-review/SKILL.md',
     'qa-design-review/SKILL.md',
+    'design-consultation/SKILL.md',
   ];
 
   for (const skill of skillsWithUpdateCheck) {
@@ -511,6 +512,7 @@ describe('v0.4.1 preamble features', () => {
     'retro/SKILL.md',
     'plan-design-review/SKILL.md',
     'qa-design-review/SKILL.md',
+    'design-consultation/SKILL.md',
   ];
 
   for (const skill of skillsWithPreamble) {
