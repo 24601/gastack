@@ -891,6 +891,30 @@ describe('Step 3.4 test coverage audit', () => {
     const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
     expect(content).toContain('vibe coding becomes yolo coding');
   });
+
+  test('Step 3.4 traces actual codepaths, not just syntax', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('Trace every codepath');
+    expect(content).toContain('Trace data flow');
+    expect(content).toContain('Diagram the execution');
+  });
+
+  test('Step 3.4 maps user flows and interaction edge cases', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('Map user flows');
+    expect(content).toContain('Interaction edge cases');
+    expect(content).toContain('Double-click');
+    expect(content).toContain('Navigate away');
+    expect(content).toContain('Error states the user can see');
+    expect(content).toContain('Empty/zero/boundary states');
+  });
+
+  test('Step 3.4 diagram includes USER FLOW COVERAGE section', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('USER FLOW COVERAGE');
+    expect(content).toContain('Code paths:');
+    expect(content).toContain('User flows:');
+  });
 });
 
 // --- Retro test health validation ---
