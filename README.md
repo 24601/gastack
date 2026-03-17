@@ -58,8 +58,6 @@ Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 
 **`/document-release` is the engineer you never had.** It reads every doc file in your project, cross-references the diff, and updates everything that drifted. README, ARCHITECTURE, CONTRIBUTING, CLAUDE.md, TODOS — all kept current automatically.
 
-**People are already building on top.** Josh built his L8 software factory on gstack. Others are forking and customizing. That's the whole point.
-
 ---
 
 ## Demo
