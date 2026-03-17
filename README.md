@@ -42,13 +42,13 @@ Claude: ┌─────────┐    ┌──────────�
         └─────────┘    └──────────┘    └──────────┘    └─────────┘
         Failure modes: 6 mapped. Test matrix: 14 cases.
 
-You:    Approve plan. Exit plan mode.
-        [Claude implements the feature]
-
 You:    /plan-design-review https://staging.myapp.com
 Claude: Design Score: B  |  AI Slop Score: C
         "Upload flow looks like a default Bootstrap form."
         Top fix: custom drag-drop zone with preview grid.
+
+You:    Approve plan. Exit plan mode.
+        [Claude implements the feature]
 
 You:    /review
 Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
@@ -67,7 +67,7 @@ Claude: Tests: 42 → 51 (+9 new)
         PR: github.com/you/app/pull/42
 ```
 
-One feature. Seven commands. CEO taste → architecture → build → design audit → review → QA → ship. The agent reframed the product, found a race condition I would have missed, auto-fixed two issues, caught the AI slop in my UI, wrote 9 tests, and generated a regression test. That is not a copilot. That is a team.
+One feature. Seven commands. CEO taste → architecture → design audit → build → review → QA → ship. The agent reframed the product, found a race condition I would have missed, auto-fixed two issues, caught the AI slop in my UI, wrote 9 tests, and generated a regression test. That is not a copilot. That is a team.
 
 ---
 
