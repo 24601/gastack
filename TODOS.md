@@ -388,17 +388,11 @@
 **Priority:** P2
 **Depends on:** `garrytan/team-supabase-store` branch landing on main
 
-### /plan-design-review skill
+## Design Review
 
-**What:** A visual/UX-focused design review skill that consumes /brainstorm design docs and evaluates mockups, wireframes, and UI decisions. Completes the review trilogy — product (/plan-ceo-review), engineering (/plan-eng-review), design (/plan-design-review).
+### /plan-design-review + /qa-design-review + /design-consultation — SHIPPED
 
-**Why:** Full workflow coverage for visual/UX projects. The brainstorm design doc artifact is the input contract.
-
-**Context:** /brainstorm handoff already mentions this skill. The design doc at `~/.gstack/projects/` is the input.
-
-**Effort:** M
-**Priority:** P2
-**Depends on:** `garrytan/design` branch landing on main
+Shipped as v0.5.0 on main. Includes `/plan-design-review` (report-only design audit), `/qa-design-review` (audit + fix loop), and `/design-consultation` (interactive DESIGN.md creation). `{{DESIGN_METHODOLOGY}}` resolver provides shared 80-item design audit checklist.
 
 ## Document-Release
 
