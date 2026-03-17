@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.5 — 2026-03-16
+
+- **Review findings now actually get fixed, not just listed.** `/review` and `/ship` used to print informational findings (dead code, test gaps, N+1 queries) and then ignore them. Now every finding gets action: obvious mechanical fixes are applied automatically, and genuinely ambiguous issues are batched into a single question instead of 8 separate prompts. You see `[AUTO-FIXED] file:line Problem → what was done` for each auto-fix.
+- **New Fix-First Heuristic in checklist.md.** Single source of truth for what gets auto-fixed vs what needs your input — referenced by both `/review` and `/ship`. Dead code, stale comments, N+1 queries → auto-fixed. Security issues, race conditions, design decisions → you decide.
+
+### For contributors
+
+- Gate Classification → Severity Classification rename (severity determines presentation order, not whether you see a prompt).
+- Fix-First Heuristic section added to `review/checklist.md` — the canonical AUTO-FIX vs ASK classification.
+- New validation test: `Fix-First Heuristic exists in checklist and is referenced by review + ship`.
+
 ## 0.4.4 — 2026-03-16
 
 - **New releases detected in under an hour, not half a day.** The update check cache was set to 12 hours, which meant you could be stuck on an old version all day while new releases dropped. Now "you're up to date" expires after 60 minutes, so you'll see upgrades within the hour. "Upgrade available" still nags for 12 hours (that's the point).
