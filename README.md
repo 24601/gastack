@@ -53,7 +53,8 @@ Claude: ┌─────────┐    ┌──────────�
         Failure modes: 6 mapped. Test matrix: 14 cases.
         Missing: what if classify returns low-confidence?
 
-You:    [implement the plan]
+You:    Approve plan. Exit plan mode.
+        [Claude implements the feature]
 You:    /review
 Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
         [AUTO-FIXED] Missing index on listings.status
