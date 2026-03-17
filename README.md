@@ -24,6 +24,64 @@ Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 
 ---
 
+## See it work
+
+```
+You:    I want to add photo upload for sellers.
+
+/plan-ceo-review
+
+Claude: "Photo upload" is not the feature. The real job is helping
+        sellers create listings that actually sell.
+
+        What if we auto-identify the product from the photo, pull
+        specs and pricing comps from the web, draft the title and
+        description, and suggest the best hero image?
+
+        That's a 10-star listing experience. "Upload a photo" is
+        a 3-star one. Which are we building?
+
+/plan-eng-review
+
+Claude: ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
+        │ Upload  │───▶│ Classify │───▶│ Enrich   │───▶│ Draft   │
+        │ (sync)  │    │ (async)  │    │ (async)  │    │ (async) │
+        └─────────┘    └──────────┘    └──────────┘    └─────────┘
+              │              │               │              │
+              ▼              ▼               ▼              ▼
+         S3 + DB        Vision API     WebSearch +      LLM gen +
+         persist        + fallback     price APIs       user edit
+
+        Failure modes: 6 mapped. Test matrix: 14 cases.
+        Missing: what if classify returns low-confidence?
+
+[implement the plan]
+
+/review
+
+Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
+        [AUTO-FIXED] Missing index on listings.status
+        [ASK] Race condition: two tabs can overwrite hero image
+              selection. Add SELECT FOR UPDATE? → You: yes
+        Pre-Landing Review: 3 issues — 2 auto-fixed, 1 fixed.
+
+/ship
+
+Claude: Tests: 42 → 51 (+9 new)
+        Coverage: 14/14 code paths tested (100%)
+        PR: github.com/you/app/pull/42
+
+/qa https://staging.myapp.com
+
+Claude: Upload → classify → enrich → draft: end to end ✓
+        Mobile upload: ✓  |  Slow connection: ✓  |  Bad image: ✓
+        Regression test generated: test/qa-regression-001.test.ts
+```
+
+One feature. Six commands. CEO taste → architecture → review → ship → QA. The agent found a race condition I would have missed, auto-fixed two issues I didn't even think about, wrote 9 tests, and generated a regression test from QA. That is not a copilot. That is a team.
+
+---
+
 ## The team
 
 | Skill | Your specialist | What they do |
@@ -57,45 +115,6 @@ Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 **Test everything.** `/ship` bootstraps test frameworks from scratch if your project doesn't have one. Every `/ship` run produces a coverage audit. Every `/qa` bug fix generates a regression test. 100% test coverage is the goal — tests make vibe coding safe instead of yolo coding.
 
 **`/document-release` is the engineer you never had.** It reads every doc file in your project, cross-references the diff, and updates everything that drifted. README, ARCHITECTURE, CONTRIBUTING, CLAUDE.md, TODOS — all kept current automatically.
-
----
-
-## Demo
-
-```
-You:   I want to add seller photo upload to the listing app.
-
-You:   /plan-ceo-review
-
-Claude: "Photo upload" is not the feature. The real job is helping sellers
-        create listings that actually sell. Here's the 10-star version:
-        auto-identify the product, pull specs and comps from the web,
-        draft the title and description, suggest the best hero image...
-
-You:   /plan-eng-review
-
-Claude: [Architecture diagram, state machine for upload → classify → enrich
-        → draft pipeline, async job boundaries, failure modes, test matrix]
-
-You:   [implement the plan]
-
-You:   /review
-
-Claude: Race condition: two tabs can overwrite cover-photo selection.
-        Trust boundary: web data into draft generation = prompt injection.
-        [AUTO-FIXED] 2 issues. 1 needs your input.
-
-You:   /ship
-
-Claude: Tests: 42 → 47 (+5 new). PR: github.com/you/app/pull/42
-
-You:   /qa https://staging.myapp.com
-
-Claude: All 3 affected routes working. Upload + enrichment flow passes
-        end to end. Regression test generated.
-```
-
-Six commands. Plan → architecture → review → ship → QA. Done.
 
 ---
 
