@@ -57,6 +57,34 @@ describe('SKILL.md command validation', () => {
     const result = validateSkill(qaOnlySkill);
     expect(result.snapshotFlagErrors).toHaveLength(0);
   });
+
+  test('all $B commands in plan-design-review/SKILL.md are valid browse commands', () => {
+    const skill = path.join(ROOT, 'plan-design-review', 'SKILL.md');
+    if (!fs.existsSync(skill)) return;
+    const result = validateSkill(skill);
+    expect(result.invalid).toHaveLength(0);
+  });
+
+  test('all snapshot flags in plan-design-review/SKILL.md are valid', () => {
+    const skill = path.join(ROOT, 'plan-design-review', 'SKILL.md');
+    if (!fs.existsSync(skill)) return;
+    const result = validateSkill(skill);
+    expect(result.snapshotFlagErrors).toHaveLength(0);
+  });
+
+  test('all $B commands in qa-design-review/SKILL.md are valid browse commands', () => {
+    const skill = path.join(ROOT, 'qa-design-review', 'SKILL.md');
+    if (!fs.existsSync(skill)) return;
+    const result = validateSkill(skill);
+    expect(result.invalid).toHaveLength(0);
+  });
+
+  test('all snapshot flags in qa-design-review/SKILL.md are valid', () => {
+    const skill = path.join(ROOT, 'qa-design-review', 'SKILL.md');
+    if (!fs.existsSync(skill)) return;
+    const result = validateSkill(skill);
+    expect(result.snapshotFlagErrors).toHaveLength(0);
+  });
 });
 
 describe('Command registry consistency', () => {
@@ -176,6 +204,10 @@ describe('Update check preamble', () => {
     'ship/SKILL.md', 'review/SKILL.md',
     'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
     'retro/SKILL.md',
+    'plan-design-review/SKILL.md',
+    'qa-design-review/SKILL.md',
+    'design-consultation/SKILL.md',
+    'document-release/SKILL.md',
   ];
 
   for (const skill of skillsWithUpdateCheck) {
@@ -397,6 +429,7 @@ describe('No hardcoded branch names in SKILL templates', () => {
     'qa/SKILL.md.tmpl',
     'plan-ceo-review/SKILL.md.tmpl',
     'retro/SKILL.md.tmpl',
+    'document-release/SKILL.md.tmpl',
   ];
 
   // Patterns that indicate hardcoded 'main' in git commands
@@ -479,6 +512,10 @@ describe('v0.4.1 preamble features', () => {
     'ship/SKILL.md', 'review/SKILL.md',
     'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
     'retro/SKILL.md',
+    'plan-design-review/SKILL.md',
+    'qa-design-review/SKILL.md',
+    'design-consultation/SKILL.md',
+    'document-release/SKILL.md',
   ];
 
   for (const skill of skillsWithPreamble) {
@@ -491,7 +528,7 @@ describe('v0.4.1 preamble features', () => {
     test(`${skill} contains session awareness`, () => {
       const content = fs.readFileSync(path.join(ROOT, skill), 'utf-8');
       expect(content).toContain('_SESSIONS');
-      expect(content).toContain('ELI16');
+      expect(content).toContain('RECOMMENDATION');
     });
   }
 });
@@ -556,14 +593,27 @@ describe('Enum & Value Completeness in review checklist', () => {
     expect(checklist).toContain('allowlist');
   });
 
-  test('Enum & Value Completeness is in the gate classification as CRITICAL', () => {
-    const gateSection = checklist.slice(checklist.indexOf('## Gate Classification'));
+  test('Enum & Value Completeness is in the severity classification as CRITICAL', () => {
+    const gateSection = checklist.slice(checklist.indexOf('## Severity Classification'));
     // The ASCII art has CRITICAL on the left and INFORMATIONAL on the right
     // Enum & Value Completeness should appear on a line with the CRITICAL tree (├─ or └─)
     const enumLine = gateSection.split('\n').find(l => l.includes('Enum & Value Completeness'));
     expect(enumLine).toBeDefined();
     // It's on the left (CRITICAL) side — starts with ├─ or └─
     expect(enumLine!.trimStart().startsWith('├─') || enumLine!.trimStart().startsWith('└─')).toBe(true);
+  });
+
+  test('Fix-First Heuristic exists in checklist and is referenced by review + ship', () => {
+    expect(checklist).toContain('## Fix-First Heuristic');
+    expect(checklist).toContain('AUTO-FIX');
+    expect(checklist).toContain('ASK');
+
+    const reviewSkill = fs.readFileSync(path.join(ROOT, 'review/SKILL.md'), 'utf-8');
+    const shipSkill = fs.readFileSync(path.join(ROOT, 'ship/SKILL.md'), 'utf-8');
+    expect(reviewSkill).toContain('AUTO-FIX');
+    expect(reviewSkill).toContain('[AUTO-FIXED]');
+    expect(shipSkill).toContain('AUTO-FIX');
+    expect(shipSkill).toContain('[AUTO-FIXED]');
   });
 });
 

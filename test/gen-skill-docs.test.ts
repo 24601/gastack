@@ -69,6 +69,9 @@ describe('gen-skill-docs', () => {
     { dir: 'retro', name: 'retro' },
     { dir: 'setup-browser-cookies', name: 'setup-browser-cookies' },
     { dir: 'gstack-upgrade', name: 'gstack-upgrade' },
+    { dir: 'plan-design-review', name: 'plan-design-review' },
+    { dir: 'qa-design-review', name: 'qa-design-review' },
+    { dir: 'design-consultation', name: 'design-consultation' },
   ];
 
   test('every skill has a SKILL.md.tmpl template', () => {
@@ -144,7 +147,18 @@ describe('gen-skill-docs', () => {
     const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
     expect(content).toContain('_SESSIONS');
     expect(content).toContain('RECOMMENDATION');
-    expect(content).toContain('ELI16');
+  });
+
+  test('generated SKILL.md contains branch detection', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
+    expect(content).toContain('_BRANCH');
+    expect(content).toContain('git branch --show-current');
+  });
+
+  test('generated SKILL.md contains ELI16 simplification rules', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
+    expect(content).toContain('No raw function names');
+    expect(content).toContain('plain English');
   });
 
   test('qa and qa-only templates use QA_METHODOLOGY placeholder', () => {

@@ -44,11 +44,14 @@ gstack/
 │   ├── skill-llm-eval.test.ts   # Tier 3: LLM-as-judge (~$0.15/run)
 │   └── skill-e2e.test.ts         # Tier 2: E2E via claude -p (~$3.85/run)
 ├── qa-only/         # /qa-only skill (report-only QA, no fixes)
+├── plan-design-review/  # /plan-design-review skill (report-only design audit)
+├── qa-design-review/    # /qa-design-review skill (design audit + fix loop)
 ├── ship/            # Ship workflow skill
 ├── review/          # PR review skill
 ├── plan-ceo-review/ # /plan-ceo-review skill
 ├── plan-eng-review/ # /plan-eng-review skill
 ├── retro/           # Retrospective skill
+├── document-release/ # /document-release skill (post-ship doc updates)
 ├── setup            # One-time setup: build binary + symlink skills
 ├── SKILL.md         # Generated from SKILL.md.tmpl (don't edit directly)
 ├── SKILL.md.tmpl    # Template: edit this, run gen:skill-docs
@@ -118,6 +121,12 @@ CHANGELOG.md is **for users**, not contributors. Write it like product release n
 - Every entry should make someone think "oh nice, I want to try that."
 - No jargon: say "every question now tells you which project and branch you're in" not
   "AskUserQuestion format standardized across skill templates via preamble resolver."
+
+## Local plans
+
+Contributors can store long-range vision docs and design documents in `~/.gstack-dev/plans/`.
+These are local-only (not checked in). When reviewing TODOS.md, check `plans/` for candidates
+that may be ready to promote to TODOs or implement.
 
 ## E2E eval failure blame protocol
 
