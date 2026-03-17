@@ -729,7 +729,7 @@ Compare screenshots and observations across pages for:
 
 **Project-scoped:**
 \`\`\`bash
-SLUG=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]\\([^/]*/[^/]*\\)\\.git$|\\1|;s|.*[:/]\\([^/]*/[^/]*\\)$|\\1|' | tr '/' '-')
+eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
 mkdir -p ~/.gstack/projects/$SLUG
 \`\`\`
 Write to: \`~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md\`
@@ -812,6 +812,38 @@ Tie everything to user goals and product objectives. Always suggest specific imp
 10. **Depth over breadth.** 5-10 well-documented findings with screenshots and specific suggestions > 20 vague observations.`;
 }
 
+function generateReviewDashboard(): string {
+  return `## Review Readiness Dashboard
+
+After completing the review, read the review log to display the dashboard.
+
+\`\`\`bash
+eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
+cat ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl 2>/dev/null || echo "NO_REVIEWS"
+\`\`\`
+
+Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, plan-design-review). Ignore entries with timestamps older than 7 days. Display:
+
+\`\`\`
++====================================================================+
+|                    REVIEW READINESS DASHBOARD                       |
++====================================================================+
+| Review          | Runs | Last Run            | Status               |
+|-----------------|------|---------------------|----------------------|
+| CEO Review      |  1   | 2026-03-16 14:30    | CLEAR                |
+| Eng Review      |  1   | 2026-03-16 15:00    | CLEAR                |
+| Design Review   |  0   | —                   | NOT YET RUN          |
++--------------------------------------------------------------------+
+| VERDICT: 2/3 CLEAR — Design Review not yet run                      |
++====================================================================+
+\`\`\`
+
+**Verdict logic:**
+- **CLEARED TO SHIP (3/3)**: All three have >= 1 entry within 7 days AND most recent status is "clean"
+- **N/3 CLEAR**: Show count and list which are missing, have open issues, or are stale (>7 days)
+- Informational only — does NOT block.`;
+}
+
 const RESOLVERS: Record<string, () => string> = {
   COMMAND_REFERENCE: generateCommandReference,
   SNAPSHOT_FLAGS: generateSnapshotFlags,
@@ -820,6 +852,7 @@ const RESOLVERS: Record<string, () => string> = {
   BASE_BRANCH_DETECT: generateBaseBranchDetect,
   QA_METHODOLOGY: generateQAMethodology,
   DESIGN_METHODOLOGY: generateDesignMethodology,
+  REVIEW_DASHBOARD: generateReviewDashboard,
 };
 
 // ─── Template Processing ────────────────────────────────────
