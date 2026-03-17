@@ -34,31 +34,38 @@ Claude: "Photo upload" is not the feature. The real job is helping
         auto-identify the product, pull specs and comps from the
         web, and draft the listing automatically? That's 10 stars.
         "Upload a photo" is 3 stars. Which are we building?
+        [8 expansion proposals, you cherry-pick 5, defer 3 to backlog]
 
 You:    /plan-design-review
 Claude: Design Score: B  |  AI Slop Score: C
         "Upload flow looks like a default Bootstrap form."
-        Top fix: custom drag-drop zone with preview grid.
+        [80-item audit, infers your design system, exports DESIGN.md]
+        [flags 3 AI slop patterns: gradient hero, icon grid, uniform radius]
 
 You:    /plan-eng-review
 Claude: ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
         │ Upload  │───▶│ Classify │───▶│ Enrich   │───▶│ Draft   │
         │ (sync)  │    │ (async)  │    │ (async)  │    │ (async) │
         └─────────┘    └──────────┘    └──────────┘    └─────────┘
-        Failure modes: 6 mapped. Test matrix: 14 cases.
+        [ASCII diagrams for every data flow, state machine, error path]
+        [14-case test matrix, 6 failure modes mapped, 3 security concerns]
 
 You:    Approve plan. Exit plan mode.
-        [Claude implements the feature]
+        [Claude writes 2,400 lines across 11 files — models, services,
+         controllers, views, migrations, and tests. ~8 minutes.]
 
 You:    /review
 Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
         [AUTO-FIXED] Missing index on listings.status
         [ASK] Race condition on hero image selection → You: yes
+        [traces every new enum value through all switch statements]
         3 issues — 2 auto-fixed, 1 fixed.
 
 You:    /qa https://staging.myapp.com
-Claude: Upload → classify → enrich → draft: end to end ✓
+Claude: [opens real browser, logs in, uploads photos, clicks through flows]
+        Upload → classify → enrich → draft: end to end ✓
         Mobile: ✓  |  Slow connection: ✓  |  Bad image: ✓
+        [finds bug: preview doesn't clear on second upload — fixes it]
         Regression test generated.
 
 You:    /ship
@@ -67,7 +74,7 @@ Claude: Tests: 42 → 51 (+9 new)
         PR: github.com/you/app/pull/42
 ```
 
-One feature. Seven commands. CEO taste → design audit → architecture → build → review → QA → ship. The agent reframed the product, found a race condition I would have missed, auto-fixed two issues, caught the AI slop in my UI, wrote 9 tests, and generated a regression test. That is not a copilot. That is a team.
+One feature. Seven commands. The agent reframed the product, ran an 80-item design audit, drew the architecture, wrote 2,400 lines of code, found a race condition I would have missed, auto-fixed two issues, opened a real browser to QA test, found and fixed a bug I didn't know about, wrote 9 tests, and generated a regression test. That is not a copilot. That is a team.
 
 ---
 
