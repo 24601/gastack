@@ -2128,9 +2128,11 @@ B="${browseBin}"
 
 Read plan-design-review/SKILL.md for the design review workflow.
 
-Review the site at ${testServer.url}. Use --quick mode (homepage + 2 pages). Skip any AskUserQuestion calls — this is non-interactive. Write your audit report to ./design-audit.md. Do not offer to create DESIGN.md.`,
+Review the site at ${testServer.url}. Use --quick mode (homepage + 2 pages). Skip any AskUserQuestion calls — this is non-interactive. Write your audit report to ./design-audit.md. Do not offer to create DESIGN.md.
+
+EFFICIENCY: Skip the preamble bash block. Combine multiple browse commands into single bash blocks (e.g. run all Phase 2 JS extractions in one block). Write the report as soon as you have enough data — do not over-explore.`,
       workingDirectory: reviewDir,
-      maxTurns: 20,
+      maxTurns: 30,
       timeout: 360_000,
       testName: 'plan-design-review-audit',
       runId,
