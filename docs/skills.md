@@ -204,7 +204,7 @@ But coherence is table stakes. Every dev tool dashboard looks the same — clean
 
 That is what `/design-consultation` is really about. It does not just propose a safe system. It proposes safe choices AND risks — and tells you which is which. "Here are the choices that keep you literate in your category. And here is where I think you should break from convention, and why." You pick which risks to take. The agent checks that the whole system still coheres either way.
 
-If you want, the agent will browse your competitors' actual sites — take screenshots, analyze their fonts and colors and spacing — so you can see the landscape before you make choices. This is not about copying. It is about getting in the ballpark so you know what the conventions are, and then deciding which ones are worth breaking.
+If you want, the agent will research what's already out there in your space — take screenshots of real sites, analyze their fonts and colors and spacing — so you can see the landscape before you make choices. This is not about copying. It is about getting in the ballpark so you know what the conventions are, and then deciding which ones are worth breaking.
 
 After you agree on the system, it generates an interactive HTML preview page — not just swatches and font samples, but realistic product pages. If you are building a dashboard, you see a dashboard with a sidebar, data tables, and stat cards. If you are building a marketing site, you see a hero section with real copy and a CTA. Everything rendered in your design system, with your product name, in light and dark mode. You see what your product could feel like before a single line of production code is written.
 
@@ -217,7 +217,7 @@ You:   /design-consultation
 
 Claude: From the README, this looks like a developer analytics dashboard
         for engineering teams. Sound right? Tell me about the feeling
-        you want — and would you like me to browse some competitors
+        you want — and would you like me to look at what's out there
         first so we can see the landscape?
 
 You:    Yes, it's for eng managers. Show me what's out there.
@@ -246,7 +246,7 @@ Claude: [browses Linear, Vercel, Datadog, Posthog — takes screenshots]
           Instrument Serif for display headings — nobody in dev tools
             uses a serif. It creates instant hierarchy contrast and
             signals "we care about craft" in a space full of sans-serifs.
-          Single teal accent instead of blue — every competitor uses blue.
+          Single teal accent instead of blue — everyone else in this space uses blue.
             Teal is close enough to feel trustworthy, different enough
             to be recognizable.
           4px compact density — tighter than Linear, says "we respect

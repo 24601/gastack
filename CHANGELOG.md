@@ -86,7 +86,7 @@ Read the philosophy: https://garryslist.org/posts/boil-the-ocean
 ## 0.5.2 — 2026-03-17
 
 - **Your design consultant now takes creative risks.** `/design-consultation` doesn't just propose a safe, coherent system — it explicitly breaks down SAFE CHOICES (category baseline) vs. RISKS (where your product stands out). You pick which rules to break. Every risk comes with a rationale for why it works and what it costs.
-- **See the competition before you choose.** When you opt into research, the agent browses competitor sites with screenshots and accessibility tree analysis — not just web search results. You see what the landscape looks like before making design decisions.
+- **See the landscape before you choose.** When you opt into research, the agent browses real sites in your space with screenshots and accessibility tree analysis — not just web search results. You see what's out there before making design decisions.
 - **Preview pages that look like your product.** The preview page now renders realistic product mockups — dashboards with sidebar nav and data tables, marketing pages with hero sections, settings pages with forms — not just font swatches and color palettes.
 
 ## 0.5.1 — 2026-03-17
