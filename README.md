@@ -29,7 +29,7 @@ Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 ```
 You:    I want to add photo upload for sellers.
 
-/plan-ceo-review
+You:    /plan-ceo-review
 
 Claude: "Photo upload" is not the feature. The real job is helping
         sellers create listings that actually sell.
@@ -41,7 +41,7 @@ Claude: "Photo upload" is not the feature. The real job is helping
         That's a 10-star listing experience. "Upload a photo" is
         a 3-star one. Which are we building?
 
-/plan-eng-review
+You:    /plan-eng-review
 
 Claude: ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
         │ Upload  │───▶│ Classify │───▶│ Enrich   │───▶│ Draft   │
@@ -55,9 +55,9 @@ Claude: ┌─────────┐    ┌──────────�
         Failure modes: 6 mapped. Test matrix: 14 cases.
         Missing: what if classify returns low-confidence?
 
-[implement the plan]
+You:    [implement the plan]
 
-/review
+You:    /review
 
 Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
         [AUTO-FIXED] Missing index on listings.status
@@ -65,13 +65,13 @@ Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
               selection. Add SELECT FOR UPDATE? → You: yes
         Pre-Landing Review: 3 issues — 2 auto-fixed, 1 fixed.
 
-/ship
+You:    /ship
 
 Claude: Tests: 42 → 51 (+9 new)
         Coverage: 14/14 code paths tested (100%)
         PR: github.com/you/app/pull/42
 
-/qa https://staging.myapp.com
+You:    /qa https://staging.myapp.com
 
 Claude: Upload → classify → enrich → draft: end to end ✓
         Mobile upload: ✓  |  Slow connection: ✓  |  Bad image: ✓
