@@ -28,7 +28,6 @@ Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 
 ```
 You:    I want to add photo upload for sellers.
-
 You:    /plan-ceo-review
 
 Claude: "Photo upload" is not the feature. The real job is helping
@@ -42,7 +41,6 @@ Claude: "Photo upload" is not the feature. The real job is helping
         a 3-star one. Which are we building?
 
 You:    /plan-eng-review
-
 Claude: ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
         │ Upload  │───▶│ Classify │───▶│ Enrich   │───▶│ Draft   │
         │ (sync)  │    │ (async)  │    │ (async)  │    │ (async) │
@@ -56,9 +54,7 @@ Claude: ┌─────────┐    ┌──────────�
         Missing: what if classify returns low-confidence?
 
 You:    [implement the plan]
-
 You:    /review
-
 Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
         [AUTO-FIXED] Missing index on listings.status
         [ASK] Race condition: two tabs can overwrite hero image
@@ -66,13 +62,11 @@ Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
         Pre-Landing Review: 3 issues — 2 auto-fixed, 1 fixed.
 
 You:    /ship
-
 Claude: Tests: 42 → 51 (+9 new)
         Coverage: 14/14 code paths tested (100%)
         PR: github.com/you/app/pull/42
 
 You:    /qa https://staging.myapp.com
-
 Claude: Upload → classify → enrich → draft: end to end ✓
         Mobile upload: ✓  |  Slow connection: ✓  |  Bad image: ✓
         Regression test generated: test/qa-regression-001.test.ts
