@@ -4,25 +4,29 @@
 
 Thirteen opinionated workflow skills for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Plan review, design review, code review, one-command shipping, browser automation, QA testing, engineering retrospectives, and post-ship documentation — all as slash commands.
 
+**The Completeness Principle:** Every gstack skill follows one rule — always recommend the complete implementation when AI makes the marginal cost near-zero. No more "Choose B because it's 90% of the value for half the effort" when option A is 70 more lines of code that a machine writes in seconds. We call this **boil the lake** — not boil the ocean (AGI is not here yet), but do the complete thing machines can now do, instead of the incomplete thing humans could only afford in the past. 100% test coverage, full edge case handling, complete implementations. Every recommendation shows both human-team and CC+gstack time so you can see the real cost of completeness.
+
 ### Without gstack
 
 - The agent takes your request literally — it never asks if you're building the right thing
 - It will implement exactly what you said, even when the real product is something bigger
+- It recommends shortcuts to save you time — even when the complete version costs 2 minutes of machine time
 - "Review my PR" gives inconsistent depth every time
 - "Ship this" turns into a long back-and-forth about what to do
 - The agent can write code but can't see your app — it's half blind
 - You still do QA by hand: open browser, click around, check pages, squint at layouts
+- Your project has no tests, and the agent never suggests setting them up
 
 ### With gstack
 
 | Skill | Mode | What it does |
 |-------|------|--------------|
-| `/plan-ceo-review` | Founder / CEO | Rethink the problem. Find the 10-star product hiding inside the request. |
+| `/plan-ceo-review` | Founder / CEO | Rethink the problem. Find the 10-star product hiding inside the request. Four modes: Expansion, Selective Expansion, Hold Scope, Reduction. |
 | `/plan-eng-review` | Eng manager / tech lead | Lock in architecture, data flow, diagrams, edge cases, and tests. |
 | `/plan-design-review` | Senior product designer | Designer's eye audit. 80-item checklist, letter grades, AI Slop detection, DESIGN.md inference. Report only — never touches code. |
 | `/design-consultation` | Design consultant | Build a complete design system from scratch. Browses competitors to get in the ballpark, proposes safe choices AND creative risks, generates realistic product mockups, and writes DESIGN.md. |
 | `/review` | Paranoid staff engineer | Find the bugs that pass CI but blow up in production. Triages Greptile review comments. |
-| `/ship` | Release engineer | Sync main, run tests, resolve Greptile reviews, push, open PR. For a ready branch, not for deciding what to build. |
+| `/ship` | Release engineer | Sync main, run tests, audit coverage, resolve Greptile reviews, push, open PR. Auto-bootstraps test frameworks if your project doesn't have one. |
 | `/browse` | QA engineer | Give the agent eyes. It logs in, clicks through your app, takes screenshots, catches breakage. Full QA pass in 60 seconds. |
 | `/qa` | QA + fix engineer | Test app, find bugs, fix them with atomic commits, re-verify. Before/after health scores and ship-readiness summary. Three tiers: Quick, Standard, Exhaustive. |
 | `/qa-only` | QA reporter | Report-only QA testing. Same methodology as /qa but never fixes anything. Use when you want a pure bug report without code changes. |
@@ -223,6 +227,14 @@ That is what `/plan-ceo-review` does for me.
 
 It does not just ask, "how do I add this feature?"
 It asks, **"what is the 10-star product hiding inside this request?"**
+
+Four modes, depending on what you need:
+- **SCOPE EXPANSION** — dream big. The agent proposes the ambitious version. Every expansion is presented as an individual decision you opt into.
+- **SELECTIVE EXPANSION** — hold your current scope as the baseline, but see what else is possible. The agent surfaces opportunities one by one — you cherry-pick the ones worth doing.
+- **HOLD SCOPE** — maximum rigor on the existing plan. No expansions surfaced.
+- **SCOPE REDUCTION** — find the minimum viable version. Cut everything else.
+
+Visions and decisions are persisted to `~/.gstack/projects/` so they survive beyond the conversation. Exceptional visions can be promoted to `docs/designs/` in your repo for the team.
 
 That is a very different kind of power.
 
@@ -517,6 +529,8 @@ This is where the model should stop behaving like a brainstorm partner and start
 Momentum matters here.
 
 A lot of branches die when the interesting work is done and only the boring release work is left. Humans procrastinate that part. AI should not.
+
+If your project doesn't have a test framework, `/ship` will set one up — detect your runtime, research the best framework, install it, write real tests for your actual code, set up CI/CD, and create TESTING.md. After that, every session writes tests naturally. 100% test coverage is the goal — tests make vibe coding safe instead of yolo coding.
 
 ### Example
 
@@ -841,7 +855,7 @@ Or set `auto_upgrade: true` in `~/.gstack/config.yaml` to upgrade automatically 
 
 Paste this into Claude Code:
 
-> Uninstall gstack: remove the skill symlinks by running `for s in browse plan-ceo-review plan-eng-review plan-design-review design-consultation review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f ~/.claude/skills/$s; done` then run `rm -rf ~/.claude/skills/gstack` and remove the gstack section from CLAUDE.md. If this project also has gstack at .claude/skills/gstack, remove it by running `for s in browse plan-ceo-review plan-eng-review plan-design-review review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f .claude/skills/$s; done && rm -rf .claude/skills/gstack` and remove the gstack section from the project CLAUDE.md too.
+> Uninstall gstack: remove the skill symlinks by running `for s in browse plan-ceo-review plan-eng-review plan-design-review design-consultation review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f ~/.claude/skills/$s; done` then run `rm -rf ~/.claude/skills/gstack` and remove the gstack section from CLAUDE.md. If this project also has gstack at .claude/skills/gstack, remove it by running `for s in browse plan-ceo-review plan-eng-review plan-design-review design-consultation review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f .claude/skills/$s; done && rm -rf .claude/skills/gstack` and remove the gstack section from the project CLAUDE.md too.
 
 ## Development
 

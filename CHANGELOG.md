@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.1 — Boil the Lake
+## 0.6.1 — 2026-03-17 — Boil the Lake
 
 Every gstack skill now follows the **Completeness Principle**: always recommend the
 full implementation when AI makes the marginal cost near-zero. No more "Choose B
