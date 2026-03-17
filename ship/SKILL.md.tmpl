@@ -181,22 +181,32 @@ find . -name '*.test.*' -o -name '*.spec.*' -o -name '*_test.*' -o -name '*_spec
 
 Store this number for the PR body.
 
-**1. Build the code path map** from `git diff origin/<base>...HEAD`:
+**1. Trace every codepath changed** using `git diff origin/<base>...HEAD`:
 
-Extract all new or modified:
-- Functions/methods (def, function, const, class methods)
-- Conditional branches (if/else, switch/case, ternary, guard clauses, early returns)
-- API routes/endpoints (route definitions, controller actions)
-- Components (new files or new exports)
-- Error handlers (try/catch, rescue, error boundaries, fallback paths)
+Read every changed file. For each one, trace how data flows through the code — don't just list functions, actually follow the execution:
 
-**2. Search for corresponding tests and score quality:**
+1. **Read the diff.** For each changed file, read the full file (not just the diff hunk) to understand context.
+2. **Trace data flow.** Starting from each entry point (route handler, exported function, event listener, component render), follow the data through every branch:
+   - Where does input come from? (request params, props, database, API call)
+   - What transforms it? (validation, mapping, computation)
+   - Where does it go? (database write, API response, rendered output, side effect)
+   - What can go wrong at each step? (null/undefined, invalid input, network failure, empty collection)
+3. **Diagram the execution.** For each changed file, draw an ASCII diagram showing:
+   - Every function/method that was added or modified
+   - Every conditional branch (if/else, switch, ternary, guard clause, early return)
+   - Every error path (try/catch, rescue, error boundary, fallback)
+   - Every call to another function (trace into it — does IT have untested branches?)
+   - Every edge: what happens with null input? Empty array? Invalid type?
 
-For each code path, search for a test exercising it:
-- `src/services/billing.ts:processPayment` → `billing.test.ts`, `billing.spec.ts`
-- `app/controllers/payments_controller.rb#create` → `test/controllers/payments_controller_test.rb`
-- New if/else → tests for BOTH paths (not just happy path)
-- New error handler → test triggering the error condition
+This is the critical step — you're building a map of every line of code that can execute differently based on input. Every branch in this diagram needs a test.
+
+**2. Check each branch against existing tests:**
+
+Go through your diagram branch by branch. For each one, search for a test that exercises it:
+- Function `processPayment()` → look for `billing.test.ts`, `billing.spec.ts`, `test/billing_test.rb`
+- An if/else → look for tests covering BOTH the true AND false path
+- An error handler → look for a test that triggers that specific error condition
+- A call to `helperFn()` that has its own branches → those branches need tests too
 
 Quality scoring rubric:
 - ★★★  Tests behavior with edge cases AND error paths

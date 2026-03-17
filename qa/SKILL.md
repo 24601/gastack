@@ -707,12 +707,19 @@ Read 2-3 test files closest to the fix (same directory, same code type). Match e
 - File naming, imports, assertion style, describe/it nesting, setup/teardown patterns
 The regression test must look like it was written by the same developer.
 
-**2. Write a regression test encoding the exact bug condition:**
+**2. Trace the bug's codepath, then write a regression test:**
+
+Before writing the test, trace the data flow through the code you just fixed:
+- What input/state triggered the bug? (the exact precondition)
+- What codepath did it follow? (which branches, which function calls)
+- Where did it break? (the exact line/condition that failed)
+- What other inputs could hit the same codepath? (edge cases around the fix)
 
 The test MUST:
 - Set up the precondition that triggered the bug (the exact state that made it break)
 - Perform the action that exposed the bug
 - Assert the correct behavior (NOT "it renders" or "it doesn't throw")
+- If you found adjacent edge cases while tracing, test those too (e.g., null input, empty array, boundary value)
 - Include full attribution comment:
   ```
   // Regression: ISSUE-NNN — {what broke}
