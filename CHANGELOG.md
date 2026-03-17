@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.1.0] - 2026-03-17
+
+### Added
+
+- **E2E and LLM-judge tests now only run what you changed.** Each test declares which source files it depends on. When you run `bun run test:e2e`, it checks your diff and skips tests whose dependencies weren't touched. A branch that only changes `/retro` now runs 2 tests instead of 31. Use `bun run test:e2e:all` to force everything.
+- **`bun run eval:select` previews which tests would run.** See exactly which tests your diff triggers before spending API credits. Supports `--json` for scripting and `--base <branch>` to override the base branch.
+- **Completeness guardrail catches forgotten test entries.** A free unit test validates that every `testName` in the E2E and LLM-judge test files has a corresponding entry in the TOUCHFILES map. New tests without entries fail `bun test` immediately — no silent always-run degradation.
+
+### Changed
+
+- `test:evals` and `test:e2e` now auto-select based on diff (was: all-or-nothing)
+- New `test:evals:all` and `test:e2e:all` scripts for explicit full runs
+
 ## 0.6.0.1 — 2026-03-17
 
 - **`/gstack-upgrade` now catches stale vendored copies automatically.** If your global gstack is up to date but the vendored copy in your project is behind, `/gstack-upgrade` detects the mismatch and syncs it. No more manually asking "did we vendor it?" — it just tells you and offers to update.

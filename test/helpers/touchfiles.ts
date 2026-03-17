@@ -57,9 +57,10 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'review-base-branch':       ['review/**'],
 
   // Plan reviews
-  'plan-ceo-review':          ['plan-ceo-review/**'],
-  'plan-eng-review':          ['plan-eng-review/**'],
-  'plan-eng-review-artifact': ['plan-eng-review/**'],
+  'plan-ceo-review':           ['plan-ceo-review/**'],
+  'plan-ceo-review-selective': ['plan-ceo-review/**'],
+  'plan-eng-review':           ['plan-eng-review/**'],
+  'plan-eng-review-artifact':  ['plan-eng-review/**'],
 
   // Ship
   'ship-base-branch': ['ship/**'],
@@ -70,6 +71,12 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
 
   // Document-release
   'document-release': ['document-release/**'],
+
+  // QA bootstrap
+  'qa-bootstrap': ['qa/**', 'browse/src/**', 'ship/**'],
+
+  // Ship coverage audit
+  'ship-coverage-audit': ['ship/**'],
 
   // Design
   'design-consultation-core':     ['design-consultation/**'],

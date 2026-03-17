@@ -74,10 +74,12 @@ describe('selectTests', () => {
     expect(result.selected).not.toContain('document-release');
   });
 
-  test('skill-specific change selects only that skill', () => {
+  test('skill-specific change selects only that skill and related tests', () => {
     const result = selectTests(['plan-ceo-review/SKILL.md'], E2E_TOUCHFILES);
-    expect(result.selected).toEqual(['plan-ceo-review']);
-    expect(result.skipped.length).toBe(Object.keys(E2E_TOUCHFILES).length - 1);
+    expect(result.selected).toContain('plan-ceo-review');
+    expect(result.selected).toContain('plan-ceo-review-selective');
+    expect(result.selected.length).toBe(2);
+    expect(result.skipped.length).toBe(Object.keys(E2E_TOUCHFILES).length - 2);
   });
 
   test('global touchfile triggers ALL tests', () => {
@@ -110,9 +112,10 @@ describe('selectTests', () => {
       E2E_TOUCHFILES,
     );
     expect(result.selected).toContain('plan-ceo-review');
+    expect(result.selected).toContain('plan-ceo-review-selective');
     expect(result.selected).toContain('retro');
     expect(result.selected).toContain('retro-base-branch');
-    expect(result.selected.length).toBe(3);
+    expect(result.selected.length).toBe(4);
   });
 
   test('works with LLM_JUDGE_TOUCHFILES', () => {

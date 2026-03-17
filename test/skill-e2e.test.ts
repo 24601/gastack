@@ -896,7 +896,7 @@ Focus on reviewing the plan content: architecture, error handling, security, and
 
 // --- Plan CEO Review (SELECTIVE EXPANSION) E2E ---
 
-describeE2E('Plan CEO Review SELECTIVE EXPANSION E2E', () => {
+describeIfSelected('Plan CEO Review SELECTIVE EXPANSION E2E', ['plan-ceo-review-selective'], () => {
   let planDir: string;
 
   beforeAll(() => {
@@ -2346,7 +2346,7 @@ Review the site at ${serverUrl}. Use --quick mode. Skip any AskUserQuestion call
 
 // --- Test Bootstrap E2E ---
 
-describeE2E('Test Bootstrap E2E', () => {
+describeIfSelected('Test Bootstrap E2E', ['qa-bootstrap'], () => {
   let bootstrapDir: string;
   let bootstrapServer: ReturnType<typeof Bun.serve>;
 
@@ -2483,7 +2483,7 @@ This is a test+fix loop: find bugs, fix them, write regression tests, commit eac
 
 // --- Test Coverage Audit E2E ---
 
-describeE2E('Test Coverage Audit E2E', () => {
+describeIfSelected('Test Coverage Audit E2E', ['ship-coverage-audit'], () => {
   let coverageDir: string;
 
   beforeAll(() => {
