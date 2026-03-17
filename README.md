@@ -1,32 +1,56 @@
 # gstack
 
-**Thirteen opinionated skills that turn Claude Code into a team you can manage.**
+**My open source software factory. Yours too, if you want it.**
 
-Planning is not review. Review is not shipping. Founder taste is not engineering rigor. If you blur all of that together, you get a mediocre blend of all four.
+The models are getting dramatically better every week. We are at the dawn of something real — one person shipping at a scale that used to require a team of twenty. I am doing 16k LOC/day. I am landing 10+ PRs a day. And I am not special. I just have a system.
 
-I want explicit gears. I want to tell the model what kind of brain to use right now — founder, eng manager, paranoid reviewer, release machine — and have it commit to that mode completely.
+gstack is that system. It turns Claude Code into a virtual engineering team you actually manage — with a CEO who rethinks the product, an eng manager who locks the architecture, a designer who catches AI slop, a paranoid reviewer who finds production bugs, a QA lead who opens a real browser and clicks through your app, and a release engineer who ships the PR. Thirteen specialists, all as slash commands, all Markdown, all open source, **all free, MIT license, available right now.**
 
-That is what gstack does.
+I am learning how to get to the edge of what agentic systems can do as of March 2026, and this is my live experiment. I am sharing it because I want the whole world on this journey with me.
 
-Created by [Garry Tan](https://x.com/garrytan), President & CEO of [Y Combinator](https://www.ycombinator.com/).
+Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 
-| Skill | Mode | What it does |
-|-------|------|--------------|
-| `/plan-ceo-review` | Founder | Rethink the problem. Find the 10-star product hiding inside the request. |
-| `/plan-eng-review` | Eng manager | Lock in architecture, data flow, diagrams, edge cases, and tests. |
-| `/plan-design-review` | Senior designer | 80-item design audit with letter grades and AI Slop detection. Report only. |
-| `/design-consultation` | Design partner | Build a complete design system from scratch. Knows the landscape, proposes creative risks, generates realistic mockups. |
-| `/review` | Staff engineer | Find the bugs that pass CI but blow up in production. Auto-fixes the obvious ones. |
-| `/ship` | Release engineer | Sync main, run tests, audit coverage, push, open PR. One command. |
-| `/browse` | QA engineer | Give the agent eyes. Real browser, real clicks, real screenshots. ~100ms per command. |
-| `/qa` | QA lead | Test your app, find bugs, fix them, re-verify. Generates regression tests for every fix. |
-| `/qa-only` | QA reporter | Same testing methodology as /qa but report only — never touches code. |
-| `/qa-design-review` | Designer who codes | Same audit as /plan-design-review, then fixes what it finds. Atomic commits, before/after screenshots. |
-| `/setup-browser-cookies` | Session manager | Import cookies from your real browser into the headless session. Test authenticated pages. |
-| `/retro` | Eng manager | Team-aware weekly retro with per-person breakdowns, metrics, and trends. |
-| `/document-release` | Technical writer | Update all project docs to match what you just shipped. |
+— [Garry Tan](https://x.com/garrytan), President & CEO of [Y Combinator](https://www.ycombinator.com/)
 
-**[Detailed guides with examples and philosophy for every skill](docs/skills.md)**
+---
+
+## The team
+
+| Skill | Your specialist | What they do |
+|-------|----------------|--------------|
+| `/plan-ceo-review` | **CEO / Founder** | Rethink the problem. Find the 10-star product hiding inside the request. Four modes: Expansion, Selective Expansion, Hold Scope, Reduction. |
+| `/plan-eng-review` | **Eng Manager** | Lock in architecture, data flow, diagrams, edge cases, and tests. Forces hidden assumptions into the open. |
+| `/plan-design-review` | **Senior Designer** | 80-item design audit with letter grades. AI Slop detection. Infers your design system. Report only — never touches code. |
+| `/design-consultation` | **Design Partner** | Build a complete design system from scratch. Knows the landscape, proposes creative risks, generates realistic product mockups. Design at the heart of all other phases. |
+| `/review` | **Staff Engineer** | Find the bugs that pass CI but blow up in production. Auto-fixes the obvious ones. Flags completeness gaps. |
+| `/ship` | **Release Engineer** | Sync main, run tests, audit coverage, push, open PR. Bootstraps test frameworks if you don't have one. One command. |
+| `/browse` | **QA Engineer** | Give the agent eyes. Real Chromium browser, real clicks, real screenshots. ~100ms per command. |
+| `/qa` | **QA Lead** | Test your app, find bugs, fix them with atomic commits, re-verify. Auto-generates regression tests for every fix. |
+| `/qa-only` | **QA Reporter** | Same methodology as /qa but report only. Use when you want a pure bug report without code changes. |
+| `/qa-design-review` | **Designer Who Codes** | Same audit as /plan-design-review, then fixes what it finds. Atomic commits, before/after screenshots. |
+| `/setup-browser-cookies` | **Session Manager** | Import cookies from your real browser (Chrome, Arc, Brave, Edge) into the headless session. Test authenticated pages. |
+| `/retro` | **Eng Manager** | Team-aware weekly retro. Per-person breakdowns, shipping streaks, test health trends, growth opportunities. |
+| `/document-release` | **Technical Writer** | Update all project docs to match what you just shipped. Catches stale READMEs automatically. |
+
+**[Deep dives with examples and philosophy for every skill →](docs/skills.md)**
+
+---
+
+## What's new and why it matters
+
+**Design is at the heart.** `/design-consultation` doesn't just pick fonts. It researches what's out there in your space, proposes safe choices AND creative risks, generates realistic mockups of your actual product, and writes `DESIGN.md` — and then `/qa-design-review` and `/plan-eng-review` read what you chose. Design decisions flow through the whole system.
+
+**`/qa` was a massive unlock.** It let me go from 6 to 12 parallel workers. Claude Code saying *"I SEE THE ISSUE"* and then actually fixing it, generating a regression test, and verifying the fix — that changed how I work. The agent has eyes now.
+
+**Smart review routing.** Just like at a well-run startup: CEO doesn't have to look at infra bug fixes, design review isn't needed for backend changes. gstack tracks what reviews are run, figures out what's appropriate, and just does the smart thing. The Review Readiness Dashboard tells you where you stand before you ship.
+
+**Test everything.** `/ship` bootstraps test frameworks from scratch if your project doesn't have one. Every `/ship` run produces a coverage audit. Every `/qa` bug fix generates a regression test. 100% test coverage is the goal — tests make vibe coding safe instead of yolo coding.
+
+**`/document-release` is the engineer you never had.** It reads every doc file in your project, cross-references the diff, and updates everything that drifted. README, ARCHITECTURE, CONTRIBUTING, CLAUDE.md, TODOS — all kept current automatically.
+
+**People are already building on top.** Josh built his L8 software factory on gstack. Others are forking and customizing. That's the whole point.
+
+---
 
 ## Demo
 
@@ -61,19 +85,25 @@ You:   /qa https://staging.myapp.com
 
 Claude: All 3 affected routes working. Upload + enrichment flow passes
         end to end. Regression test generated.
-
-You:   /plan-design-review https://staging.myapp.com
-
-Claude: Design Score: B  |  AI Slop Score: C
-        "The site communicates competence but not confidence."
-        Top issues: generic typography, AI slop patterns, flat heading scale.
 ```
 
-## Who this is for
+Six commands. Plan → architecture → review → ship → QA. Done.
 
-You already use Claude Code and want it to stop being one mushy generic mode. You want the model to have opinions, catch things you would miss, and execute without hand-holding.
+---
 
-This is not a prompt pack for beginners. It is an operating system for people who ship.
+## My journey and why this exists
+
+I have a full time busy job as CEO of Y Combinator. And I am coding a lot. Like, a lot a lot. I was stranded in Austin due to weather and I was coding. My mom was in the hospital and not too lucid for most of it, and I was coding by her bedside too. She's ok now.
+
+Is it really possible for a CEO to be coding all the time? I think it will have to be. The CEO has to set the future of the company. All companies will need to adapt to a faster world and do more. It's not about doing less and cheaper. It's about doing more and making 10x better products and services.
+
+Is 16k LOC/day sustainable for me? We're going to find out if I can manage to get to L8 software factory. But you can tell the models are about to get much much better. L8 is barely possible today. But everyone will be there soon.
+
+I want to be one of the people who helps all of you do it with me.
+
+gstack is how I do it. It's the exact system I use every day. I'm upgrading it live, in public, and sharing everything I learn. There is nothing to sell here. No monetization, no premium tier, no waitlist. Just me trying to figure out the future and bringing everyone along for the ride.
+
+---
 
 ## 10 sessions at once
 
@@ -81,9 +111,11 @@ gstack is powerful with one session. It is transformative with ten.
 
 [Conductor](https://conductor.build) runs multiple Claude Code sessions in parallel — each in its own isolated workspace. One session running `/qa` on staging, another doing `/review` on a PR, a third implementing a feature, and seven more on other branches. All at the same time.
 
-Each workspace gets its own isolated browser instance automatically. No port collisions, no shared state, no configuration. One person, ten parallel agents, each with the right cognitive mode. That is a different way of building software.
+One person, ten parallel agents, each with the right cognitive mode. That is a different way of building software.
 
-## Install
+---
+
+## Install — takes 30 seconds
 
 **Requirements:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Git](https://git-scm.com/), [Bun](https://bun.sh/) v1.0+
 
@@ -97,17 +129,14 @@ Open Claude Code and paste this. Claude does the rest.
 
 > Add gstack to this project: run `cp -Rf ~/.claude/skills/gstack .claude/skills/gstack && rm -rf .claude/skills/gstack/.git && cd .claude/skills/gstack && ./setup` then add a "gstack" section to this project's CLAUDE.md that says to use the /browse skill from gstack for all web browsing, never use mcp\_\_claude-in-chrome\_\_\* tools, lists the available skills: /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /review, /ship, /browse, /qa, /qa-only, /qa-design-review, /setup-browser-cookies, /retro, /document-release, and tells Claude that if gstack skills aren't working, run `cd .claude/skills/gstack && ./setup` to build the binary and register skills.
 
-Real files get committed to your repo (not a submodule), so `git clone` just works. The binary and node\_modules are gitignored — teammates run `cd .claude/skills/gstack && ./setup` once to build.
-
-Everything lives inside `.claude/`. Nothing touches your PATH or runs in the background.
+Real files get committed to your repo (not a submodule), so `git clone` just works. Everything lives inside `.claude/`. Nothing touches your PATH or runs in the background.
 
 ---
 
 ```
 +----------------------------------------------------------------------------+
 |                                                                            |
-|   Are you a great software engineer who loves to write 10K LOC/day         |
-|   and land 10 PRs a day like Garry?                                        |
+|   Are you a great software engineer who wants to ship 10K+ LOC/day?       |
 |                                                                            |
 |   Come work at YC: ycombinator.com/software                                |
 |                                                                            |
@@ -120,48 +149,38 @@ Everything lives inside `.claude/`. Nothing touches your PATH or runs in the bac
 
 ---
 
-## Greptile integration
+## Come ride the wave
 
-[Greptile](https://greptile.com) reviews your PRs automatically. gstack triages Greptile's comments as part of `/review` and `/ship` — valid issues get fixed, false positives get pushed back with evidence, already-fixed issues get auto-acknowledged. **[Setup guide](docs/greptile.md)**
+This is **free, MIT licensed, open source, available now.** No premium tier. No waitlist. No strings.
 
-## Contributor mode
+I open sourced how I do development and I am actively upgrading my own software factory here. You can fork it and make it your own. That's the whole point. I want everyone on this journey.
 
-Turn on contributor mode and gstack files bug reports when something goes wrong. Fork gstack and fix it yourself. **[Guide](docs/contributor-mode.md)**
+The models are getting better fast. The people who figure out how to work with them now — really work with them, not just dabble — are going to have a massive advantage. This is that window. Let's go.
 
-## Troubleshooting
+**[github.com/garrytan/gstack](https://github.com/garrytan/gstack)** — MIT License
 
-**Skill not showing up?**
-`cd ~/.claude/skills/gstack && ./setup`
-
-**`/browse` fails?**
-`cd ~/.claude/skills/gstack && bun install && bun run build`
-
-**Project copy is stale?**
-Run `/gstack-upgrade`
-
-**`bun` not installed?**
-`curl -fsSL https://bun.sh/install | bash`
-
-## Upgrading
-
-Run `/gstack-upgrade` in Claude Code. Or set `auto_upgrade: true` in `~/.gstack/config.yaml`.
-
-## Uninstalling
-
-> Uninstall gstack: remove the skill symlinks by running `for s in browse plan-ceo-review plan-eng-review plan-design-review design-consultation review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f ~/.claude/skills/$s; done` then run `rm -rf ~/.claude/skills/gstack` and remove the gstack section from CLAUDE.md. If this project also has gstack at .claude/skills/gstack, remove it by running `for s in browse plan-ceo-review plan-eng-review plan-design-review design-consultation review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f .claude/skills/$s; done && rm -rf .claude/skills/gstack` and remove the gstack section from the project CLAUDE.md too.
+---
 
 ## Docs
 
 | Doc | What it covers |
 |-----|---------------|
 | [Skill Deep Dives](docs/skills.md) | Philosophy, examples, and workflow for every skill |
-| [Greptile Integration](docs/greptile.md) | Setup and triage workflow |
+| [Greptile Integration](docs/greptile.md) | PR review triage with [Greptile](https://greptile.com) |
 | [Contributor Mode](docs/contributor-mode.md) | How to help improve gstack |
 | [Browser Reference](BROWSER.md) | Full command reference for `/browse` |
 | [Architecture](ARCHITECTURE.md) | Design decisions and system internals |
 | [Contributing](CONTRIBUTING.md) | Dev setup, testing, and dev mode |
 | [Changelog](CHANGELOG.md) | What's new in every version |
 
+## Troubleshooting
+
+**Skill not showing up?** `cd ~/.claude/skills/gstack && ./setup`
+
+**`/browse` fails?** `cd ~/.claude/skills/gstack && bun install && bun run build`
+
+**Stale install?** Run `/gstack-upgrade` — or set `auto_upgrade: true` in `~/.gstack/config.yaml`
+
 ## License
 
-MIT
+MIT. Free forever. Go build something.
