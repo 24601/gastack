@@ -897,7 +897,7 @@ function findTemplates(): string[] {
     path.join(ROOT, 'plan-ceo-review', 'SKILL.md.tmpl'),
     path.join(ROOT, 'plan-eng-review', 'SKILL.md.tmpl'),
     path.join(ROOT, 'retro', 'SKILL.md.tmpl'),
-    path.join(ROOT, 'brainstorm', 'SKILL.md.tmpl'),
+    path.join(ROOT, 'office-hours', 'SKILL.md.tmpl'),
     path.join(ROOT, 'debug', 'SKILL.md.tmpl'),
     path.join(ROOT, 'gstack-upgrade', 'SKILL.md.tmpl'),
     path.join(ROOT, 'plan-design-review', 'SKILL.md.tmpl'),

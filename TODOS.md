@@ -374,7 +374,7 @@
 **Priority:** P3
 **Depends on:** Ref staleness Parts 1+2 (shipped)
 
-## Brainstorm / Design
+## Office Hours / Design
 
 ### Design docs → Supabase team store sync
 
@@ -382,7 +382,7 @@
 
 **Why:** Cross-team design discovery at scale. Local `~/.gstack/projects/$SLUG/` keyword-grep discovery works for same-machine users now, but Supabase sync makes it work across the whole team. Duplicate ideas surface, everyone sees what's been explored.
 
-**Context:** /brainstorm writes design docs to `~/.gstack/projects/$SLUG/`. The team store already syncs test plans, retro snapshots, QA reports. Design docs follow the same pattern — just add a sync adapter.
+**Context:** /office-hours writes design docs to `~/.gstack/projects/$SLUG/`. The team store already syncs test plans, retro snapshots, QA reports. Design docs follow the same pattern — just add a sync adapter.
 
 **Effort:** S
 **Priority:** P2

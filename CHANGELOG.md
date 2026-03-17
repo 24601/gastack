@@ -3,21 +3,21 @@
 ## 0.6.0 — 2026-03-16
 
 ### Added
-- **New `/brainstorm` skill — think before you build.** Socratic design exploration that runs before planning. Asks clarifying questions one at a time, challenges your premises, forces you to consider 2-3 implementation approaches, then writes a design doc. The design doc feeds directly into `/plan-ceo-review` and `/plan-eng-review`. You can now do `brainstorm → plan → implement → review → QA → ship → retro` — the full lifecycle.
+- **New `/office-hours` skill — think before you build.** YC-style office hours that run before planning. Asks clarifying questions one at a time, challenges your premises, forces you to consider 2-3 implementation approaches, then writes a design doc. The design doc feeds directly into `/plan-ceo-review` and `/plan-eng-review`. You can now do `office-hours → plan → implement → review → QA → ship → retro` — the full lifecycle.
 - **New `/debug` skill — find the root cause, not the symptom.** Systematic debugging with an Iron Law: no fixes without root cause investigation first. Traces data flow, matches against known bug patterns, tests hypotheses one at a time. If 3 fixes fail, it stops and questions the architecture instead of thrashing.
 - **Every skill now knows when to stop.** New escalation protocol across all skills: DONE, DONE_WITH_CONCERNS, BLOCKED, NEEDS_CONTEXT. "It is always OK to stop and say 'this is too hard for me.' Bad work is worse than no work."
 - **/ship now re-verifies before pushing.** New verification gate (Step 6.5): if code changed during review fixes, tests must pass again before push. No more "should work now" — run it and prove it.
 - **/review now catches scope drift.** Before reviewing code quality, Step 1.5 compares the diff against TODOS.md and commit messages. Flags files changed that weren't in the plan, and requirements that weren't addressed in the diff.
 - **/review now cites evidence for every claim.** "This pattern is safe" requires a line reference. "Tests cover this" requires a test name. No more "probably handled."
 - **/plan-ceo-review now forces you to consider alternatives.** Step 0C-bis requires 2-3 implementation approaches before mode selection — one minimal, one ideal. You pick the approach, then the review runs against it.
-- **Design docs flow downstream automatically.** `/brainstorm` writes design docs to `~/.gstack/projects/`. `/plan-ceo-review` and `/plan-eng-review` discover and read them during their pre-review audits. Branch-filtered lookup with fallback.
-- **Design lineage tracking.** Brainstorm the same feature twice? The second design doc links to the first via a `Supersedes:` field. Trace how your design evolved.
+- **Design docs flow downstream automatically.** `/office-hours` writes design docs to `~/.gstack/projects/`. `/plan-ceo-review` and `/plan-eng-review` discover and read them during their pre-review audits. Branch-filtered lookup with fallback.
+- **Design lineage tracking.** Run office hours on the same feature twice? The second design doc links to the first via a `Supersedes:` field. Trace how your design evolved.
 
 ### Fixed
-- Branch names with `/` (like `garrytan/better-process`) no longer break artifact filenames. Fixed in `/brainstorm` and `/plan-eng-review` test plan artifacts.
+- Branch names with `/` (like `garrytan/better-process`) no longer break artifact filenames. Fixed in `/office-hours` and `/plan-eng-review` test plan artifacts.
 
 ### For contributors
-- New structural tests for `/brainstorm` (Phase headers, Design Doc, Supersedes, Smart-skip) and `/debug` (Iron Law, Root Cause, Pattern Analysis, Hypothesis, DEBUG REPORT, 3-strike).
+- New structural tests for `/office-hours` (Phase headers, Design Doc, Supersedes, Smart-skip) and `/debug` (Iron Law, Root Cause, Pattern Analysis, Hypothesis, DEBUG REPORT, 3-strike).
 - Escalation protocol assertions added to all preamble skills (DONE_WITH_CONCERNS, BLOCKED, NEEDS_CONTEXT).
 - Two new TODOs: design docs → Supabase team store sync (P2), /plan-design-review skill (P2).
 
