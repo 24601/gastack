@@ -207,6 +207,7 @@ describe('Update check preamble', () => {
     'plan-design-review/SKILL.md',
     'qa-design-review/SKILL.md',
     'design-consultation/SKILL.md',
+    'document-release/SKILL.md',
   ];
 
   for (const skill of skillsWithUpdateCheck) {
@@ -428,6 +429,7 @@ describe('No hardcoded branch names in SKILL templates', () => {
     'qa/SKILL.md.tmpl',
     'plan-ceo-review/SKILL.md.tmpl',
     'retro/SKILL.md.tmpl',
+    'document-release/SKILL.md.tmpl',
   ];
 
   // Patterns that indicate hardcoded 'main' in git commands
@@ -513,6 +515,7 @@ describe('v0.4.1 preamble features', () => {
     'plan-design-review/SKILL.md',
     'qa-design-review/SKILL.md',
     'design-consultation/SKILL.md',
+    'document-release/SKILL.md',
   ];
 
   for (const skill of skillsWithPreamble) {
@@ -525,7 +528,7 @@ describe('v0.4.1 preamble features', () => {
     test(`${skill} contains session awareness`, () => {
       const content = fs.readFileSync(path.join(ROOT, skill), 'utf-8');
       expect(content).toContain('_SESSIONS');
-      expect(content).toContain('ELI16');
+      expect(content).toContain('RECOMMENDATION');
     });
   }
 });
