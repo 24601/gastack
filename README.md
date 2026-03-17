@@ -4,7 +4,7 @@ Hi, I'm [Garry Tan](https://x.com/garrytan). I'm President & CEO of [Y Combinato
 
 And right now I am in the middle of something that feels like a new era entirely.
 
-In the last 60 days I have written **over 600,000 lines of production code** — 35% tests — and I am doing **10,000 to 20,000 usable lines of code per day** as a part-time part of my day while doing all my duties as CEO of YC. That is not a typo. My last `/retro` across 3 projects: **140,751 lines added, 362 commits, ~115k net LOC** in one period. The models are getting dramatically better every week. We are at the dawn of something real — one person shipping at a scale that used to require a team of twenty.
+In the last 60 days I have written **over 600,000 lines of production code** — 35% tests — and I am doing **10,000 to 20,000 usable lines of code per day** as a part-time part of my day while doing all my duties as CEO of YC. That is not a typo. My last `/retro` (developer stats from the last 7 days) across 3 projects: **140,751 lines added, 362 commits, ~115k net LOC**. The models are getting dramatically better every week. We are at the dawn of something real — one person shipping at a scale that used to require a team of twenty.
 
 **2026 — 1,237 contributions and counting:**
 
