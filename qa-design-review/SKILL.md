@@ -421,7 +421,7 @@ Compare screenshots and observations across pages for:
 
 **Project-scoped:**
 ```bash
-SLUG=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)\.git$|\1|;s|.*[:/]\([^/]*/[^/]*\)$|\1|' | tr '/' '-')
+eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
 mkdir -p ~/.gstack/projects/$SLUG
 ```
 Write to: `~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md`
@@ -502,6 +502,7 @@ Tie everything to user goals and product objectives. Always suggest specific imp
 8. **Responsive is design, not just "not broken."** A stacked desktop layout on mobile is not responsive design — it's lazy. Evaluate whether the mobile layout makes *design* sense.
 9. **Document incrementally.** Write each finding to the report as you find it. Don't batch.
 10. **Depth over breadth.** 5-10 well-documented findings with screenshots and specific suggestions > 20 vague observations.
+11. **Show screenshots to the user.** After every `$B screenshot`, `$B snapshot -a -o`, or `$B responsive` command, use the Read tool on the output file(s) so the user can see them inline. For `responsive` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.
 
 Record baseline design score and AI slop score at end of Phase 6.
 
@@ -627,7 +628,7 @@ Write the report to both local and project-scoped locations:
 
 **Project-scoped:**
 ```bash
-SLUG=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)\.git$|\1|;s|.*[:/]\([^/]*/[^/]*\)$|\1|' | tr '/' '-')
+eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
 mkdir -p ~/.gstack/projects/$SLUG
 ```
 Write to `~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md`

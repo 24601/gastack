@@ -21,6 +21,24 @@
 - Escalation protocol assertions added to all preamble skills (DONE_WITH_CONCERNS, BLOCKED, NEEDS_CONTEXT).
 - Two new TODOs: design docs → Supabase team store sync (P2), /plan-design-review skill (P2).
 
+## 0.5.2 — 2026-03-17
+
+- **Your design consultant now takes creative risks.** `/design-consultation` doesn't just propose a safe, coherent system — it explicitly breaks down SAFE CHOICES (category baseline) vs. RISKS (where your product stands out). You pick which rules to break. Every risk comes with a rationale for why it works and what it costs.
+- **See the competition before you choose.** When you opt into research, the agent browses competitor sites with screenshots and accessibility tree analysis — not just web search results. You see what the landscape looks like before making design decisions.
+- **Preview pages that look like your product.** The preview page now renders realistic product mockups — dashboards with sidebar nav and data tables, marketing pages with hero sections, settings pages with forms — not just font swatches and color palettes.
+
+## 0.5.1 — 2026-03-17
+- **Know where you stand before you ship.** Every `/plan-ceo-review`, `/plan-eng-review`, and `/plan-design-review` now logs its result to a review tracker. At the end of each review, you see a **Review Readiness Dashboard** showing which reviews are done, when they ran, and whether they're clean — with a clear CLEARED TO SHIP or NOT READY verdict.
+- **`/ship` checks your reviews before creating the PR.** Pre-flight now reads the dashboard and asks if you want to continue when reviews are missing. Informational only — it won't block you, but you'll know what you skipped.
+- **One less thing to copy-paste.** The SLUG computation (that opaque sed pipeline for computing `owner-repo` from git remote) is now a shared `bin/gstack-slug` helper. All 14 inline copies across templates replaced with `eval $(gstack-slug)`. If the format ever changes, fix it once.
+- **Screenshots are now visible during QA and browse sessions.** When gstack takes screenshots, they now show up as clickable image elements in your output — no more invisible `/tmp/browse-screenshot.png` paths you can't see. Works in `/qa`, `/qa-only`, `/plan-design-review`, `/qa-design-review`, `/browse`, and `/gstack`.
+
+### For contributors
+
+- Added `{{REVIEW_DASHBOARD}}` resolver to `gen-skill-docs.ts` — shared dashboard reader injected into 4 templates (3 review skills + ship).
+- Added `bin/gstack-slug` helper (5-line bash) with unit tests. Outputs `SLUG=` and `BRANCH=` lines, sanitizes `/` to `-`.
+- New TODOs: smart review relevance detection (P3), `/merge` skill for review-gated PR merge (P2).
+
 ## 0.5.0 — 2026-03-16
 
 - **Your site just got a design review.** `/plan-design-review` opens your site and reviews it like a senior product designer — typography, spacing, hierarchy, color, responsive, interactions, and AI slop detection. Get letter grades (A-F) per category, a dual headline "Design Score" + "AI Slop Score", and a structured first impression that doesn't pull punches.

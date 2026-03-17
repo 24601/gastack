@@ -2,7 +2,7 @@
 
 **gstack turns Claude Code from one generic assistant into a team of specialists you can summon on demand.**
 
-Twelve opinionated workflow skills for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Plan review, design review, code review, one-command shipping, browser automation, QA testing, engineering retrospectives, and post-ship documentation — all as slash commands.
+Thirteen opinionated workflow skills for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Plan review, design review, code review, one-command shipping, browser automation, QA testing, engineering retrospectives, and post-ship documentation — all as slash commands.
 
 ### Without gstack
 
@@ -20,6 +20,7 @@ Twelve opinionated workflow skills for [Claude Code](https://docs.anthropic.com/
 | `/plan-ceo-review` | Founder / CEO | Rethink the problem. Find the 10-star product hiding inside the request. |
 | `/plan-eng-review` | Eng manager / tech lead | Lock in architecture, data flow, diagrams, edge cases, and tests. |
 | `/plan-design-review` | Senior product designer | Designer's eye audit. 80-item checklist, letter grades, AI Slop detection, DESIGN.md inference. Report only — never touches code. |
+| `/design-consultation` | Design consultant | Build a complete design system from scratch. Browses competitors to get in the ballpark, proposes safe choices AND creative risks, generates realistic product mockups, and writes DESIGN.md. |
 | `/review` | Paranoid staff engineer | Find the bugs that pass CI but blow up in production. Triages Greptile review comments. |
 | `/ship` | Release engineer | Sync main, run tests, resolve Greptile reviews, push, open PR. For a ready branch, not for deciding what to build. |
 | `/browse` | QA engineer | Give the agent eyes. It logs in, clicks through your app, takes screenshots, catches breakage. Full QA pass in 60 seconds. |
@@ -131,11 +132,11 @@ This is the setup I use. One person, ten parallel agents, each with the right co
 
 Open Claude Code and paste this. Claude will do the rest.
 
-> Install gstack: run `git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack && cd ~/.claude/skills/gstack && ./setup` then add a "gstack" section to CLAUDE.md that says to use the /browse skill from gstack for all web browsing, never use mcp\_\_claude-in-chrome\_\_\* tools, and lists the available skills: /plan-ceo-review, /plan-eng-review, /plan-design-review, /review, /ship, /browse, /qa, /qa-only, /qa-design-review, /setup-browser-cookies, /retro, /document-release. Then ask the user if they also want to add gstack to the current project so teammates get it.
+> Install gstack: run `git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack && cd ~/.claude/skills/gstack && ./setup` then add a "gstack" section to CLAUDE.md that says to use the /browse skill from gstack for all web browsing, never use mcp\_\_claude-in-chrome\_\_\* tools, and lists the available skills: /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /review, /ship, /browse, /qa, /qa-only, /qa-design-review, /setup-browser-cookies, /retro, /document-release. Then ask the user if they also want to add gstack to the current project so teammates get it.
 
 ### Step 2: Add to your repo so teammates get it (optional)
 
-> Add gstack to this project: run `cp -Rf ~/.claude/skills/gstack .claude/skills/gstack && rm -rf .claude/skills/gstack/.git && cd .claude/skills/gstack && ./setup` then add a "gstack" section to this project's CLAUDE.md that says to use the /browse skill from gstack for all web browsing, never use mcp\_\_claude-in-chrome\_\_\* tools, lists the available skills: /plan-ceo-review, /plan-eng-review, /plan-design-review, /review, /ship, /browse, /qa, /qa-only, /qa-design-review, /setup-browser-cookies, /retro, /document-release, and tells Claude that if gstack skills aren't working, run `cd .claude/skills/gstack && ./setup` to build the binary and register skills.
+> Add gstack to this project: run `cp -Rf ~/.claude/skills/gstack .claude/skills/gstack && rm -rf .claude/skills/gstack/.git && cd .claude/skills/gstack && ./setup` then add a "gstack" section to this project's CLAUDE.md that says to use the /browse skill from gstack for all web browsing, never use mcp\_\_claude-in-chrome\_\_\* tools, lists the available skills: /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /review, /ship, /browse, /qa, /qa-only, /qa-design-review, /setup-browser-cookies, /retro, /document-release, and tells Claude that if gstack skills aren't working, run `cd .claude/skills/gstack && ./setup` to build the binary and register skills.
 
 Real files get committed to your repo (not a submodule), so `git clone` just works. The binary and node\_modules are gitignored — teammates just need to run `cd .claude/skills/gstack && ./setup` once to build (or `/browse` handles it automatically on first use).
 
@@ -334,6 +335,89 @@ Claude: Design Score: C  |  AI Slop Score: D
 ```
 
 This is report only — it never touches your code. Use `/qa-design-review` when you want it to fix what it finds.
+
+---
+
+## `/design-consultation`
+
+This is my **design partner mode**.
+
+`/plan-design-review` audits a site that already exists. `/design-consultation` is for when you have nothing yet — no design system, no font choices, no color palette. You are starting from zero and you want a senior designer to sit down with you and build the whole visual identity together.
+
+It is a conversation, not a form. The agent asks about your product, your users, and your audience. It thinks about what your product needs to communicate — trust, speed, craft, warmth, whatever fits — and works backward from that to concrete choices. Then it proposes a complete, coherent design system: aesthetic direction, typography (3+ fonts with specific roles), color palette with hex values, spacing scale, layout approach, and motion strategy. Every recommendation comes with a rationale. Every choice reinforces every other choice.
+
+But coherence is table stakes. Every dev tool dashboard looks the same — clean sans-serif, muted grays, a blue accent. They are all coherent. They are all forgettable. The difference between a product that looks "nice" and one that people actually recognize is the **deliberate creative risks**: the unexpected serif for headings, the bold accent nobody else in your category uses, the tighter spacing that makes your data feel authoritative instead of airy.
+
+That is what `/design-consultation` is really about. It does not just propose a safe system. It proposes safe choices AND risks — and tells you which is which. "Here are the choices that keep you literate in your category. And here is where I think you should break from convention, and why." You pick which risks to take. The agent checks that the whole system still coheres either way.
+
+If you want, the agent will browse your competitors' actual sites — take screenshots, analyze their fonts and colors and spacing — so you can see the landscape before you make choices. This is not about copying. It is about getting in the ballpark so you know what the conventions are, and then deciding which ones are worth breaking.
+
+After you agree on the system, it generates an interactive HTML preview page — not just swatches and font samples, but realistic product pages. If you are building a dashboard, you see a dashboard with a sidebar, data tables, and stat cards. If you are building a marketing site, you see a hero section with real copy and a CTA. Everything rendered in your design system, with your product name, in light and dark mode. You see what your product could feel like before a single line of production code is written.
+
+Then it writes `DESIGN.md` to your repo root — your project's design source of truth — and updates `CLAUDE.md` so every future Claude Code session respects the system. From that point on, `/qa-design-review` can audit against it, and any agent working on your frontend knows the rules.
+
+```
+You:   /design-consultation
+
+Claude: From the README, this looks like a developer analytics dashboard
+        for engineering teams. Sound right? Tell me about the feeling
+        you want — and would you like me to browse some competitors
+        first so we can see the landscape?
+
+You:    Yes, it's for eng managers. Show me what's out there.
+
+Claude: [browses Linear, Vercel, Datadog, Posthog — takes screenshots]
+
+        Here's the landscape. They all converge on clean sans-serifs
+        and muted blue-gray palettes. Linear stands out with dark-first
+        and tight spacing. The rest feel interchangeable.
+
+        Here's my proposal — and where I'd play it safe vs. take risks:
+
+        AESTHETIC: Industrial/Utilitarian — data-first, every pixel earns its place
+        TYPOGRAPHY: Geist (body + UI), Instrument Serif (display), JetBrains Mono (data)
+        COLOR: Restrained — slate neutrals, single teal accent (#0D9488)
+        SPACING: 4px base, compact density
+        LAYOUT: Grid-disciplined, 12-column
+        MOTION: Minimal-functional — only transitions that aid comprehension
+
+        SAFE CHOICES (match category expectations):
+          Geist for body — your users already know this font from Vercel
+          Slate neutrals — warm grays feel right for data-heavy UIs
+          Grid-disciplined layout — dashboards need predictable alignment
+
+        RISKS (where you'd stand out):
+          Instrument Serif for display headings — nobody in dev tools
+            uses a serif. It creates instant hierarchy contrast and
+            signals "we care about craft" in a space full of sans-serifs.
+          Single teal accent instead of blue — every competitor uses blue.
+            Teal is close enough to feel trustworthy, different enough
+            to be recognizable.
+          4px compact density — tighter than Linear, says "we respect
+            your screen real estate."
+
+        The safe choices keep you literate. The risks are where your
+        product gets its own face. Which risks appeal to you?
+
+You:    Love the serif risk. Let's see it.
+
+Claude: Preview opened in your browser.
+        [/tmp/design-consultation-preview-1710000000.html]
+
+        The page shows a realistic dashboard: sidebar nav, header with
+        avatar, stat cards, data table — all in your design system.
+        Instrument Serif at hero scale, Geist in body text, JetBrains
+        Mono in the data table. Teal accent on buttons and active states.
+        Light and dark mode toggle in the corner.
+
+        How does it feel? Want to adjust anything before I write DESIGN.md?
+
+You:    Ship it.
+
+Claude: Wrote DESIGN.md (typography, color, spacing, layout, motion).
+        Updated CLAUDE.md with design system guidelines.
+        All future sessions will respect these choices.
+```
 
 ---
 
@@ -757,7 +841,7 @@ Or set `auto_upgrade: true` in `~/.gstack/config.yaml` to upgrade automatically 
 
 Paste this into Claude Code:
 
-> Uninstall gstack: remove the skill symlinks by running `for s in browse plan-ceo-review plan-eng-review plan-design-review review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f ~/.claude/skills/$s; done` then run `rm -rf ~/.claude/skills/gstack` and remove the gstack section from CLAUDE.md. If this project also has gstack at .claude/skills/gstack, remove it by running `for s in browse plan-ceo-review plan-eng-review plan-design-review review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f .claude/skills/$s; done && rm -rf .claude/skills/gstack` and remove the gstack section from the project CLAUDE.md too.
+> Uninstall gstack: remove the skill symlinks by running `for s in browse plan-ceo-review plan-eng-review plan-design-review design-consultation review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f ~/.claude/skills/$s; done` then run `rm -rf ~/.claude/skills/gstack` and remove the gstack section from CLAUDE.md. If this project also has gstack at .claude/skills/gstack, remove it by running `for s in browse plan-ceo-review plan-eng-review plan-design-review review ship retro qa qa-only qa-design-review setup-browser-cookies document-release; do rm -f .claude/skills/$s; done && rm -rf .claude/skills/gstack` and remove the gstack section from the project CLAUDE.md too.
 
 ## Development
 
