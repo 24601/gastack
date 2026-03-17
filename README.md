@@ -29,51 +29,45 @@ Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 ```
 You:    I want to add photo upload for sellers.
 You:    /plan-ceo-review
-
 Claude: "Photo upload" is not the feature. The real job is helping
-        sellers create listings that actually sell.
-
-        What if we auto-identify the product from the photo, pull
-        specs and pricing comps from the web, draft the title and
-        description, and suggest the best hero image?
-
-        That's a 10-star listing experience. "Upload a photo" is
-        a 3-star one. Which are we building?
+        sellers create listings that actually sell. What if we
+        auto-identify the product, pull specs and comps from the
+        web, and draft the listing automatically? That's 10 stars.
+        "Upload a photo" is 3 stars. Which are we building?
 
 You:    /plan-eng-review
 Claude: ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
         │ Upload  │───▶│ Classify │───▶│ Enrich   │───▶│ Draft   │
         │ (sync)  │    │ (async)  │    │ (async)  │    │ (async) │
         └─────────┘    └──────────┘    └──────────┘    └─────────┘
-              │              │               │              │
-              ▼              ▼               ▼              ▼
-         S3 + DB        Vision API     WebSearch +      LLM gen +
-         persist        + fallback     price APIs       user edit
-
         Failure modes: 6 mapped. Test matrix: 14 cases.
-        Missing: what if classify returns low-confidence?
 
 You:    Approve plan. Exit plan mode.
         [Claude implements the feature]
+
+You:    /plan-design-review https://staging.myapp.com
+Claude: Design Score: B  |  AI Slop Score: C
+        "Upload flow looks like a default Bootstrap form."
+        Top fix: custom drag-drop zone with preview grid.
+
 You:    /review
 Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
         [AUTO-FIXED] Missing index on listings.status
-        [ASK] Race condition: two tabs can overwrite hero image
-              selection. Add SELECT FOR UPDATE? → You: yes
-        Pre-Landing Review: 3 issues — 2 auto-fixed, 1 fixed.
+        [ASK] Race condition on hero image selection → You: yes
+        3 issues — 2 auto-fixed, 1 fixed.
 
 You:    /qa https://staging.myapp.com
 Claude: Upload → classify → enrich → draft: end to end ✓
-        Mobile upload: ✓  |  Slow connection: ✓  |  Bad image: ✓
-        Regression test generated: test/qa-regression-001.test.ts
+        Mobile: ✓  |  Slow connection: ✓  |  Bad image: ✓
+        Regression test generated.
 
 You:    /ship
 Claude: Tests: 42 → 51 (+9 new)
-        Coverage: 14/14 code paths tested (100%)
+        Coverage: 14/14 code paths (100%)
         PR: github.com/you/app/pull/42
 ```
 
-One feature. Six commands. CEO taste → architecture → review → QA → ship. The agent found a race condition I would have missed, auto-fixed two issues I didn't even think about, wrote 9 tests, and generated a regression test from QA. That is not a copilot. That is a team.
+One feature. Seven commands. CEO taste → architecture → build → design audit → review → QA → ship. The agent reframed the product, found a race condition I would have missed, auto-fixed two issues, caught the AI slop in my UI, wrote 9 tests, and generated a regression test. That is not a copilot. That is a team.
 
 ---
 
