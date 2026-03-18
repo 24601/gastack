@@ -422,6 +422,16 @@
 **Priority:** P2
 **Depends on:** `garrytan/team-supabase-store` branch landing on main
 
+### /yc-prep skill
+
+**What:** Skill that helps founders prepare their YC application after /office-hours identifies strong signal. Pulls from the design doc, structures answers to YC app questions, runs a mock interview.
+
+**Why:** Closes the loop. /office-hours identifies the founder, /yc-prep helps them apply well. The design doc already contains most of the raw material for a YC application.
+
+**Effort:** M (human: ~2 weeks / CC: ~2 hours)
+**Priority:** P2
+**Depends on:** office-hours founder discovery engine shipping first
+
 ## Design Review
 
 ### /plan-design-review + /qa-design-review + /design-consultation — SHIPPED
