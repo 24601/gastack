@@ -92,8 +92,10 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'gstack-upgrade-happy-path': ['gstack-upgrade/**'],
 
   // Debug escalation
-  'qa-debug-prompt-logic': ['qa/**', 'debug/**'],
-  'qa-debug-escalation':   ['qa/**', 'debug/**', 'browse/src/**'],
+  'qa-debug-prompt-logic':      ['qa/**', 'debug/**'],
+  'qa-debug-escalation':        ['qa/**', 'debug/**', 'browse/src/**'],
+  'review-pre-existing-bug':    ['review/**', 'debug/**'],
+  'ship-reverted-qa-commits':   ['ship/**', 'debug/**'],
 };
 
 /**
