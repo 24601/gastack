@@ -85,6 +85,20 @@ describe('SKILL.md command validation', () => {
     const result = validateSkill(skill);
     expect(result.snapshotFlagErrors).toHaveLength(0);
   });
+
+  test('all $B commands in design-consultation/SKILL.md are valid browse commands', () => {
+    const skill = path.join(ROOT, 'design-consultation', 'SKILL.md');
+    if (!fs.existsSync(skill)) return;
+    const result = validateSkill(skill);
+    expect(result.invalid).toHaveLength(0);
+  });
+
+  test('all snapshot flags in design-consultation/SKILL.md are valid', () => {
+    const skill = path.join(ROOT, 'design-consultation', 'SKILL.md');
+    if (!fs.existsSync(skill)) return;
+    const result = validateSkill(skill);
+    expect(result.snapshotFlagErrors).toHaveLength(0);
+  });
 });
 
 describe('Command registry consistency', () => {
@@ -430,6 +444,8 @@ describe('No hardcoded branch names in SKILL templates', () => {
     'plan-ceo-review/SKILL.md.tmpl',
     'retro/SKILL.md.tmpl',
     'document-release/SKILL.md.tmpl',
+    'plan-eng-review/SKILL.md.tmpl',
+    'plan-design-review/SKILL.md.tmpl',
   ];
 
   // Patterns that indicate hardcoded 'main' in git commands
@@ -543,6 +559,10 @@ describe('Contributor mode preamble structure', () => {
     'ship/SKILL.md', 'review/SKILL.md',
     'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
     'retro/SKILL.md',
+    'plan-design-review/SKILL.md',
+    'design-review/SKILL.md',
+    'design-consultation/SKILL.md',
+    'document-release/SKILL.md',
   ];
 
   for (const skill of skillsWithPreamble) {
