@@ -84,9 +84,9 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'design-consultation-research': ['design-consultation/**'],
   'design-consultation-existing': ['design-consultation/**'],
   'design-consultation-preview':  ['design-consultation/**'],
-  'plan-design-review-audit':     ['plan-design-review/**'],
-  'plan-design-review-export':    ['plan-design-review/**'],
-  'qa-design-review-fix':         ['qa-design-review/**', 'browse/src/**'],
+  'plan-design-review-plan-mode':   ['plan-design-review/**'],
+  'plan-design-review-no-ui-scope': ['plan-design-review/**'],
+  'design-review-fix':              ['design-review/**', 'browse/src/**'],
 };
 
 /**

@@ -53,7 +53,7 @@ gstack/
 │   └── skill-e2e.test.ts         # Tier 2: E2E via claude -p (~$3.85/run)
 ├── qa-only/         # /qa-only skill (report-only QA, no fixes)
 ├── plan-design-review/  # /plan-design-review skill (report-only design audit)
-├── qa-design-review/    # /qa-design-review skill (design audit + fix loop)
+├── design-review/    # /design-review skill (design audit + fix loop)
 ├── ship/            # Ship workflow skill
 ├── review/          # PR review skill
 ├── plan-ceo-review/ # /plan-ceo-review skill

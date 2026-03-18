@@ -72,15 +72,15 @@ describe('SKILL.md command validation', () => {
     expect(result.snapshotFlagErrors).toHaveLength(0);
   });
 
-  test('all $B commands in qa-design-review/SKILL.md are valid browse commands', () => {
-    const skill = path.join(ROOT, 'qa-design-review', 'SKILL.md');
+  test('all $B commands in design-review/SKILL.md are valid browse commands', () => {
+    const skill = path.join(ROOT, 'design-review', 'SKILL.md');
     if (!fs.existsSync(skill)) return;
     const result = validateSkill(skill);
     expect(result.invalid).toHaveLength(0);
   });
 
-  test('all snapshot flags in qa-design-review/SKILL.md are valid', () => {
-    const skill = path.join(ROOT, 'qa-design-review', 'SKILL.md');
+  test('all snapshot flags in design-review/SKILL.md are valid', () => {
+    const skill = path.join(ROOT, 'design-review', 'SKILL.md');
     if (!fs.existsSync(skill)) return;
     const result = validateSkill(skill);
     expect(result.snapshotFlagErrors).toHaveLength(0);
@@ -205,7 +205,7 @@ describe('Update check preamble', () => {
     'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
     'retro/SKILL.md',
     'plan-design-review/SKILL.md',
-    'qa-design-review/SKILL.md',
+    'design-review/SKILL.md',
     'design-consultation/SKILL.md',
     'document-release/SKILL.md',
   ];
@@ -513,7 +513,7 @@ describe('v0.4.1 preamble features', () => {
     'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
     'retro/SKILL.md',
     'plan-design-review/SKILL.md',
-    'qa-design-review/SKILL.md',
+    'design-review/SKILL.md',
     'design-consultation/SKILL.md',
     'document-release/SKILL.md',
   ];
@@ -628,7 +628,7 @@ describe('Completeness Principle in generated SKILL.md files', () => {
     'plan-ceo-review/SKILL.md', 'plan-eng-review/SKILL.md',
     'retro/SKILL.md',
     'plan-design-review/SKILL.md',
-    'qa-design-review/SKILL.md',
+    'design-review/SKILL.md',
     'design-consultation/SKILL.md',
     'document-release/SKILL.md',
   ];
@@ -801,8 +801,8 @@ describe('Test Bootstrap ({{TEST_BOOTSTRAP}}) integration', () => {
     expect(content).toContain('Step 2.5');
   });
 
-  test('TEST_BOOTSTRAP appears in qa-design-review/SKILL.md', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'qa-design-review', 'SKILL.md'), 'utf-8');
+  test('TEST_BOOTSTRAP appears in design-review/SKILL.md', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'design-review', 'SKILL.md'), 'utf-8');
     expect(content).toContain('Test Framework Bootstrap');
   });
 
@@ -843,10 +843,10 @@ describe('Test Bootstrap ({{TEST_BOOTSTRAP}}) integration', () => {
     expect(content).toContain('100% test coverage');
   });
 
-  test('WebSearch is in allowed-tools for qa, ship, qa-design-review', () => {
+  test('WebSearch is in allowed-tools for qa, ship, design-review', () => {
     const qa = fs.readFileSync(path.join(ROOT, 'qa', 'SKILL.md'), 'utf-8');
     const ship = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
-    const qaDesign = fs.readFileSync(path.join(ROOT, 'qa-design-review', 'SKILL.md'), 'utf-8');
+    const qaDesign = fs.readFileSync(path.join(ROOT, 'design-review', 'SKILL.md'), 'utf-8');
     expect(qa).toContain('WebSearch');
     expect(ship).toContain('WebSearch');
     expect(qaDesign).toContain('WebSearch');
@@ -869,8 +869,8 @@ describe('Phase 8e.5 regression test generation', () => {
     expect(content).not.toContain('Never modify tests or CI configuration');
   });
 
-  test('qa-design-review has CSS-aware Phase 8e.5 variant', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'qa-design-review', 'SKILL.md'), 'utf-8');
+  test('design-review has CSS-aware Phase 8e.5 variant', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'design-review', 'SKILL.md'), 'utf-8');
     expect(content).toContain('8e.5. Regression Test (design-review variant)');
     expect(content).toContain('CSS-only');
     expect(content).toContain('test(design): regression test');
