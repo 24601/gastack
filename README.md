@@ -61,79 +61,43 @@ Real files get committed to your repo (not a submodule), so `git clone` just wor
 ```
 You:    I want to build a daily briefing app for my calendar.
 You:    /office-hours
-Claude: What does the pain look like? Specific examples — the last
-        time a conflict burned you, the daily friction of switching
-        accounts, what your assistant has to do manually today.
+Claude: [asks about the pain — specific examples, not hypotheticals]
 
-You:    My assistant keeps messing things up... I have multiple Google
-        calendars and events have stale info, wrong locations. Logistics
-        AND prep for actual events. The prep docs were AI slop...
+You:    My assistant keeps messing things up... multiple Google calendars,
+        stale info, wrong locations. The prep docs were AI slop...
 
-Claude: I'm going to push back on the framing, because I think you've
-        outgrown it. You said "daily briefing app for multi-Google-
-        Calendar management." But what you actually described is a
-        personal chief of staff AI — one that:
-        1. Watches your calendar across all accounts
-        2. Generates real prep work — the intellectual work
-        3. Manages your CRM — who are you meeting, what's the history
-        4. Prioritizes your time — flags when prep needs to start early
-        5. Trades money for leverage — finds ways to delegate or automate
-
-        The calendar is the entry point, but the product is an AI that
-        makes a busy CEO a 2000x CEO the way Claude Code makes them a
-        2000x developer.
-
-        [presents 4 premises for validation → you agree/disagree]
+Claude: I'm going to push back on the framing. You said "daily briefing
+        app." But what you actually described is a personal chief of
+        staff AI.
+        [extracts 5 capabilities you didn't realize you were describing]
+        [challenges 4 premises — you agree, disagree, or adjust]
         [generates 3 implementation approaches with effort estimates]
-
-        APPROACH A: Daily Briefing First (Narrowest Wedge)
-          Effort: M (human: ~3 weeks / CC: ~2 days)
-          Risk: Low — you use it tomorrow
-        APPROACH B: CRM-First (Relationship Graph)
-          Effort: L (human: ~6 weeks / CC: ~4 days)
-        APPROACH C: Event Intelligence Engine (Full Vision)
-          Effort: XL (human: ~3 months / CC: ~1.5 weeks)
-
-        RECOMMENDATION: Choose A because it ships tomorrow and you
-        learn from real usage. CRM data layer comes in the second
-        week naturally.
-
-        [writes design doc to ~/.gstack/projects/ — feeds into
-         /plan-ceo-review and /plan-eng-review automatically]
+        RECOMMENDATION: Ship the narrowest wedge tomorrow, learn from
+        real usage. The full vision is a 3-month project — start with
+        the daily briefing that actually works.
+        [writes design doc → feeds into downstream skills automatically]
 
 You:    /plan-ceo-review
-        [reads the design doc, runs 10-section mega review]
+        [reads the design doc, challenges scope, runs 10-section review]
 
 You:    /plan-eng-review
-Claude: ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
-        │ Calendar│───▶│ Detect   │───▶│ Generate │───▶│ Deliver │
-        │ (sync)  │    │ (stale)  │    │ (prep)   │    │ (email) │
-        └─────────┘    └──────────┘    └──────────┘    └─────────┘
-        [ASCII diagrams for every data flow, state machine, error path]
-        [14-case test matrix, 6 failure modes mapped, 3 security concerns]
+        [ASCII diagrams for data flow, state machines, error paths]
+        [test matrix, failure modes, security concerns]
 
 You:    Approve plan. Exit plan mode.
-        [Claude writes 2,400 lines across 11 files — models, services,
-         controllers, views, migrations, and tests. ~8 minutes.]
+        [writes 2,400 lines across 11 files. ~8 minutes.]
 
 You:    /review
-Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
-        [AUTO-FIXED] Missing index on listings.status
-        [ASK] Race condition on hero image selection → You: yes
-        3 issues — 2 auto-fixed, 1 fixed.
+        [AUTO-FIXED] 2 issues. [ASK] Race condition → you approve fix.
 
 You:    /qa https://staging.myapp.com
-Claude: [opens real browser, logs in, clicks through flows]
-        [finds bug: preview doesn't clear on second upload — fixes it]
-        Regression test generated.
+        [opens real browser, clicks through flows, finds and fixes a bug]
 
 You:    /ship
-Claude: Tests: 42 → 51 (+9 new)
-        Coverage: 14/14 code paths (100%)
-        PR: github.com/you/app/pull/42
+        Tests: 42 → 51 (+9 new). PR: github.com/you/app/pull/42
 ```
 
-You said "daily briefing app." The agent said "you're describing a personal chief of staff AI" — because it listened to your actual pain, not your feature request. Then it challenged your premises, generated three implementation approaches, recommended the narrowest wedge, wrote a design doc, and that doc fed into every downstream skill automatically. Eight commands. That is not a copilot. That is a team.
+You said "daily briefing app." The agent said "you're building a chief of staff AI" — because it listened to your pain, not your feature request. Then it challenged your premises, generated three approaches, recommended the narrowest wedge, and wrote a design doc that fed into every downstream skill. Eight commands. That is not a copilot. That is a team.
 
 ## The team
 
