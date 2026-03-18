@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.5.0] - 2026-03-18
+
+### Fixed
+
+- **Review log no longer breaks on branch names with `/`.** Branch names like `garrytan/design-system` caused review log writes to fail because Claude Code runs multi-line bash blocks as separate shell invocations, losing the sanitized `$BRANCH` variable between commands. New `gstack-review-log` and `gstack-review-read` atomic helpers encapsulate the entire operation in a single command — slug detection, directory creation, and file I/O all happen in one shell.
+- **All `eval $(gstack-slug)` blocks across 12 skill templates now use `&&` chaining** to prevent variable loss, even in templates that only need `mkdir`.
+
+### For contributors
+
+- Added `bin/gstack-review-log` and `bin/gstack-review-read` helpers with `GSTACK_HOME` env var override for testability.
+- Full integration tests: temp-dir file creation, append behavior, slash sanitization, `NO_REVIEWS` fallback, `---CONFIG---` separator.
+- Regression tests verify generated SKILL.md files use the new helpers.
+
 ## [0.6.4.0] - 2026-03-17
 
 ### Added
