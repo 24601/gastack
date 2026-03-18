@@ -119,6 +119,22 @@ symlink or a real copy. If it's a symlink to your working directory, be aware th
 gen-skill-docs pipeline, consider whether the changes should be tested in isolation
 before going live (especially if the user is actively using gstack in other windows).
 
+## Commit style
+
+**Always bisect commits.** Every commit should be a single logical change. When
+you've made multiple changes (e.g., a rename + a rewrite + new tests), split them
+into separate commits before pushing. Each commit should be independently
+understandable and revertable.
+
+Examples of good bisection:
+- Rename/move separate from behavior changes
+- Test infrastructure (touchfiles, helpers) separate from test implementations
+- Template changes separate from generated file regeneration
+- Mechanical refactors separate from new features
+
+When the user says "bisect commit" or "bisect and push," split staged/unstaged
+changes into logical commits and push.
+
 ## CHANGELOG style
 
 CHANGELOG.md is **for users**, not contributors. Write it like product release notes:
