@@ -241,7 +241,7 @@ Fetch and merge the base branch into the feature branch so tests run against the
 git fetch origin <base> && git merge origin/<base> --no-edit
 ```
 
-**If there are merge conflicts:** Try to auto-resolve if they are simple (VERSION, schema.rb, CHANGELOG ordering). If conflicts are complex or ambiguous, **STOP** and show them.
+**If there are merge conflicts:** Try to auto-resolve if they are simple (VERSION, CHANGELOG ordering). If conflicts are complex or ambiguous, **STOP** and show them.
 
 **If already up to date:** Continue silently.
 
@@ -406,85 +406,63 @@ Only commit if there are changes. Stage all bootstrap files (config, test direct
 
 ## Step 3: Run tests (on merged code)
 
-**Do NOT run `RAILS_ENV=test bin/rails db:migrate`** — `bin/test-lane` already calls
-`db:test:prepare` internally, which loads the schema into the correct lane database.
-Running bare test migrations without INSTANCE hits an orphan DB and corrupts structure.sql.
+Read CLAUDE.md. Look for a `## Testing` section or test commands in `## Commands`.
+Extract all test commands (lines in bash code blocks that run tests — e.g., `bun test`,
+`npm test`, `pytest`, `go test ./...`, `cargo test`, `bin/rails test`).
 
-Run both test suites in parallel:
+Run all discovered test commands in parallel, each piped to a unique /tmp file:
 
 ```bash
-bin/test-lane 2>&1 | tee /tmp/ship_tests.txt &
-npm run test 2>&1 | tee /tmp/ship_vitest.txt &
+{test_command_1} 2>&1 | tee /tmp/ship_tests_1.txt &
+{test_command_2} 2>&1 | tee /tmp/ship_tests_2.txt &
 wait
 ```
 
-After both complete, read the output files and check pass/fail.
+After all complete, read the output files and check pass/fail.
 
 **If any test fails:** Show the failures and **STOP**. Do not proceed.
 
 **If all pass:** Continue silently — just note the counts briefly.
 
+**If CLAUDE.md has no test commands:** Use AskUserQuestion:
+
+"I couldn't find test commands in CLAUDE.md. I need to know how to run tests before
+I can ship. Options:
+A) Let me search the repo — I'll look at package.json, Makefile, Gemfile, etc.,
+   figure out the test commands, and add a ## Testing section to CLAUDE.md so we
+   never have to ask again.
+B) Tell me the commands — type them and I'll add them to CLAUDE.md.
+C) This project has no tests — skip testing and continue shipping.
+RECOMMENDATION: Choose A because it's a one-time cost that prevents this question forever."
+
+If A: Search the repo for test infrastructure (package.json scripts, Makefile targets,
+Gemfile test gems, pytest/pyproject.toml config, go.mod, Cargo.toml, CI workflow files).
+Determine the correct test commands. Write a `## Testing` section to CLAUDE.md with the
+discovered commands. Then re-run Step 3 with those commands.
+
+If B: User provides commands. Write them to CLAUDE.md `## Testing` section. Re-run Step 3.
+
+If C: Skip tests with warning. Continue to Step 3.25.
+
 ---
 
 ## Step 3.25: Eval Suites (conditional)
 
-Evals are mandatory when prompt-related files change. Skip this step entirely if no prompt files are in the diff.
+Read CLAUDE.md. Look for a `## Evals` section, or eval-related commands in `## Testing`
+or `## Commands` (identified by keywords: "eval", "evals", "judge", "llm-judge").
 
-**1. Check if the diff touches prompt-related files:**
+If an eval command is found:
+  Run it. The project's eval system handles diff-based file selection internally.
 
-```bash
-git diff origin/<base> --name-only
-```
+  ```bash
+  {eval_command} 2>&1 | tee /tmp/ship_evals.txt
+  ```
 
-Match against these patterns (from CLAUDE.md):
-- `app/services/*_prompt_builder.rb`
-- `app/services/*_generation_service.rb`, `*_writer_service.rb`, `*_designer_service.rb`
-- `app/services/*_evaluator.rb`, `*_scorer.rb`, `*_classifier_service.rb`, `*_analyzer.rb`
-- `app/services/concerns/*voice*.rb`, `*writing*.rb`, `*prompt*.rb`, `*token*.rb`
-- `app/services/chat_tools/*.rb`, `app/services/x_thread_tools/*.rb`
-- `config/system_prompts/*.txt`
-- `test/evals/**/*` (eval infrastructure changes affect all suites)
+  If the eval fails → show failures and **STOP**. Do not proceed.
+  If it passes → note pass counts and cost. Continue to Step 3.4.
 
-**If no matches:** Print "No prompt-related files changed — skipping evals." and continue to Step 3.5.
-
-**2. Identify affected eval suites:**
-
-Each eval runner (`test/evals/*_eval_runner.rb`) declares `PROMPT_SOURCE_FILES` listing which source files affect it. Grep these to find which suites match the changed files:
-
-```bash
-grep -l "changed_file_basename" test/evals/*_eval_runner.rb
-```
-
-Map runner → test file: `post_generation_eval_runner.rb` → `post_generation_eval_test.rb`.
-
-**Special cases:**
-- Changes to `test/evals/judges/*.rb`, `test/evals/support/*.rb`, or `test/evals/fixtures/` affect ALL suites that use those judges/support files. Check imports in the eval test files to determine which.
-- Changes to `config/system_prompts/*.txt` — grep eval runners for the prompt filename to find affected suites.
-- If unsure which suites are affected, run ALL suites that could plausibly be impacted. Over-testing is better than missing a regression.
-
-**3. Run affected suites at `EVAL_JUDGE_TIER=full`:**
-
-`/ship` is a pre-merge gate, so always use full tier (Sonnet structural + Opus persona judges).
-
-```bash
-EVAL_JUDGE_TIER=full EVAL_VERBOSE=1 bin/test-lane --eval test/evals/<suite>_eval_test.rb 2>&1 | tee /tmp/ship_evals.txt
-```
-
-If multiple suites need to run, run them sequentially (each needs a test lane). If the first suite fails, stop immediately — don't burn API cost on remaining suites.
-
-**4. Check results:**
-
-- **If any eval fails:** Show the failures, the cost dashboard, and **STOP**. Do not proceed.
-- **If all pass:** Note pass counts and cost. Continue to Step 3.5.
-
-**5. Save eval output** — include eval results and cost dashboard in the PR body (Step 8).
-
-**Tier reference (for context — /ship always uses `full`):**
-| Tier | When | Speed (cached) | Cost |
-|------|------|----------------|------|
-| `fast` (Haiku) | Dev iteration, smoke tests | ~5s (14x faster) | ~$0.07/run |
-| `standard` (Sonnet) | Default dev, `bin/test-lane --eval` | ~17s (4x faster) | ~$0.37/run |
-| `full` (Opus persona) | **`/ship` and pre-merge** | ~72s (baseline) | ~$1.27/run |
+If no eval command found:
+  Skip silently — most projects don't have eval suites. Continue to Step 3.4.
 
 ---
 
@@ -915,8 +893,7 @@ gh pr create --base <base> --title "<type>: <summary>" --body "$(cat <<'EOF'
 <If TODOS.md doesn't exist and user skipped: omit this section>
 
 ## Test plan
-- [x] All Rails tests pass (N runs, 0 failures)
-- [x] All Vitest tests pass (N tests)
+- [x] All tests pass (list each test suite: command name, pass/fail counts)
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
