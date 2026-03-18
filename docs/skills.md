@@ -16,7 +16,7 @@ Detailed guides for every gstack skill — philosophy, workflow, and examples.
 | [`/design-review`](#design-review) | **Designer Who Codes** | Live-site visual audit + fix loop. 80-item audit, then fixes what it finds. Atomic commits, before/after screenshots. |
 | [`/setup-browser-cookies`](#setup-browser-cookies) | **Session Manager** | Import cookies from your real browser (Chrome, Arc, Brave, Edge) into the headless session. Test authenticated pages. |
 | [`/retro`](#retro) | **Eng Manager** | Team-aware weekly retro. Per-person breakdowns, shipping streaks, test health trends, growth opportunities. |
-| [`/office-hours`](#office-hours) | **YC Office Hours** | Two modes. Startup: six forcing questions on demand, users, and product. Builder: brainstorming for side projects, hackathons, and learning. Writes a design doc with personal observations about how you think. |
+| [`/office-hours`](#office-hours) | **YC Office Hours** | Start here. Six forcing questions that reframe your product before you write code. Pushes back on your framing, challenges premises, generates implementation alternatives. Design doc feeds into every downstream skill. |
 | [`/debug`](#debug) | **Debugger** | Systematic root-cause debugging. Iron Law: no fixes without investigation. Traces data flow, tests hypotheses, stops after 3 failed fixes. |
 | [`/document-release`](#document-release) | **Technical Writer** | Update all project docs to match what you just shipped. Catches stale READMEs automatically. |
 
@@ -26,17 +26,56 @@ Detailed guides for every gstack skill — philosophy, workflow, and examples.
 
 This is where every project should start.
 
-Before you plan, before you review, before you write code — sit down and think about what you're building and why. `/office-hours` is a YC-style conversation that forces clarity before action.
+Before you plan, before you review, before you write code — sit down with a YC-style partner and think about what you're actually building. Not what you think you're building. What you're *actually* building.
 
-It works in two modes, and it asks you which one upfront:
+### The reframe
+
+Here's what happened when I used it on a real project. I said: "I want to build a daily briefing app for my calendar." Reasonable request. Then it asked about the pain — specific examples, not hypotheticals. I told it about my assistant missing things, calendar items across multiple Google accounts with stale info, prep docs that were AI slop, events with wrong locations I had to hunt down in Google Drive.
+
+It came back with: *"I'm going to push back on the framing, because I think you've outgrown it. You said 'daily briefing app for multi-Google-Calendar management.' But what you actually described is a personal chief of staff AI."*
+
+Then it extracted five capabilities I didn't realize I was describing:
+
+1. **Watches your calendar** across all accounts and detects stale info, missing locations, permission gaps
+2. **Generates real prep work** — not logistics summaries, but *the intellectual work* of preparing for a board meeting, a podcast, a fundraiser
+3. **Manages your CRM** — who are you meeting, what's their relationship to you and YC, what do they want, what's the history
+4. **Prioritizes your time** — flags when prep needs to start early, tells Renee to block time, ranks events by importance
+5. **Trades money for leverage** — actively looks for ways to delegate, automate, or amplify your $20/second
+
+That reframe changed the entire project. I was about to build a calendar app. Now I'm building something ten times more valuable — because the skill listened to my pain instead of my feature request.
+
+### Premise challenge
+
+After the reframe, it presents premises for you to validate. Not "does this sound good?" — actual falsifiable claims about the product:
+
+1. The calendar is the anchor data source, but the value is in the intelligence layer on top
+2. Renee doesn't get replaced — she gets superpowered
+3. The narrowest wedge is a daily briefing that actually works
+4. CRM integration is a must-have, not a nice-to-have
+
+You agree, disagree, or adjust. Every premise you accept becomes load-bearing in the design doc.
+
+### Implementation alternatives
+
+Then it generates 2-3 concrete implementation approaches with honest effort estimates:
+
+- **Approach A: Daily Briefing First** — narrowest wedge, ships tomorrow, M effort (human: ~3 weeks / CC: ~2 days)
+- **Approach B: CRM-First** — build the relationship graph first, L effort (human: ~6 weeks / CC: ~4 days)
+- **Approach C: Full Vision** — everything at once, XL effort (human: ~3 months / CC: ~1.5 weeks)
+
+Recommends A because you learn from real usage. CRM data comes naturally in week two.
+
+### Two modes
 
 **Startup mode** — for founders and intrapreneurs building a business. You get six forcing questions distilled from how YC partners evaluate products: demand reality, status quo, desperate specificity, narrowest wedge, observation & surprise, and future-fit. These questions are uncomfortable on purpose. If you can't name a specific human who needs your product, that's the most important thing to learn before writing any code.
 
 **Builder mode** — for hackathons, side projects, open source, learning, and having fun. You get an enthusiastic collaborator who helps you find the coolest version of your idea. What would make someone say "whoa"? What's the fastest path to something you can share? The questions are generative, not interrogative.
 
+### The design doc
+
 Both modes end with a design doc written to `~/.gstack/projects/` — and that doc feeds directly into `/plan-ceo-review` and `/plan-eng-review`. The full lifecycle is now: `office-hours → plan → implement → review → QA → ship → retro`.
 
-**Personal observations.** After the design doc is approved, `/office-hours` reflects on what it noticed about how you think — not generic praise, but specific callbacks to things you said during the session. The observations appear in the design doc too, so you re-encounter them when you re-read later.
+After the design doc is approved, `/office-hours` reflects on what it noticed about how you think — not generic praise, but specific callbacks to things you said during the session. The observations appear in the design doc too, so you re-encounter them when you re-read later.
 
 ---
 

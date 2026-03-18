@@ -30,10 +30,11 @@ Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 ## Quick start: your first 10 minutes
 
 1. Install gstack (30 seconds — see below)
-2. Run `/plan-ceo-review` on any feature idea
-3. Run `/review` on any branch with changes
-4. Run `/qa` on your staging URL
-5. Stop there. You'll know if this is for you.
+2. Run `/office-hours` — describe what you're building. It will reframe the problem before you write a line of code.
+3. Run `/plan-ceo-review` on any feature idea
+4. Run `/review` on any branch with changes
+5. Run `/qa` on your staging URL
+6. Stop there. You'll know if this is for you.
 
 Expect first useful run in under 5 minutes on any repo with tests already set up.
 
@@ -58,25 +59,55 @@ Real files get committed to your repo (not a submodule), so `git clone` just wor
 ## See it work
 
 ```
-You:    I want to add photo upload for sellers.
-You:    /plan-ceo-review
-Claude: "Photo upload" is not the feature. The real job is helping
-        sellers create listings that actually sell. What if we
-        auto-identify the product, pull specs and comps from the
-        web, and draft the listing automatically? That's 10 stars.
-        "Upload a photo" is 3 stars. Which are we building?
-        [8 expansion proposals, you cherry-pick 5, defer 3 to backlog]
+You:    I want to build a daily briefing app for my calendar.
+You:    /office-hours
+Claude: What does the pain look like? Specific examples — the last
+        time a conflict burned you, the daily friction of switching
+        accounts, what your assistant has to do manually today.
 
-You:    /plan-design-review
-Claude: Design Score: B  |  AI Slop Score: C
-        "Upload flow looks like a default Bootstrap form."
-        [80-item audit, infers your design system, exports DESIGN.md]
-        [flags 3 AI slop patterns: gradient hero, icon grid, uniform radius]
+You:    My assistant keeps messing things up... every second of my time
+        is worth $20. Logistics AND prep for actual events. The media
+        team put together some AI slop for me...
+
+Claude: I'm going to push back on the framing, because I think you've
+        outgrown it. You said "daily briefing app for multi-Google-
+        Calendar management." But what you actually described is a
+        personal chief of staff AI — one that:
+        1. Watches your calendar across all accounts
+        2. Generates real prep work — the intellectual work
+        3. Manages your CRM — who are you meeting, what's the history
+        4. Prioritizes your time — flags when prep needs to start early
+        5. Trades money for leverage — amplify your $20/second
+
+        The calendar is the entry point, but the product is an AI that
+        makes Garry Tan a 2000x CEO the way Claude Code makes him a
+        2000x developer.
+
+        [presents 4 premises for validation → you agree/disagree]
+        [generates 3 implementation approaches with effort estimates]
+
+        APPROACH A: Daily Briefing First (Narrowest Wedge)
+          Effort: M (human: ~3 weeks / CC: ~2 days)
+          Risk: Low — you use it tomorrow
+        APPROACH B: CRM-First (Relationship Graph)
+          Effort: L (human: ~6 weeks / CC: ~4 days)
+        APPROACH C: Event Intelligence Engine (Full Vision)
+          Effort: XL (human: ~3 months / CC: ~1.5 weeks)
+
+        RECOMMENDATION: Choose A because it ships tomorrow and you
+        learn from real usage. CRM data layer comes in the second
+        week naturally.
+
+        [writes design doc to ~/.gstack/projects/ — feeds into
+         /plan-ceo-review and /plan-eng-review automatically]
+
+You:    /plan-ceo-review
+        [reads the design doc, runs 10-section mega review]
 
 You:    /plan-eng-review
 Claude: ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
-        │ Upload  │───▶│ Classify │───▶│ Enrich   │───▶│ Draft   │
-        │ (sync)  │    │ (async)  │    │ (async)  │    │ (async) │
+        │ Calendar│───▶│ Detect   │───▶│ Generate │───▶│ Deliver │
+        │ (sync)  │    │ (stale)  │    │ (prep)   │    │ (email) │
         └─────────┘    └──────────┘    └──────────┘    └─────────┘
         [ASCII diagrams for every data flow, state machine, error path]
         [14-case test matrix, 6 failure modes mapped, 3 security concerns]
@@ -89,13 +120,10 @@ You:    /review
 Claude: [AUTO-FIXED] Orphan S3 cleanup on failed upload
         [AUTO-FIXED] Missing index on listings.status
         [ASK] Race condition on hero image selection → You: yes
-        [traces every new enum value through all switch statements]
         3 issues — 2 auto-fixed, 1 fixed.
 
 You:    /qa https://staging.myapp.com
-Claude: [opens real browser, logs in, uploads photos, clicks through flows]
-        Upload → classify → enrich → draft: end to end ✓
-        Mobile: ✓  |  Slow connection: ✓  |  Bad image: ✓
+Claude: [opens real browser, logs in, clicks through flows]
         [finds bug: preview doesn't clear on second upload — fixes it]
         Regression test generated.
 
@@ -105,7 +133,7 @@ Claude: Tests: 42 → 51 (+9 new)
         PR: github.com/you/app/pull/42
 ```
 
-One feature. Seven commands. The agent reframed the product, ran an 80-item design audit, drew the architecture, wrote 2,400 lines of code, found a race condition I would have missed, auto-fixed two issues, opened a real browser to QA test, found and fixed a bug I didn't know about, wrote 9 tests, and generated a regression test. That is not a copilot. That is a team.
+You said "daily briefing app." The agent said "you're describing a personal chief of staff AI" — because it listened to your actual pain, not your feature request. Then it challenged your premises, generated three implementation approaches, recommended the narrowest wedge, wrote a design doc, and that doc fed into every downstream skill automatically. Eight commands. That is not a copilot. That is a team.
 
 ## The team
 
@@ -123,13 +151,15 @@ One feature. Seven commands. The agent reframed the product, ran an 80-item desi
 | `/design-review` | **Designer Who Codes** | Same audit as /plan-design-review, then fixes what it finds. Atomic commits, before/after screenshots. |
 | `/setup-browser-cookies` | **Session Manager** | Import cookies from your real browser (Chrome, Arc, Brave, Edge) into the headless session. Test authenticated pages. |
 | `/retro` | **Eng Manager** | Team-aware weekly retro. Per-person breakdowns, shipping streaks, test health trends, growth opportunities. |
-| `/office-hours` | **YC Office Hours** | Two modes. Startup: six forcing questions on demand, users, and product. Builder: brainstorming for side projects, hackathons, and learning. Writes a design doc with personal observations about how you think. |
+| `/office-hours` | **YC Office Hours** | Start here. Six forcing questions that reframe your product before you write code. Pushes back on your framing, challenges premises, generates implementation alternatives. Design doc feeds into every downstream skill. |
 | `/debug` | **Debugger** | Systematic root-cause debugging. Iron Law: no fixes without investigation. Traces data flow, tests hypotheses, stops after 3 failed fixes. |
 | `/document-release` | **Technical Writer** | Update all project docs to match what you just shipped. Catches stale READMEs automatically. |
 
 **[Deep dives with examples and philosophy for every skill →](docs/skills.md)**
 
 ## What's new and why it matters
+
+**`/office-hours` reframes your product before you write code.** You say "daily briefing app." It listens to your actual pain, pushes back on the framing, tells you you're really building a personal chief of staff AI, challenges your premises, and generates three implementation approaches with effort estimates. The design doc it writes feeds directly into `/plan-ceo-review` and `/plan-eng-review` — so every downstream skill starts with real clarity instead of a vague feature request.
 
 **Design is at the heart.** `/design-consultation` doesn't just pick fonts. It researches what's out there in your space, proposes safe choices AND creative risks, generates realistic mockups of your actual product, and writes `DESIGN.md` — and then `/design-review` and `/plan-eng-review` read what you chose. Design decisions flow through the whole system.
 
