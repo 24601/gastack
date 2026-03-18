@@ -1876,8 +1876,120 @@ describeE2E('Deferred skill E2E', () => {
   // Setup-browser-cookies requires interactive browser picker UI
   test.todo('/setup-browser-cookies imports cookies');
 
-  // Gstack-upgrade is destructive: modifies skill installation directory
-  test.todo('/gstack-upgrade completes upgrade flow');
+});
+
+// --- gstack-upgrade E2E ---
+
+describeIfSelected('gstack-upgrade E2E', ['gstack-upgrade-happy-path'], () => {
+  let upgradeDir: string;
+  let remoteDir: string;
+
+  beforeAll(() => {
+    upgradeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-upgrade-'));
+    remoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-remote-'));
+
+    const run = (cmd: string, args: string[], cwd: string) =>
+      spawnSync(cmd, args, { cwd, stdio: 'pipe', timeout: 5000 });
+
+    // Init the "project" repo
+    run('git', ['init'], upgradeDir);
+    run('git', ['config', 'user.email', 'test@test.com'], upgradeDir);
+    run('git', ['config', 'user.name', 'Test'], upgradeDir);
+
+    // Create mock gstack install directory (local-git type)
+    const mockGstack = path.join(upgradeDir, '.claude', 'skills', 'gstack');
+    fs.mkdirSync(mockGstack, { recursive: true });
+
+    // Init as a git repo
+    run('git', ['init'], mockGstack);
+    run('git', ['config', 'user.email', 'test@test.com'], mockGstack);
+    run('git', ['config', 'user.name', 'Test'], mockGstack);
+
+    // Create bare remote
+    run('git', ['init', '--bare'], remoteDir);
+    run('git', ['remote', 'add', 'origin', remoteDir], mockGstack);
+
+    // Write old version files
+    fs.writeFileSync(path.join(mockGstack, 'VERSION'), '0.5.0\n');
+    fs.writeFileSync(path.join(mockGstack, 'CHANGELOG.md'),
+      '# Changelog\n\n## 0.5.0 — 2026-03-01\n\n- Initial release\n');
+    fs.writeFileSync(path.join(mockGstack, 'setup'),
+      '#!/bin/bash\necho "Setup completed"\n', { mode: 0o755 });
+
+    // Initial commit + push
+    run('git', ['add', '.'], mockGstack);
+    run('git', ['commit', '-m', 'initial'], mockGstack);
+    run('git', ['push', '-u', 'origin', 'HEAD:main'], mockGstack);
+
+    // Create new version (simulate upstream release)
+    fs.writeFileSync(path.join(mockGstack, 'VERSION'), '0.6.0\n');
+    fs.writeFileSync(path.join(mockGstack, 'CHANGELOG.md'),
+      '# Changelog\n\n## 0.6.0 — 2026-03-15\n\n- New feature: interactive design review\n- Fix: snapshot flag validation\n\n## 0.5.0 — 2026-03-01\n\n- Initial release\n');
+    run('git', ['add', '.'], mockGstack);
+    run('git', ['commit', '-m', 'release 0.6.0'], mockGstack);
+    run('git', ['push', 'origin', 'HEAD:main'], mockGstack);
+
+    // Reset working copy back to old version
+    run('git', ['reset', '--hard', 'HEAD~1'], mockGstack);
+
+    // Copy gstack-upgrade skill
+    fs.mkdirSync(path.join(upgradeDir, 'gstack-upgrade'), { recursive: true });
+    fs.copyFileSync(
+      path.join(ROOT, 'gstack-upgrade', 'SKILL.md'),
+      path.join(upgradeDir, 'gstack-upgrade', 'SKILL.md'),
+    );
+
+    // Commit so git repo is clean
+    run('git', ['add', '.'], upgradeDir);
+    run('git', ['commit', '-m', 'initial project'], upgradeDir);
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(upgradeDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(remoteDir, { recursive: true, force: true }); } catch {}
+  });
+
+  testIfSelected('gstack-upgrade-happy-path', async () => {
+    const mockGstack = path.join(upgradeDir, '.claude', 'skills', 'gstack');
+    const result = await runSkillTest({
+      prompt: `Read gstack-upgrade/SKILL.md for the upgrade workflow.
+
+You are running /gstack-upgrade standalone. The gstack installation is at ./.claude/skills/gstack (local-git type — it has a .git directory with an origin remote).
+
+Current version: 0.5.0. A new version 0.6.0 is available on origin/main.
+
+Follow the standalone upgrade flow:
+1. Detect install type (local-git)
+2. Run git fetch origin && git reset --hard origin/main in the install directory
+3. Run the setup script
+4. Show what's new from CHANGELOG
+
+Skip any AskUserQuestion calls — auto-approve the upgrade. Write a summary of what you did to stdout.
+
+IMPORTANT: The install directory is at ./.claude/skills/gstack — use that exact path.`,
+      workingDirectory: upgradeDir,
+      maxTurns: 20,
+      timeout: 180_000,
+      testName: 'gstack-upgrade-happy-path',
+      runId,
+    });
+
+    logCost('/gstack-upgrade happy path', result);
+
+    // Check that the version was updated
+    const versionAfter = fs.readFileSync(path.join(mockGstack, 'VERSION'), 'utf-8').trim();
+    const output = result.output || '';
+    const mentionsUpgrade = output.toLowerCase().includes('0.6.0') ||
+      output.toLowerCase().includes('upgrade') ||
+      output.toLowerCase().includes('updated');
+
+    recordE2E('/gstack-upgrade happy path', 'gstack-upgrade E2E', result, {
+      passed: versionAfter === '0.6.0' && ['success', 'error_max_turns'].includes(result.exitReason),
+    });
+
+    expect(['success', 'error_max_turns']).toContain(result.exitReason);
+    expect(versionAfter).toBe('0.6.0');
+  }, 240_000);
 });
 
 // --- Design Consultation E2E ---
@@ -2235,9 +2347,9 @@ Build a user dashboard that shows account stats, recent activity, and settings.
 
 Review the plan in ./plan.md. This plan has several design gaps — it uses vague language like "clean, modern UI" and "cards and icons", mentions a "hero section with gradient" (AI slop), and doesn't specify empty states, error states, loading states, responsive behavior, or accessibility.
 
-Skip the preamble bash block. Skip any AskUserQuestion calls — this is non-interactive. Rate each design dimension 0-10 and explain what would make it a 10. Write your findings and ratings directly to stdout.
+Skip the preamble bash block. Skip any AskUserQuestion calls — this is non-interactive. Rate each design dimension 0-10 and explain what would make it a 10. Then EDIT plan.md to add the missing design decisions (interaction state table, empty states, responsive behavior, etc.).
 
-IMPORTANT: Do NOT try to browse any URLs or use a browse binary. This is a plan review, not a live site audit. Just read the plan file and review it.`,
+IMPORTANT: Do NOT try to browse any URLs or use a browse binary. This is a plan review, not a live site audit. Just read the plan file, review it, and edit it to fix the gaps.`,
       workingDirectory: reviewDir,
       maxTurns: 15,
       timeout: 300_000,
@@ -2255,13 +2367,27 @@ IMPORTANT: Do NOT try to browse any URLs or use a browse binary. This is a plan 
       output.toLowerCase().includes('ai slop') ||
       output.toLowerCase().includes('hierarchy');
 
+    // Check that the plan file was edited (the core new behavior)
+    const planAfter = fs.readFileSync(path.join(reviewDir, 'plan.md'), 'utf-8');
+    const planOriginal = `# Plan: User Dashboard`;
+    const planWasEdited = planAfter.length > 300; // Original is ~450 chars, edited should be much longer
+    const planHasDesignAdditions = planAfter.toLowerCase().includes('empty') ||
+      planAfter.toLowerCase().includes('loading') ||
+      planAfter.toLowerCase().includes('error') ||
+      planAfter.toLowerCase().includes('state') ||
+      planAfter.toLowerCase().includes('responsive') ||
+      planAfter.toLowerCase().includes('accessibility');
+
     recordE2E('/plan-design-review plan-mode', 'Plan Design Review E2E', result, {
-      passed: hasDesignContent && ['success', 'error_max_turns'].includes(result.exitReason),
+      passed: hasDesignContent && planWasEdited && ['success', 'error_max_turns'].includes(result.exitReason),
     });
 
     expect(['success', 'error_max_turns']).toContain(result.exitReason);
     // Agent should produce design-relevant output about the plan
     expect(hasDesignContent).toBe(true);
+    // Agent should have edited the plan file to add missing design decisions
+    expect(planWasEdited).toBe(true);
+    expect(planHasDesignAdditions).toBe(true);
   }, 360_000);
 
   testIfSelected('plan-design-review-no-ui-scope', async () => {
