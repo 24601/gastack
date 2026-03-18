@@ -30,26 +30,26 @@ Before you plan, before you review, before you write code — sit down with a YC
 
 ### The reframe
 
-Here's what happened when I used it on a real project. I said: "I want to build a daily briefing app for my calendar." Reasonable request. Then it asked about the pain — specific examples, not hypotheticals. I told it about my assistant missing things, calendar items across multiple Google accounts with stale info, prep docs that were AI slop, events with wrong locations I had to hunt down in Google Drive.
+Here's what happened on a real project. The user said: "I want to build a daily briefing app for my calendar." Reasonable request. Then it asked about the pain — specific examples, not hypotheticals. They described an assistant missing things, calendar items across multiple Google accounts with stale info, prep docs that were AI slop, events with wrong locations that took forever to track down.
 
 It came back with: *"I'm going to push back on the framing, because I think you've outgrown it. You said 'daily briefing app for multi-Google-Calendar management.' But what you actually described is a personal chief of staff AI."*
 
-Then it extracted five capabilities I didn't realize I was describing:
+Then it extracted five capabilities the user didn't realize they were describing:
 
 1. **Watches your calendar** across all accounts and detects stale info, missing locations, permission gaps
 2. **Generates real prep work** — not logistics summaries, but *the intellectual work* of preparing for a board meeting, a podcast, a fundraiser
-3. **Manages your CRM** — who are you meeting, what's their relationship to you and YC, what do they want, what's the history
-4. **Prioritizes your time** — flags when prep needs to start early, tells Renee to block time, ranks events by importance
-5. **Trades money for leverage** — actively looks for ways to delegate, automate, or amplify your $20/second
+3. **Manages your CRM** — who are you meeting, what's the relationship, what do they want, what's the history
+4. **Prioritizes your time** — flags when prep needs to start early, blocks time proactively, ranks events by importance
+5. **Trades money for leverage** — actively looks for ways to delegate or automate
 
-That reframe changed the entire project. I was about to build a calendar app. Now I'm building something ten times more valuable — because the skill listened to my pain instead of my feature request.
+That reframe changed the entire project. They were about to build a calendar app. Now they're building something ten times more valuable — because the skill listened to their pain instead of their feature request.
 
 ### Premise challenge
 
 After the reframe, it presents premises for you to validate. Not "does this sound good?" — actual falsifiable claims about the product:
 
 1. The calendar is the anchor data source, but the value is in the intelligence layer on top
-2. Renee doesn't get replaced — she gets superpowered
+2. The assistant doesn't get replaced — they get superpowered
 3. The narrowest wedge is a daily briefing that actually works
 4. CRM integration is a must-have, not a nice-to-have
 

@@ -65,9 +65,9 @@ Claude: What does the pain look like? Specific examples — the last
         time a conflict burned you, the daily friction of switching
         accounts, what your assistant has to do manually today.
 
-You:    My assistant keeps messing things up... every second of my time
-        is worth $20. Logistics AND prep for actual events. The media
-        team put together some AI slop for me...
+You:    My assistant keeps messing things up... I have multiple Google
+        calendars and events have stale info, wrong locations. Logistics
+        AND prep for actual events. The prep docs were AI slop...
 
 Claude: I'm going to push back on the framing, because I think you've
         outgrown it. You said "daily briefing app for multi-Google-
@@ -77,10 +77,10 @@ Claude: I'm going to push back on the framing, because I think you've
         2. Generates real prep work — the intellectual work
         3. Manages your CRM — who are you meeting, what's the history
         4. Prioritizes your time — flags when prep needs to start early
-        5. Trades money for leverage — amplify your $20/second
+        5. Trades money for leverage — finds ways to delegate or automate
 
         The calendar is the entry point, but the product is an AI that
-        makes Garry Tan a 2000x CEO the way Claude Code makes him a
+        makes a busy CEO a 2000x CEO the way Claude Code makes them a
         2000x developer.
 
         [presents 4 premises for validation → you agree/disagree]
