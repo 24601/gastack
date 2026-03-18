@@ -23,9 +23,9 @@ I am learning how to get to the edge of what agentic systems can do as of March 
 Fork it. Improve it. Make it yours. Don't player hate, appreciate.
 
 **Who this is for:**
-- **Solo founder** shipping a product alone — you need a team, not a copilot
-- **Tech lead of a small team** — multiply your people with structured agent roles
-- **Staff engineer at a larger org** — bring rigorous review, QA, and release automation to every PR
+- **Founders and CEOs** — especially technical ones who still want to ship. This is how you build like a team of twenty.
+- **First-time Claude Code users** — gstack is the best way to start. Structured roles instead of a blank prompt.
+- **Tech leads and staff engineers** — bring rigorous review, QA, and release automation to every PR
 
 ## Quick start: your first 10 minutes
 
