@@ -101,9 +101,9 @@ git fetch origin <base> && git merge origin/<base> --no-edit
 
 ## Step 3: Run tests (on merged code)
 
-Read CLAUDE.md. Look for a `## Testing` section or test commands in `## Commands`.
-Extract all test commands (lines in bash code blocks that run tests — e.g., `bun test`,
-`npm test`, `pytest`, `go test ./...`, `cargo test`, `bin/rails test`).
+Read CLAUDE.md. Look for a section about testing — `## Testing`, `## Test Commands`,
+`## Tests`, or test commands in `## Commands`. Extract all test commands (lines in
+bash code blocks or command tables that run tests — e.g., `bun test`, `npm test`, `pytest`, `go test ./...`, `cargo test`, `bin/rails test`).
 
 Run all discovered test commands in parallel, each piped to a unique /tmp file:
 
@@ -143,8 +143,9 @@ If C: Skip tests with warning. Continue to Step 3.25.
 
 ## Step 3.25: Eval Suites (conditional)
 
-Read CLAUDE.md. Look for a `## Evals` section, or eval-related commands in `## Testing`
-or `## Commands` (identified by keywords: "eval", "evals", "judge", "llm-judge").
+Read CLAUDE.md. Look for a `## Evals` section, or eval-related commands in `## Testing`,
+`## Test Commands`, `## Tests`, or `## Commands` (identified by keywords: "eval", "evals",
+"judge", "llm-judge").
 
 If an eval command is found:
   Run it. The project's eval system handles diff-based file selection internally.
