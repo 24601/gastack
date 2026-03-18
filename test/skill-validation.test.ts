@@ -1142,3 +1142,51 @@ describe('QA report template', () => {
     expect(content).toContain('**Precondition:**');
   });
 });
+
+// --- Platform-agnostic blocklist regression tests ---
+
+describe('Platform-agnostic: no Rails-isms in templates or generated files', () => {
+  const skillDirs = fs.readdirSync(ROOT).filter(d => {
+    const fullPath = path.join(ROOT, d);
+    return fs.statSync(fullPath).isDirectory() && fs.existsSync(path.join(fullPath, 'SKILL.md'));
+  });
+  const allSkillFiles = [
+    path.join(ROOT, 'SKILL.md'),
+    ...skillDirs.map(d => path.join(ROOT, d, 'SKILL.md')),
+  ];
+  const allTemplateFiles = [
+    ...fs.existsSync(path.join(ROOT, 'SKILL.md.tmpl')) ? [path.join(ROOT, 'SKILL.md.tmpl')] : [],
+    ...skillDirs
+      .filter(d => fs.existsSync(path.join(ROOT, d, 'SKILL.md.tmpl')))
+      .map(d => path.join(ROOT, d, 'SKILL.md.tmpl')),
+  ];
+  const allFiles = [...allSkillFiles, ...allTemplateFiles];
+
+  const BLOCKLIST = [
+    { pattern: /bin\/test-lane/, label: 'bin/test-lane' },
+    { pattern: /RAILS_ENV/, label: 'RAILS_ENV' },
+    { pattern: /_prompt_builder\.rb/, label: '_prompt_builder.rb' },
+    { pattern: /--include="\*\.rb"/, label: '--include="*.rb"' },
+  ];
+
+  for (const { pattern, label } of BLOCKLIST) {
+    test(`no "${label}" in any generated SKILL.md or template`, () => {
+      const matches: string[] = [];
+      for (const file of allFiles) {
+        const content = fs.readFileSync(file, 'utf-8');
+        if (pattern.test(content)) {
+          matches.push(path.relative(ROOT, file));
+        }
+      }
+      expect(matches).toEqual([]);
+    });
+  }
+
+  test('review/checklist.md mentions multiple frameworks', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'review', 'checklist.md'), 'utf-8');
+    expect(content).toContain('Rails:');
+    expect(content).toContain('React:');
+    expect(content).toContain('Django:');
+    expect(content).toContain('Prisma:');
+  });
+});
