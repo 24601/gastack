@@ -30,6 +30,17 @@ on `git diff` against the base branch. Each test declares its file dependencies 
 llm-judge, gen-skill-docs) trigger all tests. Use `EVALS_ALL=1` or the `:all` script
 variants to force all tests. Run `eval:select` to preview which tests would run.
 
+## Testing
+
+```bash
+bun test             # run before every commit — free, <2s
+bun run test:evals   # run before shipping — paid, diff-based (~$4/run max)
+```
+
+`bun test` runs skill validation, gen-skill-docs quality checks, and browse
+integration tests. `bun run test:evals` runs LLM-judge quality evals and E2E
+tests via `claude -p`. Both must pass before creating a PR.
+
 ## Project structure
 
 ```
