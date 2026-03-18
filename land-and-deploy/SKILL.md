@@ -290,7 +290,96 @@ Record merge timestamp and duration.
 
 Determine what kind of project this is and how to verify the deploy.
 
-Run `gstack-diff-scope` to classify the changes:
+First, run the deploy configuration bootstrap to detect or read persisted deploy settings:
+
+## Deploy Configuration Bootstrap
+
+**Detect existing deploy configuration in CLAUDE.md:**
+
+```bash
+grep -q "## Deploy Configuration" CLAUDE.md 2>/dev/null && echo "DEPLOY_CONFIG_EXISTS" || echo "NO_DEPLOY_CONFIG"
+```
+
+**If DEPLOY_CONFIG_EXISTS:** Read the Deploy Configuration section from CLAUDE.md. Use the detected platform, production URL, deploy workflow name, and merge method in subsequent steps. **Skip the rest of bootstrap.**
+
+**If NO_DEPLOY_CONFIG — auto-detect:**
+
+### D1. Detect deploy platform
+
+```bash
+# Check for platform config files
+[ -f vercel.json ] || [ -d .vercel ] && echo "PLATFORM:vercel"
+[ -f netlify.toml ] || [ -d netlify ] && echo "PLATFORM:netlify"
+[ -f fly.toml ] && echo "PLATFORM:fly"
+[ -f render.yaml ] && echo "PLATFORM:render"
+[ -f Procfile ] && echo "PLATFORM:heroku"
+[ -f railway.json ] || [ -f railway.toml ] && echo "PLATFORM:railway"
+[ -f Dockerfile ] || [ -f docker-compose.yml ] && echo "PLATFORM:docker"
+# Check for GitHub Actions deploy workflows
+for f in .github/workflows/*.yml .github/workflows/*.yaml; do
+  [ -f "$f" ] && grep -qiE "deploy|release|production|staging|cd" "$f" 2>/dev/null && echo "DEPLOY_WORKFLOW:$f"
+done
+# Check project type
+[ -f package.json ] && grep -q '"bin"' package.json 2>/dev/null && echo "PROJECT_TYPE:cli"
+[ -f Cargo.toml ] && grep -q '\[\[bin\]\]' Cargo.toml 2>/dev/null && echo "PROJECT_TYPE:cli"
+[ -f setup.py ] || [ -f pyproject.toml ] && grep -qiE "console_scripts|entry_points" setup.py pyproject.toml 2>/dev/null && echo "PROJECT_TYPE:cli"
+ls *.gemspec 2>/dev/null && echo "PROJECT_TYPE:library"
+```
+
+### D2. Detect production URL
+
+```bash
+# Check package.json homepage
+[ -f package.json ] && grep -o '"homepage":\s*"[^"]*"' package.json 2>/dev/null
+# Check for common URL patterns in config
+[ -f vercel.json ] && cat vercel.json 2>/dev/null
+[ -f netlify.toml ] && grep -i "url\|domain" netlify.toml 2>/dev/null
+[ -f fly.toml ] && grep "app" fly.toml 2>/dev/null
+```
+
+### D3. Detect merge method
+
+```bash
+gh api repos/{owner}/{repo} --jq '{squash: .allow_squash_merge, merge: .allow_merge_commit, rebase: .allow_rebase_merge}' 2>/dev/null || echo "MERGE_DETECT_FAILED"
+```
+
+Default preference order: squash (cleanest history) > merge > rebase.
+
+### D4. Classify and present
+
+Based on the detection results, determine the deploy configuration:
+
+1. **If PLATFORM detected:** Note the platform and any associated URL.
+2. **If DEPLOY_WORKFLOW detected:** Note the workflow file path and name.
+3. **If PROJECT_TYPE is "cli" or "library":** Note that this project likely doesn't have a web deploy. Post-merge verification is not applicable.
+4. **If no platform, no workflow, and not a CLI/library:** Use AskUserQuestion:
+   - **Context:** Setting up deploy configuration for /land-and-deploy.
+   - **Question:** No deploy platform detected. What does your deploy look like?
+   - **RECOMMENDATION:** Choose the option that matches your setup.
+   - A) We deploy via GitHub Actions (specify workflow name)
+   - B) We deploy via Vercel / Netlify / Fly.io / other platform (specify URL)
+   - C) We deploy manually or via custom scripts
+   - D) This project doesn't deploy (library, CLI tool)
+
+### D5. Persist to CLAUDE.md
+
+If CLAUDE.md exists, append. If it doesn't exist, create it.
+
+Add a section:
+```markdown
+## Deploy Configuration (auto-detected by gstack)
+- Platform: {platform or "none detected"}
+- Production URL: {url or "not detected — provide via /land-and-deploy <url>"}
+- Deploy workflow: {workflow file or "none"}
+- Merge method: {squash/merge/rebase}
+- Project type: {web app / CLI / library}
+```
+
+Tell the user: "Deploy configuration saved to CLAUDE.md. Future /land-and-deploy runs will use these settings automatically. Edit the section manually to update."
+
+---
+
+Then run `gstack-diff-scope` to classify the changes:
 
 ```bash
 eval $(~/.claude/skills/gstack/bin/gstack-diff-scope $(gh pr view --json baseRefName -q .baseRefName 2>/dev/null || echo main) 2>/dev/null)

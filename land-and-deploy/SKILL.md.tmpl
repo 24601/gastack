@@ -152,7 +152,11 @@ Record merge timestamp and duration.
 
 Determine what kind of project this is and how to verify the deploy.
 
-Run `gstack-diff-scope` to classify the changes:
+First, run the deploy configuration bootstrap to detect or read persisted deploy settings:
+
+{{DEPLOY_BOOTSTRAP}}
+
+Then run `gstack-diff-scope` to classify the changes:
 
 ```bash
 eval $(~/.claude/skills/gstack/bin/gstack-diff-scope $(gh pr view --json baseRefName -q .baseRefName 2>/dev/null || echo main) 2>/dev/null)
