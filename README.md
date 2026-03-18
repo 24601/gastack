@@ -63,8 +63,8 @@ You:    I want to build a daily briefing app for my calendar.
 You:    /office-hours
 Claude: [asks about the pain — specific examples, not hypotheticals]
 
-You:    My assistant keeps messing things up... multiple Google calendars,
-        stale info, wrong locations. The prep docs were AI slop...
+You:    Multiple Google calendars, events with stale info, wrong locations.
+        Prep takes forever and the results aren't good enough...
 
 Claude: I'm going to push back on the framing. You said "daily briefing
         app." But what you actually described is a personal chief of
