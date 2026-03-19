@@ -195,7 +195,8 @@ Parse the user's input to determine which mode to run:
 1. `/codex review` or `/codex review <instructions>` — **Review mode** (Step 2A)
 2. `/codex challenge` or `/codex challenge <focus>` — **Challenge mode** (Step 2B)
 3. `/codex` with no arguments — **Auto-detect:**
-   - Check for a diff: `git diff origin/<base> --stat 2>/dev/null | tail -1`
+   - Check for a diff (with fallback if origin isn't available):
+     `git diff origin/<base> --stat 2>/dev/null | tail -1 || git diff <base> --stat 2>/dev/null | tail -1`
    - If a diff exists, use AskUserQuestion:
      ```
      Codex detected changes against the base branch. What should it do?
@@ -289,13 +290,7 @@ rm -f "$TMPERR"
 Codex tries to break your code — finding edge cases, race conditions, security holes,
 and failure modes that a normal review would miss.
 
-1. Create temp files:
-```bash
-TMPRESP=$(mktemp /tmp/codex-resp-XXXXXX.txt)
-TMPERR=$(mktemp /tmp/codex-err-XXXXXX.txt)
-```
-
-2. Construct the adversarial prompt. If the user provided a focus area
+1. Construct the adversarial prompt. If the user provided a focus area
 (e.g., `/codex challenge security`), include it:
 
 Default prompt (no focus):
@@ -304,28 +299,48 @@ Default prompt (no focus):
 With focus (e.g., "security"):
 "Review the changes on this branch against the base branch. Run `git diff origin/<base>` to see the diff. Focus specifically on SECURITY. Your job is to find every way an attacker could exploit this code. Think about injection vectors, auth bypasses, privilege escalation, data exposure, and timing attacks. Be adversarial."
 
-3. Run codex exec (5-minute timeout):
+2. Run codex exec with **JSONL output** to capture reasoning traces and tool calls (5-minute timeout):
 ```bash
-codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached -o "$TMPRESP" 2>"$TMPERR"
+codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>/dev/null | python3 -c "
+import sys, json
+for line in sys.stdin:
+    line = line.strip()
+    if not line: continue
+    try:
+        obj = json.loads(line)
+        t = obj.get('type','')
+        if t == 'item.completed' and 'item' in obj:
+            item = obj['item']
+            itype = item.get('type','')
+            text = item.get('text','')
+            if itype == 'reasoning' and text:
+                print(f'[codex thinking] {text}')
+                print()
+            elif itype == 'agent_message' and text:
+                print(text)
+            elif itype == 'command_execution':
+                cmd = item.get('command','')
+                if cmd: print(f'[codex ran] {cmd}')
+        elif t == 'turn.completed':
+            usage = obj.get('usage',{})
+            tokens = usage.get('input_tokens',0) + usage.get('output_tokens',0)
+            if tokens: print(f'\ntokens used: {tokens}')
+    except: pass
+"
 ```
 
-4. Read the response and parse cost:
-```bash
-cat "$TMPRESP"
-grep "tokens used" "$TMPERR" 2>/dev/null || echo "tokens: unknown"
-```
+This parses codex's JSONL events to extract reasoning traces, tool calls, and the final
+response. The `[codex thinking]` lines show what codex reasoned through before its answer.
 
-5. Present:
+3. Present the full streamed output:
 
 ```
 CODEX SAYS (adversarial challenge):
 ════════════════════════════════════════════════════════════
-<full response from $TMPRESP, verbatim>
+<full output from above, verbatim>
 ════════════════════════════════════════════════════════════
 Tokens: N | Est. cost: ~$X.XX
 ```
-
-6. Clean up: `rm -f "$TMPRESP" "$TMPERR"`
 
 ---
 
@@ -365,46 +380,70 @@ or sequencing issues. Be direct. Be terse. No compliments. Just the problems.
 THE PLAN:
 <plan content>"
 
-4. Run codex exec (5-minute timeout):
+4. Run codex exec with **JSONL output** to capture reasoning traces (5-minute timeout):
 
 For a **new session:**
 ```bash
-codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached -o "$TMPRESP" 2>"$TMPERR"
+codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached --json 2>/tmp/codex-consult-err.txt | python3 -c "
+import sys, json
+for line in sys.stdin:
+    line = line.strip()
+    if not line: continue
+    try:
+        obj = json.loads(line)
+        t = obj.get('type','')
+        if t == 'thread.started':
+            tid = obj.get('thread_id','')
+            if tid: print(f'SESSION_ID:{tid}')
+        elif t == 'item.completed' and 'item' in obj:
+            item = obj['item']
+            itype = item.get('type','')
+            text = item.get('text','')
+            if itype == 'reasoning' and text:
+                print(f'[codex thinking] {text}')
+                print()
+            elif itype == 'agent_message' and text:
+                print(text)
+            elif itype == 'command_execution':
+                cmd = item.get('command','')
+                if cmd: print(f'[codex ran] {cmd}')
+        elif t == 'turn.completed':
+            usage = obj.get('usage',{})
+            tokens = usage.get('input_tokens',0) + usage.get('output_tokens',0)
+            if tokens: print(f'\ntokens used: {tokens}')
+    except: pass
+"
 ```
 
 For a **resumed session** (user chose "Continue"):
 ```bash
-codex exec resume <session-id> "<prompt>" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached -o "$TMPRESP" 2>"$TMPERR"
+codex exec resume <session-id> "<prompt>" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached --json 2>/tmp/codex-consult-err.txt | python3 -c "
+<same python streaming parser as above>
+"
 ```
 
-5. Capture and save session ID:
+5. Capture session ID from the streamed output. The parser prints `SESSION_ID:<id>`
+   from the `thread.started` event. Save it for follow-ups:
 ```bash
-SESSION_ID=$(grep "session id:" "$TMPERR" | head -1 | awk '{print $3}')
-[ -n "$SESSION_ID" ] && mkdir -p .context && echo "$SESSION_ID" > .context/codex-session-id
+mkdir -p .context
 ```
+Save the session ID printed by the parser (the line starting with `SESSION_ID:`)
+to `.context/codex-session-id`.
 
-6. Read response and parse cost:
-```bash
-cat "$TMPRESP"
-grep "tokens used" "$TMPERR" 2>/dev/null || echo "tokens: unknown"
-```
-
-7. Present:
+6. Present the full streamed output:
 
 ```
 CODEX SAYS (consult):
 ════════════════════════════════════════════════════════════
-<full response from $TMPRESP, verbatim>
+<full output, verbatim — includes [codex thinking] traces>
 ════════════════════════════════════════════════════════════
 Tokens: N | Est. cost: ~$X.XX
 Session saved — run /codex again to continue this conversation.
 ```
 
-8. After presenting, note any points where Codex's analysis differs from your own
+7. After presenting, note any points where Codex's analysis differs from your own
    understanding. If there is a disagreement, flag it:
    "Note: Claude Code disagrees on X because Y."
-
-9. Clean up: `rm -f "$TMPRESP" "$TMPERR"`
 
 ---
 
