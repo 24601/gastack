@@ -424,8 +424,8 @@ If token count is not available, display: `Tokens: unknown`
 ## Error Handling
 
 - **Binary not found:** Detected in Step 0. Stop with install instructions.
-- **API key missing:** Codex prints an auth error to stderr. Surface the error:
-  "Codex authentication failed. Set OPENAI_API_KEY in your environment."
+- **Auth error:** Codex prints an auth error to stderr. Surface the error:
+  "Codex authentication failed. Run `codex login` in your terminal to authenticate via ChatGPT."
 - **Timeout:** If the Bash call times out (5 min), tell the user:
   "Codex timed out after 5 minutes. The diff may be too large or the API may be slow. Try again or use a smaller scope."
 - **Empty response:** If `$TMPRESP` is empty or doesn't exist, tell the user:

@@ -1176,10 +1176,10 @@ describe('Codex skill', () => {
     expect(content).not.toContain('/opt/homebrew/bin/codex');
   });
 
-  test('codex/SKILL.md contains error handling for missing binary and API key', () => {
+  test('codex/SKILL.md contains error handling for missing binary and auth', () => {
     const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
     expect(content).toContain('NOT_FOUND');
-    expect(content).toContain('OPENAI_API_KEY');
+    expect(content).toContain('codex login');
   });
 
   test('codex/SKILL.md uses mktemp for temp files', () => {
