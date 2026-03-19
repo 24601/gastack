@@ -134,7 +134,7 @@ Deno.serve(async (_req: Request) => {
           .eq('team_id', teamId)
           .gte('timestamp', weekAgo),
         supabase.from('ship_logs')
-          .select('user_id, email')
+          .select('user_id, version, branch, pr_url')
           .eq('team_id', teamId)
           .gte('created_at', weekAgo),
         supabase.from('session_transcripts')
@@ -178,7 +178,7 @@ Deno.serve(async (_req: Request) => {
       // Ships by person
       const shipsByPerson = new Map<string, number>();
       for (const log of shipLogs) {
-        const key = String(log.email || log.user_id || 'unknown');
+        const key = String(log.user_id || 'unknown');
         shipsByPerson.set(key, (shipsByPerson.get(key) || 0) + 1);
       }
 
