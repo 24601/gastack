@@ -264,11 +264,9 @@ Session saved — run /codex again to continue this conversation.
 
 ## Model & Reasoning
 
-**Models** (with ChatGPT login):
-- `gpt-5.2-codex` (default) — frontier agentic coding model, best overall
-- `gpt-5.2` — deeper reasoning for non-coding analysis
-- `gpt-5.1-codex-max` — deep and fast reasoning, 30% cheaper
-- `gpt-5.1-codex-mini` — faster and cheaper, less capable
+**Model:** No model is hardcoded — codex uses whatever its current default is (the frontier
+agentic coding model). This means as OpenAI ships newer models, /codex automatically
+uses them. If the user wants a specific model, pass `-m` through to codex.
 
 **Reasoning effort** varies by mode — use the right level for each task:
 - **Review mode:** `high` — thorough but not slow. Diff review benefits from depth but doesn't need maximum compute.
@@ -278,19 +276,16 @@ Session saved — run /codex again to continue this conversation.
 **Web search:** All codex commands use `--enable web_search_cached` so Codex can look up
 docs and APIs during review. This is OpenAI's cached index — fast, no extra cost.
 
-If the user specifies a model (e.g., `/codex review -m gpt-5.1-codex-max`),
-pass the `-m` flag through to codex.
+If the user specifies a model (e.g., `/codex review -m gpt-5.1-codex-max`
+or `/codex challenge -m gpt-5.2`), pass the `-m` flag through to codex.
 
 ---
 
 ## Cost Estimation
 
 Parse token count from stderr. Codex prints `tokens used\nN` to stderr.
-Estimate cost based on the model:
-- gpt-5.2-codex: ~$0.008 per 1K tokens (estimate)
-- o3: ~$0.01 per 1K tokens (estimate)
 
-Display as: `Tokens: N | Est. cost: ~$X.XX`
+Display as: `Tokens: N`
 
 If token count is not available, display: `Tokens: unknown`
 
