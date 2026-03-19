@@ -443,12 +443,19 @@ codex exec "Review the changes on this branch against the base branch. Run git d
 ```
 Present the full output verbatim under a `CODEX SAYS (adversarial challenge):` header.
 
-Persist the Codex review result to the review log:
+**Only if a code review ran (user chose A or C):** Persist the Codex review result to the review log:
 ```bash
 eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
 BRANCH_SLUG=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-')
 mkdir -p ~/.gstack/projects/$SLUG
+echo '{"skill":"codex-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","gate":"GATE"}' >> ~/.gstack/projects/$SLUG/$BRANCH_SLUG-reviews.jsonl
 ```
+
+Substitute: STATUS ("clean" if PASS, "issues_found" if FAIL), GATE ("pass" or "fail").
+
+**Do NOT persist a codex-review entry when only the adversarial challenge (B) ran** —
+there is no gate verdict to record, and a false entry would make the Review Readiness
+Dashboard believe a code review happened when it didn't.
 
 If Codex is not available, skip this step silently.
 
