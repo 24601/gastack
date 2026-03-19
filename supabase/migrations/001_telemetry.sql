@@ -43,17 +43,20 @@ CREATE TABLE update_checks (
   os TEXT NOT NULL
 );
 
--- RLS: anon key can INSERT only, never SELECT/UPDATE/DELETE
+-- RLS: anon key can INSERT and SELECT (all telemetry data is anonymous)
 ALTER TABLE telemetry_events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "anon_insert_only" ON telemetry_events FOR INSERT WITH CHECK (true);
+CREATE POLICY "anon_select" ON telemetry_events FOR SELECT USING (true);
 
 ALTER TABLE installations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "anon_insert_only" ON installations FOR INSERT WITH CHECK (true);
+CREATE POLICY "anon_select" ON installations FOR SELECT USING (true);
 -- Allow upsert (update last_seen)
 CREATE POLICY "anon_update_last_seen" ON installations FOR UPDATE USING (true) WITH CHECK (true);
 
 ALTER TABLE update_checks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "anon_insert_only" ON update_checks FOR INSERT WITH CHECK (true);
+CREATE POLICY "anon_select" ON update_checks FOR SELECT USING (true);
 
 -- Crash clustering view
 CREATE VIEW crash_clusters AS
