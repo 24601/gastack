@@ -17,6 +17,7 @@
 
 import { chromium, type Browser, type BrowserContext, type BrowserContextOptions, type Page, type Locator, type Cookie } from 'playwright';
 import { addConsoleEntry, addNetworkEntry, addDialogEntry, networkBuffer, type DialogEntry } from './buffers';
+import { validateNavigationUrl } from './url-validation';
 
 export interface RefEntry {
   locator: Locator;
@@ -128,6 +129,7 @@ export class BrowserManager {
     this.wirePageEvents(page);
 
     if (url) {
+      validateNavigationUrl(url);
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
     }
 
