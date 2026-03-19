@@ -501,18 +501,6 @@ Shipped as `/design-consultation` on garrytan/design branch. Renamed from `/setu
 **Priority:** P3
 **Depends on:** None
 
-### Skill usage telemetry
-
-**What:** Track which skills get invoked, how often, from which repo.
-
-**Why:** Enables finding undertriggering skills and measuring adoption. Anthropic uses a PreToolUse hook for this; simpler approach is appending JSONL from the preamble.
-
-**Context:** Add to `generatePreamble()` in `scripts/gen-skill-docs.ts`. Append to `~/.gstack/analytics/skill-usage.jsonl` with skill name, timestamp, and repo name. `mkdir -p` ensures the directory exists.
-
-**Effort:** S (human) / S (CC)
-**Priority:** P3
-**Depends on:** None
-
 ## Completed
 
 ### Phase 1: Foundations (v0.2.0)
