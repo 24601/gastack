@@ -7,6 +7,38 @@ description: |
   responsive layouts, test forms and uploads, handle dialogs, and assert element states.
   ~100ms per command. Use when you need to test a feature, verify a deployment, dogfood a
   user flow, or file a bug with evidence.
+
+  gstack also includes development workflow skills. When you notice the user is at
+  these stages, suggest the appropriate skill:
+  - Brainstorming a new idea → suggest /office-hours
+  - Reviewing a plan (strategy) → suggest /plan-ceo-review
+  - Reviewing a plan (architecture) → suggest /plan-eng-review
+  - Reviewing a plan (design) → suggest /plan-design-review
+  - Creating a design system → suggest /design-consultation
+  - Debugging errors → suggest /investigate
+  - Testing the app → suggest /qa
+  - Code review before merge → suggest /review
+  - Visual design audit → suggest /design-review
+  - Ready to deploy / create PR → suggest /ship
+  - Post-ship doc updates → suggest /document-release
+  - Weekly retrospective → suggest /retro
+  - Wanting a second opinion or adversarial code review → suggest /codex
+  - Working with production or live systems → suggest /careful
+  - Want to scope edits to one module/directory → suggest /freeze
+  - Maximum safety mode (destructive warnings + edit restrictions) → suggest /guard
+  - Removing edit restrictions → suggest /unfreeze
+  - Upgrading gstack to latest version → suggest /gstack-upgrade
+
+  If the user pushes back on skill suggestions ("stop suggesting things",
+  "I don't need suggestions", "too aggressive"):
+  1. Stop suggesting for the rest of this session
+  2. Run: gstack-config set proactive false
+  3. Say: "Got it — I'll stop suggesting skills. Just tell me to be proactive
+     again if you change your mind."
+
+  If the user says "be proactive again" or "turn on suggestions":
+  1. Run: gstack-config set proactive true
+  2. Say: "Proactive suggestions are back on."
 allowed-tools:
   - Bash
   - Read
@@ -39,7 +71,8 @@ _SESSION_ID="$$-$(date +%s)"
 echo "TELEMETRY: ${_TEL:-off}"
 echo "TEL_PROMPTED: $_TEL_PROMPTED"
 mkdir -p ~/.gstack/analytics
-for _PF in ~/.gstack/analytics/.pending-* 2>/dev/null; do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
+echo '{"skill":"gstack","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
+for _PF in ~/.gstack/analytics/.pending-*; do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
 ```
 
 If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills — only invoke
@@ -154,13 +187,37 @@ Hey gstack team — ran into this while using /{skill-name}:
 
 Slug: lowercase, hyphens, max 60 chars (e.g. `browse-js-no-await`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"
 
+## Completion Status Protocol
+
+When completing a skill workflow, report status using one of:
+- **DONE** — All steps completed successfully. Evidence provided for each claim.
+- **DONE_WITH_CONCERNS** — Completed, but with issues the user should know about. List each concern.
+- **BLOCKED** — Cannot proceed. State what is blocking and what was tried.
+- **NEEDS_CONTEXT** — Missing information required to continue. State exactly what you need.
+
+### Escalation
+
+It is always OK to stop and say "this is too hard for me" or "I'm not confident in this result."
+
+Bad work is worse than no work. You will not be penalized for escalating.
+- If you have attempted a task 3 times without success, STOP and escalate.
+- If you are uncertain about a security-sensitive change, STOP and escalate.
+- If the scope of work exceeds what you can verify, STOP and escalate.
+
+Escalation format:
+```
+STATUS: BLOCKED | NEEDS_CONTEXT
+REASON: [1-2 sentences]
+ATTEMPTED: [what you tried]
+RECOMMENDATION: [what the user should do next]
+```
+
 ## Telemetry (run last)
 
-After the skill workflow completes (success, error, or abort), write the .pending marker
-with the actual skill name, then log the telemetry event. Determine the skill name from
-the `name:` field in this file's YAML frontmatter. Determine the outcome from the
-workflow result (success if completed normally, error if it failed, abort if the user
-interrupted). Run this bash:
+After the skill workflow completes (success, error, or abort), log the telemetry event.
+Determine the skill name from the `name:` field in this file's YAML frontmatter.
+Determine the outcome from the workflow result (success if completed normally, error
+if it failed, abort if the user interrupted). Run this bash:
 
 ```bash
 _TEL_END=$(date +%s)
@@ -175,6 +232,10 @@ Replace `SKILL_NAME` with the actual skill name from frontmatter, `OUTCOME` with
 success/error/abort, and `USED_BROWSE` with true/false based on whether `$B` was used.
 If you cannot determine the outcome, use "unknown". This runs in the background and
 never blocks the user.
+
+If `PROACTIVE` is `false`: do NOT proactively suggest other gstack skills during this session.
+Only run skills the user explicitly invokes. This preference persists across sessions via
+`gstack-config`.
 
 # gstack browse: QA Testing & Dogfooding
 
@@ -523,7 +584,9 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 ### Server
 | Command | Description |
 |---------|-------------|
+| `handoff [message]` | Open visible Chrome at current page for user takeover |
 | `restart` | Restart server |
+| `resume` | Re-snapshot after user takeover, return control to AI |
 | `status` | Health check |
 | `stop` | Shutdown server |
 

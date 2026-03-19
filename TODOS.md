@@ -52,7 +52,9 @@
 
 **Why:** Enables "resume where I left off" for QA sessions and repeatable auth states.
 
-**Effort:** M
+**Context:** The `saveState()`/`restoreState()` helpers from the handoff feature (browser-manager.ts) already capture cookies + localStorage + sessionStorage + URLs. Adding file I/O on top is ~20 lines.
+
+**Effort:** S
 **Priority:** P3
 **Depends on:** Sessions
 
@@ -408,27 +410,41 @@
 **Priority:** P3
 **Depends on:** Ref staleness Parts 1+2 (shipped)
 
+## Office Hours / Design
+
+### Design docs → Supabase team store sync
+
+**What:** Add design docs (`*-design-*.md`) to the Supabase sync pipeline alongside test plans, retro snapshots, and QA reports.
+
+**Why:** Cross-team design discovery at scale. Local `~/.gstack/projects/$SLUG/` keyword-grep discovery works for same-machine users now, but Supabase sync makes it work across the whole team. Duplicate ideas surface, everyone sees what's been explored.
+
+**Context:** /office-hours writes design docs to `~/.gstack/projects/$SLUG/`. The team store already syncs test plans, retro snapshots, QA reports. Design docs follow the same pattern — just add a sync adapter.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** `garrytan/team-supabase-store` branch landing on main
+
+### /yc-prep skill
+
+**What:** Skill that helps founders prepare their YC application after /office-hours identifies strong signal. Pulls from the design doc, structures answers to YC app questions, runs a mock interview.
+
+**Why:** Closes the loop. /office-hours identifies the founder, /yc-prep helps them apply well. The design doc already contains most of the raw material for a YC application.
+
+**Effort:** M (human: ~2 weeks / CC: ~2 hours)
+**Priority:** P2
+**Depends on:** office-hours founder discovery engine shipping first
+
 ## Design Review
 
-### /design-consultation interactive skill — SHIPPED
+### /plan-design-review + /qa-design-review + /design-consultation — SHIPPED
 
-~~**What:** Interactive skill that walks user through creating a DESIGN.md from scratch.~~
-
-Shipped as `/design-consultation` on garrytan/design branch. Renamed from `/setup-design-md` to reflect the consultant approach (agent proposes a complete coherent system, user adjusts). Includes competitive research via WebSearch, combined font+color preview page, coherence validation, and LLM-judged E2E tests.
+Shipped as v0.5.0 on main. Includes `/plan-design-review` (report-only design audit), `/qa-design-review` (audit + fix loop), and `/design-consultation` (interactive DESIGN.md creation). `{{DESIGN_METHODOLOGY}}` resolver provides shared 80-item design audit checklist.
 
 ## Document-Release
 
-### Auto-invoke /document-release from /ship
+### Auto-invoke /document-release from /ship — SHIPPED
 
-**What:** Add Step 8.5 to /ship that reads document-release/SKILL.md and executes the doc update workflow after creating the PR.
-
-**Why:** Zero-friction doc updates — user runs /ship and docs are automatically current. No extra command to remember.
-
-**Context:** /ship currently ends at Step 8 (PR URL output). Step 8.5 would continue into the document-release workflow. Same pattern as /ship calling /review's checklist in Step 3.5.
-
-**Effort:** S
-**Priority:** P1
-**Depends on:** /document-release shipped
+Shipped in v0.8.3. Step 8.5 added to `/ship` — after creating the PR, `/ship` automatically reads `document-release/SKILL.md` and executes the doc update workflow. Zero-friction doc updates.
 
 ### `{{DOC_VOICE}}` shared resolver
 
@@ -484,22 +500,37 @@ Shipped as `/design-consultation` on garrytan/design branch. Renamed from `/setu
 
 ## Safety & Observability
 
-### On-demand hook skills (/careful, /freeze, /guard)
+### On-demand hook skills (/careful, /freeze, /guard) — SHIPPED
 
-**What:** Three new skills that use Claude Code's session-scoped PreToolUse hooks to add safety guardrails on demand.
+~~**What:** Three new skills that use Claude Code's session-scoped PreToolUse hooks to add safety guardrails on demand.~~
 
-**Why:** Anthropic's internal skill best practices recommend on-demand hooks for safety. Claude Code already handles destructive command permissions, but these add an explicit opt-in layer for high-risk sessions (touching prod, debugging live systems).
+Shipped as `/careful`, `/freeze`, `/guard`, and `/unfreeze` in v0.6.5. Includes hook fire-rate telemetry (pattern name only, no command content) and inline skill activation telemetry.
 
-**Skills:**
-- `/careful` — PreToolUse hook on Bash tool. Warns (not blocks) before destructive commands: `rm -rf`, `DROP TABLE`, `git push --force`, `git reset --hard`, `kubectl delete`, `docker system prune`. Uses `permissionDecision: "ask"` so user can override.
-- `/freeze` — PreToolUse hook on Edit/Write tools. Restricts file edits to a user-specified directory. Great for debugging without accidentally "fixing" unrelated code.
-- `/guard` — meta-skill composing `/careful` + `/freeze` into one command.
+### Skill usage telemetry — SHIPPED
 
-**Implementation notes:** Use `${CLAUDE_SKILL_DIR}` (not `${SKILL_DIR}`) for script paths in hook commands. Pure bash JSON parsing (no jq dependency). Freeze dir storage: `${CLAUDE_PLUGIN_DATA}/freeze-dir.txt` with `~/.gstack/freeze-dir.txt` fallback. Ensure trailing `/` on freeze dir paths to prevent `/src` matching `/src-old`.
+~~**What:** Track which skills get invoked, how often, from which repo.~~
 
-**Effort:** M (human) / S (CC)
+Shipped in v0.6.5. TemplateContext in gen-skill-docs.ts bakes skill name into preamble telemetry line. Analytics CLI (`bun run analytics`) for querying. /retro integration shows skills-used-this-week.
+
+### /investigate scoped debugging enhancements (gated on telemetry)
+
+**What:** Six enhancements to /investigate auto-freeze, contingent on telemetry showing the freeze hook actually fires in real debugging sessions.
+
+**Why:** /investigate v0.7.1 auto-freezes edits to the module being debugged. If telemetry shows the hook fires often, these enhancements make the experience smarter. If it never fires, the problem wasn't real and these aren't worth building.
+
+**Context:** All items are prose additions to `investigate/SKILL.md.tmpl`. No new scripts.
+
+**Items:**
+1. Stack trace auto-detection for freeze directory (parse deepest app frame)
+2. Freeze boundary widening (ask to widen instead of hard-block when hitting boundary)
+3. Post-fix auto-unfreeze + full test suite run
+4. Debug instrumentation cleanup (tag with DEBUG-TEMP, remove before commit)
+5. Debug session persistence (~/.gstack/investigate-sessions/ — save investigation for reuse)
+6. Investigation timeline in debug report (hypothesis log with timing)
+
+**Effort:** M (all 6 combined)
 **Priority:** P3
-**Depends on:** None
+**Depends on:** Telemetry data showing freeze hook fires in real /investigate sessions
 
 ## Completed
 
