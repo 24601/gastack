@@ -447,6 +447,7 @@ describe('No hardcoded branch names in SKILL templates', () => {
     'document-release/SKILL.md.tmpl',
     'plan-eng-review/SKILL.md.tmpl',
     'plan-design-review/SKILL.md.tmpl',
+    'codex/SKILL.md.tmpl',
   ];
 
   // Patterns that indicate hardcoded 'main' in git commands
