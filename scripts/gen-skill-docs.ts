@@ -549,8 +549,8 @@ eval $(~/.claude/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 
 \`\`\`bash
 eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
-mkdir -p ~/.gstack/projects/$SLUG
-echo '{"skill":"design-review-lite","timestamp":"TIMESTAMP","status":"STATUS","findings":N,"auto_fixed":M}' >> ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl
+mkdir -p $PROJECTS_DIR/$SLUG/reviews
+echo '{"skill":"design-review-lite","timestamp":"TIMESTAMP","status":"STATUS","findings":N,"auto_fixed":M}' >> $PROJECTS_DIR/$SLUG/reviews/$BRANCH.jsonl
 \`\`\`
 
 Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count.`;
@@ -809,9 +809,10 @@ Compare screenshots and observations across pages for:
 **Project-scoped:**
 \`\`\`bash
 eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
-mkdir -p ~/.gstack/projects/$SLUG
+DATE=$(date +%Y-%m-%d)
+mkdir -p $PROJECTS_DIR/$SLUG/reports
 \`\`\`
-Write to: \`~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md\`
+Write to: \`$PROJECTS_DIR/$SLUG/reports/design-{domain}-$DATE.md\`
 
 **Baseline:** Write \`design-baseline.json\` for regression mode:
 \`\`\`json
@@ -899,7 +900,7 @@ After completing the review, read the review log and config to display the dashb
 
 \`\`\`bash
 eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
-cat ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl 2>/dev/null || echo "NO_REVIEWS"
+cat $PROJECTS_DIR/$SLUG/reviews/$BRANCH.jsonl 2>/dev/null || echo "NO_REVIEWS"
 echo "---CONFIG---"
 ~/.claude/skills/gstack/bin/gstack-config get skip_eng_review 2>/dev/null || echo "false"
 \`\`\`
@@ -1087,6 +1088,13 @@ Only commit if there are changes. Stage all bootstrap files (config, test direct
 ---`;
 }
 
+function generateArtifactSetup(): string {
+  return `\`\`\`bash
+eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
+DATE=$(date +%Y-%m-%d)
+\`\`\``;
+}
+
 const RESOLVERS: Record<string, () => string> = {
   COMMAND_REFERENCE: generateCommandReference,
   SNAPSHOT_FLAGS: generateSnapshotFlags,
@@ -1098,6 +1106,7 @@ const RESOLVERS: Record<string, () => string> = {
   DESIGN_REVIEW_LITE: generateDesignReviewLite,
   REVIEW_DASHBOARD: generateReviewDashboard,
   TEST_BOOTSTRAP: generateTestBootstrap,
+  ARTIFACT_SETUP: generateArtifactSetup,
 };
 
 // ─── Template Processing ────────────────────────────────────
