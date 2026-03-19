@@ -217,6 +217,8 @@ source <(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
 cat ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl 2>/dev/null || echo "NO_REVIEWS"
 echo "---CONFIG---"
 ~/.claude/skills/gstack/bin/gstack-config get skip_eng_review 2>/dev/null || echo "false"
+echo "---HEAD---"
+git rev-parse --short HEAD 2>/dev/null || echo "unknown"
 ```
 
 Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, plan-design-review, design-review-lite, codex-review). Ignore entries with timestamps older than 7 days. For Design Review, show whichever is more recent between `plan-design-review` (full visual audit) and `design-review-lite` (code-level check). Append "(FULL)" or "(LITE)" to the status to distinguish. Display:
@@ -247,6 +249,12 @@ Parse the output. Find the most recent entry for each skill (plan-ceo-review, pl
 - **NOT CLEARED**: Eng Review missing, stale (>7 days), or has open issues
 - CEO, Design, and Codex reviews are shown for context but never block shipping
 - If \`skip_eng_review\` config is \`true\`, Eng Review shows "SKIPPED (global)" and verdict is CLEARED
+
+**Staleness detection:** After displaying the dashboard, check if any existing reviews may be stale:
+- Parse the \`---HEAD---\` section from the bash output to get the current HEAD commit hash
+- For each review entry that has a \`commit\` field: compare it against the current HEAD. If different, count elapsed commits: \`git rev-list --count STORED_COMMIT..HEAD\`. Display: "Note: {skill} review from {date} may be stale — {N} commits since review"
+- For entries without a \`commit\` field (legacy entries): display "Note: {skill} review from {date} has no commit tracking — consider re-running for accurate staleness detection"
+- If all reviews match the current HEAD, do not display any staleness notes
 
 If the Eng Review is NOT "CLEAR":
 
@@ -708,10 +716,10 @@ source <(~/.claude/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 ```bash
 source <(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
 mkdir -p ~/.gstack/projects/$SLUG
-echo '{"skill":"design-review-lite","timestamp":"TIMESTAMP","status":"STATUS","findings":N,"auto_fixed":M}' >> ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl
+echo '{"skill":"design-review-lite","timestamp":"TIMESTAMP","status":"STATUS","findings":N,"auto_fixed":M,"commit":"COMMIT"}' >> ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl
 ```
 
-Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count.
+Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count, COMMIT = output of `git rev-parse --short HEAD`.
 
    Include any design findings alongside the code review findings. They follow the same Fix-First flow below.
 
@@ -1028,7 +1036,28 @@ EOF
 )"
 ```
 
-**Output the PR URL** — this should be the final output the user sees.
+**Output the PR URL** — then proceed to Step 8.5.
+
+---
+
+## Step 8.5: Auto-invoke /document-release
+
+After the PR is created, automatically sync project documentation. Read the
+`document-release/SKILL.md` skill file (adjacent to this skill's directory) and
+execute its full workflow:
+
+1. Read the `/document-release` skill: `cat ${CLAUDE_SKILL_DIR}/../document-release/SKILL.md`
+2. Follow its instructions — it reads all .md files in the project, cross-references
+   the diff, and updates anything that drifted (README, ARCHITECTURE, CONTRIBUTING,
+   CLAUDE.md, TODOS, etc.)
+3. If any docs were updated, commit the changes and push to the same branch:
+   ```bash
+   git add -A && git commit -m "docs: sync documentation with shipped changes" && git push
+   ```
+4. If no docs needed updating, say "Documentation is current — no updates needed."
+
+This step is automatic. Do not ask the user for confirmation. The goal is zero-friction
+doc updates — the user runs `/ship` and documentation stays current without a separate command.
 
 ---
 
@@ -1045,4 +1074,4 @@ EOF
 - **Use Greptile reply templates from greptile-triage.md.** Every reply includes evidence (inline diff, code references, re-rank suggestion). Never post vague replies.
 - **Never push without fresh verification evidence.** If code changed after Step 3 tests, re-run before pushing.
 - **Step 3.4 generates coverage tests.** They must pass before committing. Never commit failing tests.
-- **The goal is: user says `/ship`, next thing they see is the review + PR URL.**
+- **The goal is: user says `/ship`, next thing they see is the review + PR URL + auto-synced docs.**
