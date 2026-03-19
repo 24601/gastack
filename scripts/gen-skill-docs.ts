@@ -105,11 +105,26 @@ touch ~/.gstack/sessions/"$PPID"
 _SESSIONS=$(find ~/.gstack/sessions -mmin -120 -type f 2>/dev/null | wc -l | tr -d ' ')
 find ~/.gstack/sessions -mmin +120 -type f -delete 2>/dev/null || true
 _CONTRIB=$(~/.claude/skills/gstack/bin/gstack-config get gstack_contributor 2>/dev/null || true)
+_PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null || echo "true")
 _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 echo "BRANCH: $_BRANCH"
+echo "PROACTIVE: $_PROACTIVE"
 _LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
 echo "LAKE_INTRO: $_LAKE_SEEN"
+_TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || true)
+_TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
+_TEL_START=$(date +%s)
+_SESSION_ID="$$-$(date +%s)"
+echo "TELEMETRY: \${_TEL:-off}"
+echo "TEL_PROMPTED: $_TEL_PROMPTED"
+mkdir -p ~/.gstack/analytics
+if [ -f ~/.gstack/analytics/.pending ]; then
+  ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown 2>/dev/null || true
+fi
 \`\`\`
+
+If \`PROACTIVE\` is \`"false"\`, do not proactively suggest gstack skills — only invoke
+them when the user explicitly asks. The user opted out of proactive suggestions.
 
 If output shows \`UPGRADE_AVAILABLE <old> <new>\`: read \`~/.claude/skills/gstack/gstack-upgrade/SKILL.md\` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If \`JUST_UPGRADED <from> <to>\`: tell user "Running gstack v{to} (just updated!)" and continue.
 
@@ -124,6 +139,27 @@ touch ~/.gstack/.completeness-intro-seen
 \`\`\`
 
 Only run \`open\` if the user says yes. Always run \`touch\` to mark as seen. This only happens once.
+
+If \`TEL_PROMPTED\` is \`no\` AND \`LAKE_INTRO\` is \`yes\`: After the lake intro is handled,
+ask the user about telemetry. Use AskUserQuestion:
+
+> gstack can share anonymous usage data (which skills you use, how long they take, crash info)
+> to help improve the project. No code, file paths, or repo names are ever sent.
+> Change anytime with \`gstack-config set telemetry off\`.
+
+Options:
+- A) Yes, share anonymous data (recommended)
+- B) No thanks
+
+If A: run \`~/.claude/skills/gstack/bin/gstack-config set telemetry anonymous\`
+If B: run \`~/.claude/skills/gstack/bin/gstack-config set telemetry off\`
+
+Always run:
+\`\`\`bash
+touch ~/.gstack/.telemetry-prompted
+\`\`\`
+
+This only happens once. If \`TEL_PROMPTED\` is \`yes\`, skip this entirely.
 
 ## AskUserQuestion Format
 
@@ -197,7 +233,29 @@ Hey gstack team — ran into this while using /{skill-name}:
 **Date:** {YYYY-MM-DD} | **Version:** {gstack version} | **Skill:** /{skill}
 \`\`\`
 
-Slug: lowercase, hyphens, max 60 chars (e.g. \`browse-js-no-await\`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"`;
+Slug: lowercase, hyphens, max 60 chars (e.g. \`browse-js-no-await\`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"
+
+## Telemetry (run last)
+
+After the skill workflow completes (success, error, or abort), write the .pending marker
+with the actual skill name, then log the telemetry event. Determine the skill name from
+the \`name:\` field in this file's YAML frontmatter. Determine the outcome from the
+workflow result (success if completed normally, error if it failed, abort if the user
+interrupted). Run this bash:
+
+\`\`\`bash
+_TEL_END=$(date +%s)
+_TEL_DUR=$(( _TEL_END - _TEL_START ))
+rm -f ~/.gstack/analytics/.pending 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-telemetry-log \\
+  --skill "SKILL_NAME" --duration "$_TEL_DUR" --outcome "OUTCOME" \\
+  --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" 2>/dev/null &
+\`\`\`
+
+Replace \`SKILL_NAME\` with the actual skill name from frontmatter, \`OUTCOME\` with
+success/error/abort, and \`USED_BROWSE\` with true/false based on whether \`$B\` was used.
+If you cannot determine the outcome, use "unknown". This runs in the background and
+never blocks the user.`;
 }
 
 function generateBrowseSetup(): string {
