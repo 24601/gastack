@@ -387,7 +387,7 @@ File a contributor report about this issue. Then tell me what you filed.`,
     // Set up a git repo so there's project/branch context to reference
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: sessionDir, stdio: 'pipe', timeout: 5000 });
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
     fs.writeFileSync(path.join(sessionDir, 'app.rb'), '# my app\n');
@@ -518,7 +518,7 @@ describeIfSelected('Review skill E2E', ['review-sql-injection'], () => {
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: reviewDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -575,7 +575,7 @@ describeIfSelected('Review enum completeness E2E', ['review-enum-completeness'],
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: enumDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -647,7 +647,7 @@ describeE2E('Review design lite E2E', () => {
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: designDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -910,7 +910,7 @@ describeIfSelected('Plan CEO Review E2E', ['plan-ceo-review'], () => {
       spawnSync(cmd, args, { cwd: planDir, stdio: 'pipe', timeout: 5000 });
 
     // Init git repo (CEO review SKILL.md has a "System Audit" step that runs git)
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -996,7 +996,7 @@ describeIfSelected('Plan CEO Review SELECTIVE EXPANSION E2E', ['plan-ceo-review-
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: planDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -1079,7 +1079,7 @@ describeIfSelected('Plan Eng Review E2E', ['plan-eng-review'], () => {
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: planDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -1174,7 +1174,7 @@ describeIfSelected('Retro E2E', ['retro'], () => {
       spawnSync(cmd, args, { cwd: retroDir, stdio: 'pipe', timeout: 5000 });
 
     // Create a git repo with varied commit history
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'dev@example.com']);
     run('git', ['config', 'user.name', 'Dev']);
 
@@ -1273,7 +1273,7 @@ describeIfSelected('QA-Only skill E2E', ['qa-only-no-fix'], () => {
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: qaOnlyDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
     fs.writeFileSync(path.join(qaOnlyDir, 'index.html'), '<h1>Test</h1>\n');
@@ -1373,7 +1373,7 @@ describeIfSelected('QA Fix Loop E2E', ['qa-fix-loop'], () => {
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: qaFixDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
     run('git', ['add', '.']);
@@ -1460,7 +1460,7 @@ describeIfSelected('Plan-Eng-Review Test-Plan Artifact E2E', ['plan-eng-review-a
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: planDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -1777,7 +1777,7 @@ describeIfSelected('Document-Release skill E2E', ['document-release'], () => {
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: docReleaseDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -2030,7 +2030,7 @@ describeIfSelected('Design Consultation E2E', [
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: designDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -2302,7 +2302,7 @@ describeIfSelected('Plan Design Review E2E', ['plan-design-review-plan-mode', 'p
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: reviewDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -2453,7 +2453,7 @@ describeIfSelected('Design Review E2E', ['design-review-fix'], () => {
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: qaDesignDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
@@ -2620,7 +2620,7 @@ export function divide(a, b) { return a / b; } // BUG: no zero check
     // Init git repo
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: bootstrapDir, stdio: 'pipe', timeout: 5000 });
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
     run('git', ['add', '.']);
@@ -2852,7 +2852,7 @@ describeIfSelected('Codex skill E2E', ['codex-review'], () => {
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: codexDir, stdio: 'pipe', timeout: 5000 });
 
-    run('git', ['init']);
+    run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
