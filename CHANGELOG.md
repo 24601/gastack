@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.7.4] - 2026-03-18
+## [0.8.2] - 2026-03-19
 
 ### Added
 
@@ -12,6 +12,30 @@
 
 - `recreateContext()` refactored to use shared `saveState()`/`restoreState()` helpers — same behavior, less code, ready for future state persistence features.
 - `browser.close()` now has a 5-second timeout to prevent hangs when closing headed browsers on macOS.
+
+## [0.8.1] - 2026-03-19
+
+### Fixed
+
+- **`/qa` no longer refuses to use the browser on backend-only changes.** Previously, if your branch only changed prompt templates, config files, or service logic, `/qa` would analyze the diff, conclude "no UI to test," and suggest running evals instead. Now it always opens the browser — falling back to a Quick mode smoke test (homepage + top 5 navigation targets) when no specific pages are identified from the diff.
+
+## [0.8.0] - 2026-03-19 — Multi-AI Second Opinion
+
+**`/codex` — get an independent second opinion from a completely different AI.**
+
+Three modes. `/codex review` runs OpenAI's Codex CLI against your diff and gives a pass/fail gate — if Codex finds critical issues (`[P1]`), it fails. `/codex challenge` goes adversarial: it tries to find ways your code will fail in production, thinking like an attacker and a chaos engineer. `/codex <anything>` opens a conversation with Codex about your codebase, with session continuity so follow-ups remember context.
+
+When both `/review` (Claude) and `/codex review` have run, you get a cross-model analysis showing which findings overlap and which are unique to each AI — building intuition for when to trust which system.
+
+**Integrated everywhere.** After `/review` finishes, it offers a Codex second opinion. During `/ship`, you can run Codex review as an optional gate before pushing. In `/plan-eng-review`, Codex can independently critique your plan before the engineering review begins. All Codex results show up in the Review Readiness Dashboard.
+
+**Also in this release:** Proactive skill suggestions — gstack now notices what stage of development you're in and suggests the right skill. Don't like it? Say "stop suggesting" and it remembers across sessions.
+
+## [0.7.4] - 2026-03-18
+
+### Changed
+
+- **`/qa` and `/design-review` now ask what to do with uncommitted changes** instead of refusing to start. When your working tree is dirty, you get an interactive prompt with three options: commit your changes, stash them, or abort. No more cryptic "ERROR: Working tree is dirty" followed by a wall of text.
 
 ## [0.7.3] - 2026-03-18
 
@@ -44,6 +68,7 @@
 ### Fixed
 
 - `/debug` and `/office-hours` were completely invisible to natural language — no trigger phrases at all. Now both have full reactive + proactive triggers.
+>>>>>>> origin/main
 
 ## [0.7.0] - 2026-03-18 — YC Office Hours
 
