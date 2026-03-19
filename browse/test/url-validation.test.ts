@@ -42,6 +42,26 @@ describe('validateNavigationUrl', () => {
     expect(() => validateNavigationUrl('http://metadata.google.internal/computeMetadata/v1/')).toThrow(/cloud metadata/i);
   });
 
+  it('blocks metadata hostname with trailing dot', () => {
+    expect(() => validateNavigationUrl('http://metadata.google.internal./computeMetadata/v1/')).toThrow(/cloud metadata/i);
+  });
+
+  it('blocks metadata IP in hex form', () => {
+    expect(() => validateNavigationUrl('http://0xA9FEA9FE/')).toThrow(/cloud metadata/i);
+  });
+
+  it('blocks metadata IP in decimal form', () => {
+    expect(() => validateNavigationUrl('http://2852039166/')).toThrow(/cloud metadata/i);
+  });
+
+  it('blocks metadata IP in octal form', () => {
+    expect(() => validateNavigationUrl('http://0251.0376.0251.0376/')).toThrow(/cloud metadata/i);
+  });
+
+  it('blocks IPv6 metadata with brackets', () => {
+    expect(() => validateNavigationUrl('http://[fd00::]/')).toThrow(/cloud metadata/i);
+  });
+
   it('throws on malformed URLs', () => {
     expect(() => validateNavigationUrl('not-a-url')).toThrow(/Invalid URL/i);
   });

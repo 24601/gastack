@@ -120,6 +120,11 @@ export class BrowserManager {
   async newTab(url?: string): Promise<number> {
     if (!this.context) throw new Error('Browser not launched');
 
+    // Validate URL before allocating page to avoid zombie tabs on rejection
+    if (url) {
+      validateNavigationUrl(url);
+    }
+
     const page = await this.context.newPage();
     const id = this.nextTabId++;
     this.pages.set(id, page);
@@ -129,7 +134,6 @@ export class BrowserManager {
     this.wirePageEvents(page);
 
     if (url) {
-      validateNavigationUrl(url);
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
     }
 
