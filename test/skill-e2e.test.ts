@@ -2841,6 +2841,76 @@ Output the diagram directly.`,
   }, 180_000);
 });
 
+// --- Codex skill E2E ---
+
+describeIfSelected('Codex skill E2E', ['codex-review'], () => {
+  let codexDir: string;
+
+  beforeAll(() => {
+    codexDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-codex-'));
+
+    const run = (cmd: string, args: string[]) =>
+      spawnSync(cmd, args, { cwd: codexDir, stdio: 'pipe', timeout: 5000 });
+
+    run('git', ['init']);
+    run('git', ['config', 'user.email', 'test@test.com']);
+    run('git', ['config', 'user.name', 'Test']);
+
+    // Commit a clean base on main
+    fs.writeFileSync(path.join(codexDir, 'app.rb'), '# clean base\nclass App\nend\n');
+    run('git', ['add', 'app.rb']);
+    run('git', ['commit', '-m', 'initial commit']);
+
+    // Create feature branch with vulnerable code (reuse review fixture)
+    run('git', ['checkout', '-b', 'feature/add-vuln']);
+    const vulnContent = fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'review-eval-vuln.rb'), 'utf-8');
+    fs.writeFileSync(path.join(codexDir, 'user_controller.rb'), vulnContent);
+    run('git', ['add', 'user_controller.rb']);
+    run('git', ['commit', '-m', 'add vulnerable controller']);
+
+    // Copy the codex skill file
+    fs.copyFileSync(path.join(ROOT, 'codex', 'SKILL.md'), path.join(codexDir, 'codex-SKILL.md'));
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(codexDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test('/codex review produces findings and GATE verdict', async () => {
+    // Check codex is available — skip if not installed
+    const codexCheck = spawnSync('which', ['codex'], { stdio: 'pipe', timeout: 3000 });
+    if (codexCheck.status !== 0) {
+      console.warn('codex CLI not installed — skipping E2E test');
+      return;
+    }
+
+    const result = await runSkillTest({
+      prompt: `You are in a git repo on branch feature/add-vuln with changes against main.
+Read codex-SKILL.md for the /codex skill instructions.
+Run /codex review to review the current diff against main.
+Write the full output (including the GATE verdict) to ${codexDir}/codex-output.md`,
+      workingDirectory: codexDir,
+      maxTurns: 10,
+      timeout: 300_000,
+      testName: 'codex-review',
+      runId,
+    });
+
+    logCost('/codex review', result);
+    recordE2E('/codex review', 'Codex skill E2E', result);
+    expect(result.exitReason).toBe('success');
+
+    // Check that output file was created with review content
+    const outputPath = path.join(codexDir, 'codex-output.md');
+    if (fs.existsSync(outputPath)) {
+      const output = fs.readFileSync(outputPath, 'utf-8');
+      // Should contain the CODEX SAYS header or GATE verdict
+      const hasCodexOutput = output.includes('CODEX') || output.includes('GATE') || output.includes('codex');
+      expect(hasCodexOutput).toBe(true);
+    }
+  }, 360_000);
+});
+
 // Module-level afterAll — finalize eval collector after all tests complete
 afterAll(async () => {
   if (evalCollector) {

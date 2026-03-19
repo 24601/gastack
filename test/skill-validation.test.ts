@@ -1121,3 +1121,95 @@ describe('QA report template', () => {
     expect(content).toContain('**Precondition:**');
   });
 });
+
+// --- Codex skill validation ---
+
+describe('Codex skill', () => {
+  test('codex/SKILL.md exists and has correct frontmatter', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('name: codex');
+    expect(content).toContain('version: 1.0.0');
+    expect(content).toContain('allowed-tools:');
+  });
+
+  test('codex/SKILL.md contains all three modes', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('Step 2A: Review Mode');
+    expect(content).toContain('Step 2B: Challenge');
+    expect(content).toContain('Step 2C: Consult Mode');
+  });
+
+  test('codex/SKILL.md contains gate verdict logic', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('[P1]');
+    expect(content).toContain('GATE: PASS');
+    expect(content).toContain('GATE: FAIL');
+  });
+
+  test('codex/SKILL.md contains session continuity', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('codex-session-id');
+    expect(content).toContain('codex exec resume');
+  });
+
+  test('codex/SKILL.md contains cost tracking', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('tokens used');
+    expect(content).toContain('Est. cost');
+  });
+
+  test('codex/SKILL.md contains cross-model comparison', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('CROSS-MODEL ANALYSIS');
+    expect(content).toContain('Agreement rate');
+  });
+
+  test('codex/SKILL.md contains review log persistence', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('codex-review');
+    expect(content).toContain('reviews.jsonl');
+  });
+
+  test('codex/SKILL.md uses which for binary discovery, not hardcoded path', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('which codex');
+    expect(content).not.toContain('/opt/homebrew/bin/codex');
+  });
+
+  test('codex/SKILL.md contains error handling for missing binary and API key', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('NOT_FOUND');
+    expect(content).toContain('OPENAI_API_KEY');
+  });
+
+  test('codex/SKILL.md uses mktemp for temp files', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'codex', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('mktemp');
+  });
+
+  test('codex integration in /review offers second opinion', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'review', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('Codex second opinion');
+    expect(content).toContain('codex review');
+    expect(content).toContain('adversarial');
+  });
+
+  test('codex integration in /ship offers review gate', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('Codex');
+    expect(content).toContain('codex review');
+    expect(content).toContain('codex-review');
+  });
+
+  test('codex integration in /plan-eng-review offers plan critique', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'plan-eng-review', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('Codex');
+    expect(content).toContain('codex exec');
+  });
+
+  test('Review Readiness Dashboard includes Codex Review row', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('Codex Review');
+    expect(content).toContain('codex-review');
+  });
+});
