@@ -149,7 +149,9 @@ if [ -z "${GSTACK_TELEMETRY_ENDPOINT:-}" ] && [ -f "$GSTACK_DIR/supabase/config.
 fi
 _SUPA_ENDPOINT="${GSTACK_TELEMETRY_ENDPOINT:-}"
 _SUPA_KEY="${GSTACK_SUPABASE_ANON_KEY:-}"
-if [ -n "$_SUPA_ENDPOINT" ] && [ -n "$_SUPA_KEY" ]; then
+# Respect telemetry opt-out — don't ping Supabase if user set telemetry: off
+_TEL_TIER="$("$GSTACK_DIR/bin/gstack-config" get telemetry 2>/dev/null || true)"
+if [ -n "$_SUPA_ENDPOINT" ] && [ -n "$_SUPA_KEY" ] && [ "${_TEL_TIER:-off}" != "off" ]; then
   _OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
   curl -sf --max-time 5 \
     -X POST "${_SUPA_ENDPOINT}/update_checks" \

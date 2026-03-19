@@ -70,7 +70,7 @@ echo "Top skills (last 7 days)"
 echo "────────────────────────"
 
 # Query telemetry_events, group by skill
-EVENTS="$(query "telemetry_events" "select=skill&event_type=eq.skill_run&event_timestamp=gte.${WEEK_AGO}&limit=1000" 2>/dev/null || echo "[]")"
+EVENTS="$(query "telemetry_events" "select=skill,gstack_version&event_type=eq.skill_run&event_timestamp=gte.${WEEK_AGO}&limit=1000" 2>/dev/null || echo "[]")"
 
 if [ "$EVENTS" != "[]" ] && [ -n "$EVENTS" ]; then
   echo "$EVENTS" | grep -o '"skill":"[^"]*"' | awk -F'"' '{print $4}' | sort | uniq -c | sort -rn | head -10 | while read -r COUNT SKILL; do
@@ -85,11 +85,11 @@ echo ""
 echo "Top crash clusters"
 echo "──────────────────"
 
-CRASHES="$(query "crash_clusters" "select=error_class,gstack_version,count,unique_users&limit=5" 2>/dev/null || echo "[]")"
+CRASHES="$(query "crash_clusters" "select=error_class,gstack_version,total_occurrences,identified_users&limit=5" 2>/dev/null || echo "[]")"
 
 if [ "$CRASHES" != "[]" ] && [ -n "$CRASHES" ]; then
   echo "$CRASHES" | grep -o '"error_class":"[^"]*"' | awk -F'"' '{print $4}' | head -5 | while read -r ERR; do
-    C="$(echo "$CRASHES" | grep -o "\"error_class\":\"$ERR\"[^}]*\"count\":[0-9]*" | grep -o '"count":[0-9]*' | head -1 | grep -o '[0-9]*')"
+    C="$(echo "$CRASHES" | grep -o "\"error_class\":\"$ERR\"[^}]*\"total_occurrences\":[0-9]*" | grep -o '"total_occurrences":[0-9]*' | head -1 | grep -o '[0-9]*')"
     printf "  %-30s %s occurrences\n" "$ERR" "${C:-?}"
   done
 else

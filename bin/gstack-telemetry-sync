@@ -81,7 +81,8 @@ while IFS= read -r LINE; do
     -e 's/,"_branch":"[^"]*"//g' \
     -e 's/"v":/"schema_version":/g' \
     -e 's/"ts":/"event_timestamp":/g' \
-    -e 's/"sessions":/"concurrent_sessions":/g')"
+    -e 's/"sessions":/"concurrent_sessions":/g' \
+    -e 's/,"repo":"[^"]*"//g')"
 
   # If anonymous tier, strip installation_id
   if [ "$TIER" = "anonymous" ]; then
@@ -106,19 +107,19 @@ BATCH="$BATCH]"
 [ "$COUNT" -eq 0 ] && exit 0
 
 # ─── POST to Supabase ────────────────────────────────────────
-RESPONSE="$(curl -sf --max-time 10 \
+HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
   -X POST "${ENDPOINT}/telemetry_events" \
   -H "Content-Type: application/json" \
   -H "apikey: ${ANON_KEY}" \
   -H "Authorization: Bearer ${ANON_KEY}" \
   -H "Prefer: return=minimal" \
-  -d "$BATCH" 2>/dev/null || true)"
+  -d "$BATCH" 2>/dev/null || echo "000")"
 
-# ─── Update cursor on success ────────────────────────────────
-if [ -n "$RESPONSE" ] && echo "$RESPONSE" | grep -q '"inserted"'; then
-  NEW_CURSOR=$(( CURSOR + COUNT ))
-  echo "$NEW_CURSOR" > "$CURSOR_FILE" 2>/dev/null || true
-fi
+# ─── Update cursor on success (2xx) ─────────────────────────
+case "$HTTP_CODE" in
+  2*) NEW_CURSOR=$(( CURSOR + COUNT ))
+      echo "$NEW_CURSOR" > "$CURSOR_FILE" 2>/dev/null || true ;;
+esac
 
 # Update rate limit marker
 touch "$RATE_FILE" 2>/dev/null || true
