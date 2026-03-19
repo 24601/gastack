@@ -56,28 +56,23 @@ describe('gen-skill-docs', () => {
     }
   });
 
-  // All skills that must have templates — single source of truth
-  const ALL_SKILLS = [
-    { dir: '.', name: 'root gstack' },
-    { dir: 'browse', name: 'browse' },
-    { dir: 'qa', name: 'qa' },
-    { dir: 'qa-only', name: 'qa-only' },
-    { dir: 'review', name: 'review' },
-    { dir: 'ship', name: 'ship' },
-    { dir: 'plan-ceo-review', name: 'plan-ceo-review' },
-    { dir: 'plan-eng-review', name: 'plan-eng-review' },
-    { dir: 'retro', name: 'retro' },
-    { dir: 'setup-browser-cookies', name: 'setup-browser-cookies' },
-    { dir: 'gstack-upgrade', name: 'gstack-upgrade' },
-    { dir: 'plan-design-review', name: 'plan-design-review' },
-    { dir: 'design-review', name: 'design-review' },
-    { dir: 'design-consultation', name: 'design-consultation' },
-    { dir: 'document-release', name: 'document-release' },
-    { dir: 'careful', name: 'careful' },
-    { dir: 'freeze', name: 'freeze' },
-    { dir: 'guard', name: 'guard' },
-    { dir: 'unfreeze', name: 'unfreeze' },
-  ];
+  // Dynamic template discovery — matches the generator's findTemplates() behavior.
+  // New skills automatically get test coverage without updating a static list.
+  const ALL_SKILLS = (() => {
+    const skills: Array<{ dir: string; name: string }> = [];
+    // Root template
+    if (fs.existsSync(path.join(ROOT, 'SKILL.md.tmpl'))) {
+      skills.push({ dir: '.', name: 'root gstack' });
+    }
+    // Subdirectory templates
+    for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      if (fs.existsSync(path.join(ROOT, entry.name, 'SKILL.md.tmpl'))) {
+        skills.push({ dir: entry.name, name: entry.name });
+      }
+    }
+    return skills;
+  })();
 
   test('every skill has a SKILL.md.tmpl template', () => {
     for (const skill of ALL_SKILLS) {
@@ -373,5 +368,154 @@ describe('REVIEW_DASHBOARD resolver', () => {
     expect(content).toContain('7 days');
     expect(content).toContain('Design Review');
     expect(content).toContain('skip_eng_review');
+  });
+});
+
+// ─── Codex Generation Tests ─────────────────────────────────
+
+describe('Codex generation (--host codex)', () => {
+  const AGENTS_DIR = path.join(ROOT, '.agents', 'skills');
+
+  // Dynamic discovery of expected Codex skills: all templates except /codex
+  const CODEX_SKILLS = (() => {
+    const skills: Array<{ dir: string; codexName: string }> = [];
+    if (fs.existsSync(path.join(ROOT, 'SKILL.md.tmpl'))) {
+      skills.push({ dir: '.', codexName: 'gstack' });
+    }
+    for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      if (entry.name === 'codex') continue; // /codex is excluded from Codex output
+      if (!fs.existsSync(path.join(ROOT, entry.name, 'SKILL.md.tmpl'))) continue;
+      const codexName = entry.name.startsWith('gstack-') ? entry.name : `gstack-${entry.name}`;
+      skills.push({ dir: entry.name, codexName });
+    }
+    return skills;
+  })();
+
+  test('--host codex generates correct output paths', () => {
+    for (const skill of CODEX_SKILLS) {
+      const skillMd = path.join(AGENTS_DIR, skill.codexName, 'SKILL.md');
+      expect(fs.existsSync(skillMd)).toBe(true);
+    }
+  });
+
+  test('codexSkillName mapping: root is gstack, others are gstack-{dir}', () => {
+    // Root → gstack
+    expect(fs.existsSync(path.join(AGENTS_DIR, 'gstack', 'SKILL.md'))).toBe(true);
+    // Subdirectories → gstack-{dir}
+    expect(fs.existsSync(path.join(AGENTS_DIR, 'gstack-review', 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(AGENTS_DIR, 'gstack-ship', 'SKILL.md'))).toBe(true);
+    // gstack-upgrade doesn't double-prefix
+    expect(fs.existsSync(path.join(AGENTS_DIR, 'gstack-upgrade', 'SKILL.md'))).toBe(true);
+    // No double-prefix: gstack-gstack-upgrade must NOT exist
+    expect(fs.existsSync(path.join(AGENTS_DIR, 'gstack-gstack-upgrade', 'SKILL.md'))).toBe(false);
+  });
+
+  test('Codex frontmatter has ONLY name + description', () => {
+    for (const skill of CODEX_SKILLS) {
+      const content = fs.readFileSync(path.join(AGENTS_DIR, skill.codexName, 'SKILL.md'), 'utf-8');
+      expect(content.startsWith('---\n')).toBe(true);
+      const fmEnd = content.indexOf('\n---', 4);
+      expect(fmEnd).toBeGreaterThan(0);
+      const frontmatter = content.slice(4, fmEnd);
+      // Must have name and description
+      expect(frontmatter).toContain('name:');
+      expect(frontmatter).toContain('description:');
+      // Must NOT have allowed-tools, version, or hooks
+      expect(frontmatter).not.toContain('allowed-tools:');
+      expect(frontmatter).not.toContain('version:');
+      expect(frontmatter).not.toContain('hooks:');
+    }
+  });
+
+  test('no .claude/skills/ in Codex output', () => {
+    for (const skill of CODEX_SKILLS) {
+      const content = fs.readFileSync(path.join(AGENTS_DIR, skill.codexName, 'SKILL.md'), 'utf-8');
+      expect(content).not.toContain('.claude/skills');
+    }
+  });
+
+  test('no ~/.claude/ paths in Codex output', () => {
+    for (const skill of CODEX_SKILLS) {
+      const content = fs.readFileSync(path.join(AGENTS_DIR, skill.codexName, 'SKILL.md'), 'utf-8');
+      expect(content).not.toContain('~/.claude/');
+    }
+  });
+
+  test('/codex skill excluded from Codex output', () => {
+    expect(fs.existsSync(path.join(AGENTS_DIR, 'gstack-codex', 'SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(AGENTS_DIR, 'gstack-codex'))).toBe(false);
+  });
+
+  test('--host codex --dry-run freshness', () => {
+    const result = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'codex', '--dry-run'], {
+      cwd: ROOT,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(result.exitCode).toBe(0);
+    const output = result.stdout.toString();
+    // Every Codex skill should be FRESH
+    for (const skill of CODEX_SKILLS) {
+      expect(output).toContain(`FRESH: .agents/skills/${skill.codexName}/SKILL.md`);
+    }
+    expect(output).not.toContain('STALE');
+  });
+
+  test('--host agents alias produces same output as --host codex', () => {
+    const codexResult = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'codex', '--dry-run'], {
+      cwd: ROOT,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const agentsResult = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'agents', '--dry-run'], {
+      cwd: ROOT,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(codexResult.exitCode).toBe(0);
+    expect(agentsResult.exitCode).toBe(0);
+    // Both should produce the same output (same FRESH lines)
+    expect(codexResult.stdout.toString()).toBe(agentsResult.stdout.toString());
+  });
+
+  test('multiline descriptions preserved in Codex output', () => {
+    // office-hours has a multiline description — verify it survives the frontmatter transform
+    const content = fs.readFileSync(path.join(AGENTS_DIR, 'gstack-office-hours', 'SKILL.md'), 'utf-8');
+    const fmEnd = content.indexOf('\n---', 4);
+    const frontmatter = content.slice(4, fmEnd);
+    // Description should span multiple lines (block scalar)
+    const descLines = frontmatter.split('\n').filter(l => l.startsWith('  '));
+    expect(descLines.length).toBeGreaterThan(1);
+    // Verify key phrases survived
+    expect(frontmatter).toContain('YC Office Hours');
+  });
+
+  test('hook skills have safety prose and no hooks: in frontmatter', () => {
+    const HOOK_SKILLS = ['gstack-careful', 'gstack-freeze', 'gstack-guard'];
+    for (const skillName of HOOK_SKILLS) {
+      const content = fs.readFileSync(path.join(AGENTS_DIR, skillName, 'SKILL.md'), 'utf-8');
+      // Must have safety advisory prose
+      expect(content).toContain('Safety Advisory');
+      // Must NOT have hooks: in frontmatter
+      const fmEnd = content.indexOf('\n---', 4);
+      const frontmatter = content.slice(4, fmEnd);
+      expect(frontmatter).not.toContain('hooks:');
+    }
+  });
+
+  test('all Codex SKILL.md files have auto-generated header', () => {
+    for (const skill of CODEX_SKILLS) {
+      const content = fs.readFileSync(path.join(AGENTS_DIR, skill.codexName, 'SKILL.md'), 'utf-8');
+      expect(content).toContain('AUTO-GENERATED from SKILL.md.tmpl');
+      expect(content).toContain('Regenerate: bun run gen:skill-docs');
+    }
+  });
+
+  test('Codex preamble uses codex paths', () => {
+    // Check a skill that has a preamble (review is a good candidate)
+    const content = fs.readFileSync(path.join(AGENTS_DIR, 'gstack-review', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('~/.codex/skills/gstack');
+    expect(content).toContain('.agents/skills/gstack');
   });
 });
