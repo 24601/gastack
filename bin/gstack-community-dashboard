@@ -12,7 +12,10 @@ set -uo pipefail
 
 GSTACK_DIR="${GSTACK_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 
-# Supabase connection — will be populated once project is created
+# Source Supabase config if not overridden by env
+if [ -z "${GSTACK_SUPABASE_URL:-}" ] && [ -f "$GSTACK_DIR/supabase/config.sh" ]; then
+  . "$GSTACK_DIR/supabase/config.sh"
+fi
 SUPABASE_URL="${GSTACK_SUPABASE_URL:-}"
 ANON_KEY="${GSTACK_SUPABASE_ANON_KEY:-}"
 

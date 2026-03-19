@@ -257,9 +257,22 @@ describe('gstack-telemetry-sync', () => {
 });
 
 describe('gstack-community-dashboard', () => {
-  test('shows unconfigured message when no Supabase URL', () => {
-    const output = run(`${BIN}/gstack-community-dashboard`);
+  test('shows unconfigured message when no Supabase config available', () => {
+    // Use a fake GSTACK_DIR with no supabase/config.sh
+    const output = run(`${BIN}/gstack-community-dashboard`, {
+      GSTACK_DIR: tmpDir,
+      GSTACK_SUPABASE_URL: '',
+      GSTACK_SUPABASE_ANON_KEY: '',
+    });
     expect(output).toContain('Supabase not configured');
     expect(output).toContain('gstack-analytics');
+  });
+
+  test('connects to Supabase when config exists', () => {
+    // Use the real GSTACK_DIR which has supabase/config.sh
+    const output = run(`${BIN}/gstack-community-dashboard`);
+    expect(output).toContain('gstack community dashboard');
+    // Should not show "not configured" since config.sh exists
+    expect(output).not.toContain('Supabase not configured');
   });
 });

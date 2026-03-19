@@ -18,8 +18,12 @@ CURSOR_FILE="$ANALYTICS_DIR/.last-sync-line"
 RATE_FILE="$ANALYTICS_DIR/.last-sync-time"
 CONFIG_CMD="$GSTACK_DIR/bin/gstack-config"
 
-# Default endpoint — will be updated once Supabase project is created
+# Source Supabase config if not overridden by env
+if [ -z "${GSTACK_TELEMETRY_ENDPOINT:-}" ] && [ -f "$GSTACK_DIR/supabase/config.sh" ]; then
+  . "$GSTACK_DIR/supabase/config.sh"
+fi
 ENDPOINT="${GSTACK_TELEMETRY_ENDPOINT:-}"
+ANON_KEY="${GSTACK_SUPABASE_ANON_KEY:-}"
 
 # ─── Pre-checks ──────────────────────────────────────────────
 # No endpoint configured yet → exit silently
@@ -98,8 +102,11 @@ BATCH="$BATCH]"
 
 # ─── POST to Supabase ────────────────────────────────────────
 RESPONSE="$(curl -sf --max-time 10 \
-  -X POST "$ENDPOINT" \
+  -X POST "${ENDPOINT}/telemetry_events" \
   -H "Content-Type: application/json" \
+  -H "apikey: ${ANON_KEY}" \
+  -H "Authorization: Bearer ${ANON_KEY}" \
+  -H "Prefer: return=minimal" \
   -d "$BATCH" 2>/dev/null || true)"
 
 # ─── Update cursor on success ────────────────────────────────
