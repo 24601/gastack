@@ -1215,10 +1215,11 @@ describe('Codex skill', () => {
 });
 
 // --- Trigger phrase validation ---
-// Ensures all user-facing skills have "Use when" trigger phrases in their description
-// frontmatter, so Claude Code's skill selector can route natural language to the right skill.
 
 describe('Skill trigger phrases', () => {
+  // Skills that must have "Use when" trigger phrases in their description.
+  // Excluded: root gstack (browser tool), gstack-upgrade (gstack-specific),
+  // humanizer (text tool)
   const SKILLS_REQUIRING_TRIGGERS = [
     'qa', 'qa-only', 'ship', 'review', 'debug', 'office-hours',
     'plan-ceo-review', 'plan-eng-review', 'plan-design-review',
@@ -1231,11 +1232,28 @@ describe('Skill trigger phrases', () => {
       const skillPath = path.join(ROOT, skill, 'SKILL.md');
       if (!fs.existsSync(skillPath)) return;
       const content = fs.readFileSync(skillPath, 'utf-8');
-      // Extract frontmatter (between --- markers)
-      const match = content.match(/^---\n([\s\S]*?)\n---/);
-      expect(match).toBeTruthy();
-      const frontmatter = match![1];
-      expect(frontmatter.toLowerCase()).toContain('use when');
+      // Extract description from frontmatter
+      const frontmatterEnd = content.indexOf('---', 4);
+      const frontmatter = content.slice(0, frontmatterEnd);
+      expect(frontmatter).toMatch(/Use when/i);
+    });
+  }
+
+  // Skills with proactive triggers should have "Proactively suggest" in description
+  const SKILLS_REQUIRING_PROACTIVE = [
+    'qa', 'qa-only', 'ship', 'review', 'debug', 'office-hours',
+    'plan-ceo-review', 'plan-eng-review', 'plan-design-review',
+    'design-review', 'design-consultation', 'retro', 'document-release',
+  ];
+
+  for (const skill of SKILLS_REQUIRING_PROACTIVE) {
+    test(`${skill}/SKILL.md has "Proactively suggest" phrase`, () => {
+      const skillPath = path.join(ROOT, skill, 'SKILL.md');
+      if (!fs.existsSync(skillPath)) return;
+      const content = fs.readFileSync(skillPath, 'utf-8');
+      const frontmatterEnd = content.indexOf('---', 4);
+      const frontmatter = content.slice(0, frontmatterEnd);
+      expect(frontmatter).toMatch(/Proactively suggest/i);
     });
   }
 });
