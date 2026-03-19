@@ -221,13 +221,13 @@ TMPERR=$(mktemp /tmp/codex-err-XXXXXX.txt)
 
 2. Run the review (5-minute timeout):
 ```bash
-codex review --base <base> -c 'model_reasoning_effort="high"' 2>"$TMPERR"
+codex review --base <base> -c 'model_reasoning_effort="xhigh"' 2>"$TMPERR"
 ```
 
 Use `timeout: 300000` on the Bash call. If the user provided custom instructions
 (e.g., `/codex review focus on security`), pass them as the prompt argument:
 ```bash
-codex review "focus on security" --base <base> -c 'model_reasoning_effort="high"' 2>"$TMPERR"
+codex review "focus on security" --base <base> -c 'model_reasoning_effort="xhigh"' 2>"$TMPERR"
 ```
 
 3. Capture the output. Then parse cost from stderr:
@@ -306,7 +306,7 @@ With focus (e.g., "security"):
 
 3. Run codex exec (5-minute timeout):
 ```bash
-codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="high"' -o "$TMPRESP" 2>"$TMPERR"
+codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' -o "$TMPRESP" 2>"$TMPERR"
 ```
 
 4. Read the response and parse cost:
@@ -369,12 +369,12 @@ THE PLAN:
 
 For a **new session:**
 ```bash
-codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="high"' -o "$TMPRESP" 2>"$TMPERR"
+codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' -o "$TMPRESP" 2>"$TMPERR"
 ```
 
 For a **resumed session** (user chose "Continue"):
 ```bash
-codex exec resume <session-id> "<prompt>" -s read-only -c 'model_reasoning_effort="high"' -o "$TMPRESP" 2>"$TMPERR"
+codex exec resume <session-id> "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' -o "$TMPRESP" 2>"$TMPERR"
 ```
 
 5. Capture and save session ID:
@@ -413,7 +413,7 @@ Session saved — run /codex again to continue this conversation.
 Codex with ChatGPT login only supports `gpt-5.2-codex` (the default). Other models
 (o3, o4-mini, gpt-4o) require API key auth and are not available with ChatGPT login.
 
-All codex commands use `-c 'model_reasoning_effort="high"'` because the whole point of
+All codex commands use `-c 'model_reasoning_effort="xhigh"'` because the whole point of
 this skill is deep, thorough analysis. We want maximum reasoning power — this is your
 "200 IQ autistic developer" second opinion, not a quick sanity check.
 
