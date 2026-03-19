@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.5] - 2026-03-19
+
+### Fixed
+
+- **`/retro` now counts full calendar days.** Running a retro late at night no longer silently misses commits from earlier in the day. Git treats bare dates like `--since="2026-03-11"` as "11pm on March 11" if you run it at 11pm — now we pass `--since="2026-03-11T00:00:00"` so it always starts from midnight. Compare mode windows get the same fix.
+
 ## [0.8.4] - 2026-03-19
 
 ### Added
