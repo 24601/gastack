@@ -15,6 +15,12 @@ import { spawnSync } from 'child_process';
 export const GSTACK_STATE_DIR = process.env.GSTACK_STATE_DIR || path.join(os.homedir(), '.gstack');
 export const GSTACK_DEV_DIR = path.join(os.homedir(), '.gstack-dev');
 
+/** Get the projects directory, optionally scoped to a specific project slug. */
+export function getProjectsDir(slug?: string): string {
+  const base = path.join(GSTACK_STATE_DIR, 'projects');
+  return slug ? path.join(base, slug) : base;
+}
+
 // --- File I/O ---
 
 /** Atomic write: write to .tmp then rename. Non-fatal on error. */

@@ -5,5 +5,8 @@
 set -euo pipefail
 SLUG=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)\.git$|\1|;s|.*[:/]\([^/]*/[^/]*\)$|\1|' | tr '/' '-' | tr '[:upper:]' '[:lower:]')
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-')
+STATE_DIR="${GSTACK_STATE_DIR:-$HOME/.gstack}"
+PROJECTS_DIR="${STATE_DIR}/projects"
 echo "SLUG=$SLUG"
 echo "BRANCH=$BRANCH"
+echo "PROJECTS_DIR=$PROJECTS_DIR"
