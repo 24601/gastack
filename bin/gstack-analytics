@@ -48,9 +48,15 @@ if [ "$DAYS" -gt 0 ] 2>/dev/null; then
     # GNU date
     CUTOFF="$(date -u -d "$DAYS days ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "2000-01-01T00:00:00Z")"
   fi
-  # Filter: only skill_run events with ts >= cutoff
+  # Filter: skill_run events (new format) OR basic skill events (old format, no event_type)
+  # Old format: {"skill":"X","ts":"Y","repo":"Z"} (no event_type field)
+  # New format: {"event_type":"skill_run","skill":"X","ts":"Y",...}
   FILTERED="$(awk -F'"' -v cutoff="$CUTOFF" '
-    /"event_type":"skill_run"/ && /"ts":"/ {
+    /"ts":"/ {
+      # Skip hook_fire events
+      if (/"event":"hook_fire"/) next
+      # Skip non-skill_run new-format events
+      if (/"event_type":"/ && !/"event_type":"skill_run"/) next
       for (i=1; i<=NF; i++) {
         if ($i == "ts" && $(i+1) ~ /^:/) {
           ts = $(i+2)
@@ -60,7 +66,8 @@ if [ "$DAYS" -gt 0 ] 2>/dev/null; then
     }
   ' "$JSONL_FILE")"
 else
-  FILTERED="$(grep '"event_type":"skill_run"' "$JSONL_FILE" 2>/dev/null || true)"
+  # All time: include skill_run events + old-format basic events, exclude hook_fire
+  FILTERED="$(awk '/"ts":"/ && !/"event":"hook_fire"/' "$JSONL_FILE" | grep -v '"event_type":"upgrade_' 2>/dev/null || true)"
 fi
 
 if [ -z "$FILTERED" ]; then
@@ -87,14 +94,20 @@ SKILL_COUNTS="$(echo "$FILTERED" | awk -F'"' '
 
 # Count outcomes
 TOTAL="$(echo "$FILTERED" | wc -l | tr -d ' ')"
-SUCCESS="$(echo "$FILTERED" | grep -c '"outcome":"success"' 2>/dev/null || echo "0")"
-ERRORS="$(echo "$FILTERED" | grep -c '"outcome":"error"' 2>/dev/null || echo "0")"
+SUCCESS="$(echo "$FILTERED" | grep -c '"outcome":"success"' || true)"
+SUCCESS="${SUCCESS:-0}"; SUCCESS="$(echo "$SUCCESS" | tr -d ' \n\r\t')"
+ERRORS="$(echo "$FILTERED" | grep -c '"outcome":"error"' || true)"
+ERRORS="${ERRORS:-0}"; ERRORS="$(echo "$ERRORS" | tr -d ' \n\r\t')"
+# Old format events have no outcome field — count them as successful
+NO_OUTCOME="$(echo "$FILTERED" | grep -vc '"outcome":' || true)"
+NO_OUTCOME="${NO_OUTCOME:-0}"; NO_OUTCOME="$(echo "$NO_OUTCOME" | tr -d ' \n\r\t')"
+SUCCESS=$(( SUCCESS + NO_OUTCOME ))
 
 # Calculate success rate
-if [ "$TOTAL" -gt 0 ]; then
+if [ "$TOTAL" -gt 0 ] 2>/dev/null; then
   SUCCESS_RATE=$(( SUCCESS * 100 / TOTAL ))
 else
-  SUCCESS_RATE=0
+  SUCCESS_RATE=100
 fi
 
 # ─── Calculate total duration ────────────────────────────────
@@ -112,6 +125,7 @@ TOTAL_DURATION="$(echo "$FILTERED" | awk -F'[:,]' '
 ')"
 
 # Format duration
+TOTAL_DURATION="${TOTAL_DURATION:-0}"
 if [ "$TOTAL_DURATION" -ge 3600 ] 2>/dev/null; then
   HOURS=$(( TOTAL_DURATION / 3600 ))
   MINS=$(( (TOTAL_DURATION % 3600) / 60 ))
