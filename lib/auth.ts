@@ -32,7 +32,7 @@ export async function runDeviceAuth(team: TeamConfig): Promise<AuthTokens> {
       reject(new Error('Auth timed out after 5 minutes. Please try again.'));
     }, AUTH_TIMEOUT_MS);
 
-    const server = http.createServer((req, res) => {
+    const server = http.createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://localhost:${AUTH_CALLBACK_PORT}`);
 
       // Handle the OAuth callback
@@ -53,7 +53,7 @@ export async function runDeviceAuth(team: TeamConfig): Promise<AuthTokens> {
           refresh_token: refreshToken,
           expires_at: Math.floor(Date.now() / 1000) + expiresIn,
           user_id: url.searchParams.get('user_id') || '',
-          team_id: '',  // filled in by sync.ts after first API call
+          team_id: '',
           email: url.searchParams.get('email') || '',
         };
 
@@ -62,6 +62,12 @@ export async function runDeviceAuth(team: TeamConfig): Promise<AuthTokens> {
 
         clearTimeout(timeout);
         server.close();
+
+        // Resolve team_id from team_members table before saving
+        try {
+          const teamId = await resolveTeamId(team, tokens.access_token, tokens.user_id);
+          if (teamId) tokens.team_id = teamId;
+        } catch { /* non-fatal — team_id can be resolved later */ }
 
         // Save tokens
         try {
@@ -79,7 +85,7 @@ export async function runDeviceAuth(team: TeamConfig): Promise<AuthTokens> {
       if (url.pathname === '/auth/token' && req.method === 'POST') {
         let body = '';
         req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-        req.on('end', () => {
+        req.on('end', async () => {
           try {
             const data = JSON.parse(body);
             const tokens: AuthTokens = {
@@ -96,6 +102,12 @@ export async function runDeviceAuth(team: TeamConfig): Promise<AuthTokens> {
 
             clearTimeout(timeout);
             server.close();
+
+            // Resolve team_id before saving
+            try {
+              const teamId = await resolveTeamId(team, tokens.access_token, tokens.user_id);
+              if (teamId) tokens.team_id = teamId;
+            } catch { /* non-fatal */ }
 
             saveAuthTokens(team.supabase_url, tokens);
             resolve(tokens);
@@ -208,4 +220,26 @@ export function isTokenExpired(tokens: AuthTokens): boolean {
   if (!tokens.expires_at) return false;  // env-var tokens don't expire
   const buffer = 300; // 5-minute buffer
   return Math.floor(Date.now() / 1000) >= tokens.expires_at - buffer;
+}
+
+/**
+ * Look up the user's team_id from team_members table after auth.
+ * Returns the first team_id found, or null if the lookup fails.
+ */
+async function resolveTeamId(team: TeamConfig, accessToken: string, userId: string): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const url = `${team.supabase_url}/rest/v1/team_members?user_id=eq.${userId}&select=team_id&limit=1`;
+    const res = await fetch(url, {
+      headers: {
+        'apikey': team.supabase_anon_key,
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+    if (!res.ok) return null;
+    const rows = await res.json() as Array<{ team_id: string }>;
+    return rows.length > 0 ? rows[0].team_id : null;
+  } catch {
+    return null;
+  }
 }

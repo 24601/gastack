@@ -39,7 +39,7 @@ interface CacheMeta {
  * Refresh an expired access token using the refresh token.
  * Returns new tokens on success, null on failure.
  */
-async function refreshToken(supabaseUrl: string, refreshToken: string, anonKey: string): Promise<AuthTokens | null> {
+async function refreshToken(supabaseUrl: string, refreshToken: string, anonKey: string, existingTeamId?: string): Promise<AuthTokens | null> {
   try {
     const res = await fetchWithTimeout(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
@@ -58,7 +58,7 @@ async function refreshToken(supabaseUrl: string, refreshToken: string, anonKey: 
       refresh_token: data.refresh_token as string || refreshToken,
       expires_at: Math.floor(Date.now() / 1000) + ((data.expires_in as number) || 3600),
       user_id: (data.user as any)?.id || '',
-      team_id: '',
+      team_id: existingTeamId || '',  // preserve existing team_id across refresh
       email: (data.user as any)?.email || '',
     };
   } catch {
@@ -78,6 +78,7 @@ export async function getValidToken(config: SyncConfig): Promise<string | null> 
     config.team.supabase_url,
     config.auth.refresh_token,
     config.team.supabase_anon_key,
+    config.auth.team_id,
   );
 
   if (!newTokens) return null;
@@ -234,7 +235,7 @@ export async function pullTable(table: string, query?: string): Promise<Record<s
 
     const url = query
       ? `${restUrl(config.team.supabase_url, table)}?${query}`
-      : `${restUrl(config.team.supabase_url, table)}?team_id=eq.${config.auth.team_id}&order=created_at.desc&limit=500`;
+      : `${restUrl(config.team.supabase_url, table)}?team_id=eq.${config.auth.team_id}&limit=500`;
 
     const res = await fetchWithTimeout(url, {
       method: 'GET',
