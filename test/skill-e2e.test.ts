@@ -13,6 +13,12 @@ import * as os from 'os';
 
 const ROOT = path.resolve(import.meta.dir, '..');
 
+// Isolate E2E tests from real ~/.gstack/ — all skill artifact writes go to a temp dir.
+// gstack-slug reads GSTACK_STATE_DIR and lib/util.ts reads process.env.GSTACK_STATE_DIR.
+const e2eStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-e2e-state-'));
+const originalStateDir = process.env.GSTACK_STATE_DIR;
+process.env.GSTACK_STATE_DIR = e2eStateDir;
+
 // Skip unless EVALS=1. Session runner strips CLAUDE* env vars to avoid nested session issues.
 //
 // BLAME PROTOCOL: When an eval fails, do NOT claim "pre-existing" or "not related
@@ -1511,22 +1517,14 @@ export function main() { return Dashboard(); }
     // Set up remote-slug shim and browse shims (plan-eng-review uses remote-slug for artifact path)
     setupBrowseShims(planDir);
 
-    // Create project directory for artifacts
-    projectDir = path.join(os.homedir(), '.gstack', 'projects', 'test-project');
+    // Create project directory for artifacts (uses GSTACK_STATE_DIR isolation)
+    projectDir = path.join(e2eStateDir, 'projects', 'test-project');
     fs.mkdirSync(projectDir, { recursive: true });
   });
 
   afterAll(() => {
     try { fs.rmSync(planDir, { recursive: true, force: true }); } catch {}
-    // Clean up test-plan artifacts (but not the project dir itself)
-    try {
-      const files = fs.readdirSync(projectDir);
-      for (const f of files) {
-        if (f.includes('test-plan')) {
-          fs.unlinkSync(path.join(projectDir, f));
-        }
-      }
-    } catch {}
+    // Project dir is inside e2eStateDir — cleaned up by module-level afterAll
   });
 
   test('/plan-eng-review writes test-plan artifact to ~/.gstack/projects/', async () => {
@@ -2842,7 +2840,7 @@ Output the diagram directly.`,
   }, 180_000);
 });
 
-// Module-level afterAll — finalize eval collector after all tests complete
+// Module-level afterAll — finalize eval collector and clean up E2E isolation
 afterAll(async () => {
   if (evalCollector) {
     try {
@@ -2851,4 +2849,12 @@ afterAll(async () => {
       console.error('Failed to save eval results:', err);
     }
   }
+
+  // Restore original GSTACK_STATE_DIR and clean up temp dir
+  if (originalStateDir) {
+    process.env.GSTACK_STATE_DIR = originalStateDir;
+  } else {
+    delete process.env.GSTACK_STATE_DIR;
+  }
+  try { fs.rmSync(e2eStateDir, { recursive: true, force: true }); } catch {}
 });
