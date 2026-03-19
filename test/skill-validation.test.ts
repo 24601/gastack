@@ -1213,3 +1213,29 @@ describe('Codex skill', () => {
     expect(content).toContain('codex-review');
   });
 });
+
+// --- Trigger phrase validation ---
+// Ensures all user-facing skills have "Use when" trigger phrases in their description
+// frontmatter, so Claude Code's skill selector can route natural language to the right skill.
+
+describe('Skill trigger phrases', () => {
+  const SKILLS_REQUIRING_TRIGGERS = [
+    'qa', 'qa-only', 'ship', 'review', 'debug', 'office-hours',
+    'plan-ceo-review', 'plan-eng-review', 'plan-design-review',
+    'design-review', 'design-consultation', 'retro', 'document-release',
+    'codex', 'browse', 'setup-browser-cookies',
+  ];
+
+  for (const skill of SKILLS_REQUIRING_TRIGGERS) {
+    test(`${skill}/SKILL.md has "Use when" trigger phrases`, () => {
+      const skillPath = path.join(ROOT, skill, 'SKILL.md');
+      if (!fs.existsSync(skillPath)) return;
+      const content = fs.readFileSync(skillPath, 'utf-8');
+      // Extract frontmatter (between --- markers)
+      const match = content.match(/^---\n([\s\S]*?)\n---/);
+      expect(match).toBeTruthy();
+      const frontmatter = match![1];
+      expect(frontmatter.toLowerCase()).toContain('use when');
+    });
+  }
+});

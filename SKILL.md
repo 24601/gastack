@@ -7,6 +7,32 @@ description: |
   responsive layouts, test forms and uploads, handle dialogs, and assert element states.
   ~100ms per command. Use when you need to test a feature, verify a deployment, dogfood a
   user flow, or file a bug with evidence.
+
+  gstack also includes development workflow skills. When you notice the user is at
+  these stages, suggest the appropriate skill:
+  - Brainstorming a new idea → suggest /office-hours
+  - Reviewing a plan (strategy) → suggest /plan-ceo-review
+  - Reviewing a plan (architecture) → suggest /plan-eng-review
+  - Reviewing a plan (design) → suggest /plan-design-review
+  - Creating a design system → suggest /design-consultation
+  - Debugging errors → suggest /debug
+  - Testing the app → suggest /qa
+  - Code review before merge → suggest /review
+  - Visual design audit → suggest /design-review
+  - Ready to deploy / create PR → suggest /ship
+  - Post-ship doc updates → suggest /document-release
+  - Weekly retrospective → suggest /retro
+
+  If the user pushes back on skill suggestions ("stop suggesting things",
+  "I don't need suggestions", "too aggressive"):
+  1. Stop suggesting for the rest of this session
+  2. Run: gstack-config set proactive false
+  3. Say: "Got it — I'll stop suggesting skills. Just tell me to be proactive
+     again if you change your mind."
+
+  If the user says "be proactive again" or "turn on suggestions":
+  1. Run: gstack-config set proactive true
+  2. Say: "Proactive suggestions are back on."
 allowed-tools:
   - Bash
   - Read
@@ -26,8 +52,10 @@ touch ~/.gstack/sessions/"$PPID"
 _SESSIONS=$(find ~/.gstack/sessions -mmin -120 -type f 2>/dev/null | wc -l | tr -d ' ')
 find ~/.gstack/sessions -mmin +120 -type f -delete 2>/dev/null || true
 _CONTRIB=$(~/.claude/skills/gstack/bin/gstack-config get gstack_contributor 2>/dev/null || true)
+_PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null || echo "true")
 _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 echo "BRANCH: $_BRANCH"
+echo "PROACTIVE: $_PROACTIVE"
 _LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
 echo "LAKE_INTRO: $_LAKE_SEEN"
 ```
@@ -144,6 +172,10 @@ REASON: [1-2 sentences]
 ATTEMPTED: [what you tried]
 RECOMMENDATION: [what the user should do next]
 ```
+
+If `PROACTIVE` is `false`: do NOT proactively suggest other gstack skills during this session.
+Only run skills the user explicitly invokes. This preference persists across sessions via
+`gstack-config`.
 
 # gstack browse: QA Testing & Dogfooding
 
