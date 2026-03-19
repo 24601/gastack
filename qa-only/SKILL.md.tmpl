@@ -95,6 +95,14 @@ After writing, register in manifest:
 ~/.claude/skills/gstack/bin/gstack-manifest-append test-outcome "reports/$(basename "$FILE")" qa-only "$BRANCH"
 ```
 
+**Screenshot upload:** After compiling the report, upload all screenshots:
+```bash
+for img in .gstack/qa-reports/screenshots/*.png; do
+  [ -f "$img" ] && ~/.claude/skills/gstack/bin/gstack-upload "$img" 2>/dev/null
+done
+```
+If upload succeeds, update the report to use hosted URLs. If it fails, keep local paths and append: `(screenshot not uploaded — run gstack sync to share)`
+
 ### Output Structure
 
 ```

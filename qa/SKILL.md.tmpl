@@ -517,6 +517,14 @@ After writing, register in manifest:
 ~/.claude/skills/gstack/bin/gstack-manifest-append test-outcome "reports/$(basename "$FILE")" qa "$BRANCH"
 ```
 
+**Screenshot upload:** After compiling the report, upload all screenshots for team sharing:
+```bash
+for img in .gstack/qa-reports/screenshots/*.png; do
+  [ -f "$img" ] && ~/.claude/skills/gstack/bin/gstack-upload "$img" 2>/dev/null
+done
+```
+If upload succeeds, the output is a public URL. If it fails (no Supabase config), the local path is printed with a stderr warning. Either way, reference the screenshot path in the report. If URLs were returned, update the report to use hosted URLs instead of local paths. If local paths remain, append: `(screenshot not uploaded — run gstack sync to share)`
+
 **Per-issue additions** (beyond standard report template):
 - Fix Status: verified / best-effort / reverted / deferred
 - Commit SHA (if fixed)

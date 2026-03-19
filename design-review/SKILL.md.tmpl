@@ -231,6 +231,14 @@ After writing, register in manifest:
 ~/.claude/skills/gstack/bin/gstack-manifest-append design-audit "reports/$(basename "$FILE")" design-review "$BRANCH"
 ```
 
+**Screenshot upload:** After compiling the report, upload all screenshots:
+```bash
+for img in .gstack/design-reports/screenshots/*.png; do
+  [ -f "$img" ] && ~/.claude/skills/gstack/bin/gstack-upload "$img" 2>/dev/null
+done
+```
+If upload succeeds, update the report to use hosted URLs. If it fails, keep local paths and append: `(screenshot not uploaded — run gstack sync to share)`
+
 **Per-finding additions** (beyond standard design audit report):
 - Fix Status: verified / best-effort / reverted / deferred
 - Commit SHA (if fixed)
