@@ -280,7 +280,8 @@ Count backward from today — how many consecutive days have at least one commit
 Before saving the new snapshot, check for prior retro history:
 
 ```bash
-ls -t .context/retros/*.json 2>/dev/null
+eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
+ls -t $PROJECTS_DIR/$SLUG/retros/*.json 2>/dev/null
 ```
 
 **If prior retros exist:** Load the most recent one using the Read tool. Calculate deltas for key metrics and include a **Trends vs Last Retro** section:
@@ -301,16 +302,17 @@ Deep sessions:      3      →    5           ↑2
 After computing all metrics (including streak) and loading any prior history for comparison, save a JSON snapshot:
 
 ```bash
-mkdir -p .context/retros
+eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
+mkdir -p $PROJECTS_DIR/$SLUG/retros
 ```
 
 Determine the next sequence number for today (substitute the actual date for `$(date +%Y-%m-%d)`):
 ```bash
 # Count existing retros for today to get next sequence number
 today=$(TZ=America/Los_Angeles date +%Y-%m-%d)
-existing=$(ls .context/retros/${today}-*.json 2>/dev/null | wc -l | tr -d ' ')
+existing=$(ls $PROJECTS_DIR/$SLUG/retros/${today}-*.json 2>/dev/null | wc -l | tr -d ' ')
 next=$((existing + 1))
-# Save as .context/retros/${today}-${next}.json
+# Save as $PROJECTS_DIR/$SLUG/retros/${today}-${next}.json
 ```
 
 Use the Write tool to save the JSON file with this schema:
@@ -376,9 +378,10 @@ Include backlog data in the JSON when TODOS.md exists:
   }
 ```
 
-After writing the JSON snapshot, sync to the team store (non-fatal, silent if not configured):
+After writing the JSON snapshot, register in manifest and sync:
 ```bash
-~/.claude/skills/gstack/bin/gstack-sync push-retro ".context/retros/${today}-${next}.json" 2>/dev/null && echo "Synced to team ✓" || true
+~/.claude/skills/gstack/bin/gstack-manifest-append retro "retros/${today}-${next}.json" retro "$BRANCH"
+~/.claude/skills/gstack/bin/gstack-sync push-retro "$PROJECTS_DIR/$SLUG/retros/${today}-${next}.json" 2>/dev/null && echo "Synced to team ✓" || true
 ~/.claude/skills/gstack/bin/gstack-sync push-transcript 2>/dev/null || true
 ```
 
@@ -491,7 +494,7 @@ When the user runs `/retro compare` (or `/retro compare 14d`):
 2. Compute metrics for the immediately prior same-length window using both `--since` and `--until` to avoid overlap (e.g., `--since="14 days ago" --until="7 days ago"` for a 7d window)
 3. Show a side-by-side comparison table with deltas and arrows
 4. Write a brief narrative highlighting the biggest improvements and regressions
-5. Save only the current-window snapshot to `.context/retros/` (same as a normal retro run); do **not** persist the prior-window metrics.
+5. Save only the current-window snapshot to `$PROJECTS_DIR/$SLUG/retros/` (same as a normal retro run); do **not** persist the prior-window metrics.
 
 ## Tone
 
@@ -504,11 +507,11 @@ When the user runs `/retro compare` (or `/retro compare 14d`):
 - Never compare teammates against each other negatively. Each person's section stands on its own.
 - Keep total output around 3000-4500 words (slightly longer to accommodate team sections)
 - Use markdown tables and code blocks for data, prose for narrative
-- Output directly to the conversation — do NOT write to filesystem (except the `.context/retros/` JSON snapshot)
+- Output directly to the conversation — do NOT write to filesystem (except the `$PROJECTS_DIR/$SLUG/retros/` JSON snapshot)
 
 ## Important Rules
 
-- ALL narrative output goes directly to the user in the conversation. The ONLY file written is the `.context/retros/` JSON snapshot.
+- ALL narrative output goes directly to the user in the conversation. The ONLY file written is the `$PROJECTS_DIR/$SLUG/retros/` JSON snapshot.
 - Use `origin/<default>` for all git queries (not local main which may be stale)
 - Convert all timestamps to Pacific time for display (use `TZ=America/Los_Angeles`)
 - If the window has zero commits, say so and suggest a different window
