@@ -60,14 +60,15 @@ CREATE VIEW crash_clusters AS
 SELECT
   error_class,
   gstack_version,
-  COUNT(*) as count,
-  COUNT(DISTINCT installation_id) as unique_users,
+  COUNT(*) as total_occurrences,
+  COUNT(DISTINCT installation_id) as identified_users,  -- community tier only
+  COUNT(*) - COUNT(installation_id) as anonymous_occurrences,  -- events without installation_id
   MIN(event_timestamp) as first_seen,
   MAX(event_timestamp) as last_seen
 FROM telemetry_events
 WHERE outcome = 'error' AND error_class IS NOT NULL
 GROUP BY error_class, gstack_version
-ORDER BY count DESC;
+ORDER BY total_occurrences DESC;
 
 -- Skill sequence co-occurrence view
 CREATE VIEW skill_sequences AS

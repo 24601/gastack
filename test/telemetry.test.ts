@@ -139,18 +139,18 @@ describe('gstack-telemetry-log', () => {
 });
 
 describe('.pending marker', () => {
-  test('finalizes stale .pending as outcome:unknown', () => {
+  test('finalizes stale .pending from another session as outcome:unknown', () => {
     setConfig('telemetry', 'anonymous');
 
-    // Write a fake .pending marker
+    // Write a fake .pending marker from a different session
     const analyticsDir = path.join(tmpDir, 'analytics');
     fs.mkdirSync(analyticsDir, { recursive: true });
     fs.writeFileSync(
-      path.join(analyticsDir, '.pending'),
+      path.join(analyticsDir, '.pending-old-123'),
       '{"skill":"old-skill","ts":"2026-03-18T00:00:00Z","session_id":"old-123","gstack_version":"0.6.4"}'
     );
 
-    // Run telemetry-log — should finalize the pending marker first
+    // Run telemetry-log with a DIFFERENT session — should finalize the old pending marker
     run(`${BIN}/gstack-telemetry-log --skill qa --duration 50 --outcome success --session-id new-456`);
 
     const events = parseJsonl();
@@ -166,26 +166,43 @@ describe('.pending marker', () => {
     expect(events[1].outcome).toBe('success');
   });
 
-  test('.pending file is removed after finalization', () => {
+  test('.pending-SESSION file is removed after finalization', () => {
     setConfig('telemetry', 'anonymous');
 
     const analyticsDir = path.join(tmpDir, 'analytics');
     fs.mkdirSync(analyticsDir, { recursive: true });
-    const pendingPath = path.join(analyticsDir, '.pending');
-    fs.writeFileSync(pendingPath, '{"skill":"stale","ts":"2026-03-18T00:00:00Z","session_id":"s","gstack_version":"v"}');
+    const pendingPath = path.join(analyticsDir, '.pending-stale-session');
+    fs.writeFileSync(pendingPath, '{"skill":"stale","ts":"2026-03-18T00:00:00Z","session_id":"stale-session","gstack_version":"v"}');
 
     run(`${BIN}/gstack-telemetry-log --skill qa --duration 50 --outcome success --session-id new-456`);
 
     expect(fs.existsSync(pendingPath)).toBe(false);
   });
 
-  test('tier=off still clears .pending', () => {
+  test('does not finalize own session pending marker', () => {
+    setConfig('telemetry', 'anonymous');
+
+    const analyticsDir = path.join(tmpDir, 'analytics');
+    fs.mkdirSync(analyticsDir, { recursive: true });
+    // Create pending for same session ID we'll use
+    const pendingPath = path.join(analyticsDir, '.pending-same-session');
+    fs.writeFileSync(pendingPath, '{"skill":"in-flight","ts":"2026-03-18T00:00:00Z","session_id":"same-session","gstack_version":"v"}');
+
+    run(`${BIN}/gstack-telemetry-log --skill qa --duration 50 --outcome success --session-id same-session`);
+
+    // Should only have 1 event (the new one), not finalize own pending
+    const events = parseJsonl();
+    expect(events).toHaveLength(1);
+    expect(events[0].skill).toBe('qa');
+  });
+
+  test('tier=off still clears own session pending', () => {
     setConfig('telemetry', 'off');
 
     const analyticsDir = path.join(tmpDir, 'analytics');
     fs.mkdirSync(analyticsDir, { recursive: true });
-    const pendingPath = path.join(analyticsDir, '.pending');
-    fs.writeFileSync(pendingPath, '{"skill":"stale","ts":"2026-03-18T00:00:00Z","session_id":"s","gstack_version":"v"}');
+    const pendingPath = path.join(analyticsDir, '.pending-off-123');
+    fs.writeFileSync(pendingPath, '{"skill":"stale","ts":"2026-03-18T00:00:00Z","session_id":"off-123","gstack_version":"v"}');
 
     run(`${BIN}/gstack-telemetry-log --skill qa --duration 50 --outcome success --session-id off-123`);
 

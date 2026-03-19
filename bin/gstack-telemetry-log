@@ -21,7 +21,7 @@ GSTACK_DIR="${GSTACK_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 STATE_DIR="${GSTACK_STATE_DIR:-$HOME/.gstack}"
 ANALYTICS_DIR="$STATE_DIR/analytics"
 JSONL_FILE="$ANALYTICS_DIR/skill-usage.jsonl"
-PENDING_FILE="$ANALYTICS_DIR/.pending"
+PENDING_DIR="$ANALYTICS_DIR"  # .pending-* files live here
 CONFIG_CMD="$GSTACK_DIR/bin/gstack-config"
 VERSION_FILE="$GSTACK_DIR/VERSION"
 
@@ -58,16 +58,23 @@ case "$TIER" in
 esac
 
 if [ "$TIER" = "off" ]; then
-  # Still clear any pending marker even if telemetry is off
-  rm -f "$PENDING_FILE" 2>/dev/null || true
+  # Still clear pending markers for this session even if telemetry is off
+  [ -n "$SESSION_ID" ] && rm -f "$PENDING_DIR/.pending-$SESSION_ID" 2>/dev/null || true
   exit 0
 fi
 
-# ─── Finalize stale .pending marker ─────────────────────────
-if [ -f "$PENDING_FILE" ]; then
-  # .pending contains a JSON fragment: {"skill":"X","ts":"Y","session_id":"Z","gstack_version":"V"}
-  PENDING_DATA="$(cat "$PENDING_FILE" 2>/dev/null || true)"
-  rm -f "$PENDING_FILE" 2>/dev/null || true
+# ─── Finalize stale .pending markers ────────────────────────
+# Each session gets its own .pending-$SESSION_ID file to avoid races
+# between concurrent sessions. Finalize any that don't match our session.
+for PFILE in "$PENDING_DIR"/.pending-*; do
+  [ -f "$PFILE" ] || continue
+  # Skip our own session's marker (it's still in-flight)
+  PFILE_BASE="$(basename "$PFILE")"
+  PFILE_SID="${PFILE_BASE#.pending-}"
+  [ "$PFILE_SID" = "$SESSION_ID" ] && continue
+
+  PENDING_DATA="$(cat "$PFILE" 2>/dev/null || true)"
+  rm -f "$PFILE" 2>/dev/null || true
   if [ -n "$PENDING_DATA" ]; then
     # Extract fields from pending marker using grep -o + awk
     P_SKILL="$(echo "$PENDING_DATA" | grep -o '"skill":"[^"]*"' | head -1 | awk -F'"' '{print $4}')"
@@ -82,7 +89,10 @@ if [ -f "$PENDING_FILE" ]; then
     printf '{"v":1,"ts":"%s","event_type":"skill_run","skill":"%s","session_id":"%s","gstack_version":"%s","os":"%s","arch":"%s","duration_s":null,"outcome":"unknown","error_class":null,"used_browse":false,"sessions":1}\n' \
       "$P_TS" "$P_SKILL" "$P_SID" "$P_VER" "$P_OS" "$P_ARCH" >> "$JSONL_FILE" 2>/dev/null || true
   fi
-fi
+done
+
+# Clear our own session's pending marker (we're about to log the real event)
+[ -n "$SESSION_ID" ] && rm -f "$PENDING_DIR/.pending-$SESSION_ID" 2>/dev/null || true
 
 # ─── Collect metadata ────────────────────────────────────────
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo "")"
