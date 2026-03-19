@@ -171,10 +171,10 @@ mkdir -p "$REPORT_DIR/screenshots"
 
 Before falling back to git diff heuristics, check for richer test plan sources:
 
-1. **Project-scoped test plans:** Check `~/.gstack/projects/` for recent `*-test-plan-*.md` files for this repo
+1. **Project-scoped test plans:** Check the project plans directory for recent test plans
    ```bash
    eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
-   ls -t ~/.gstack/projects/$SLUG/*-test-plan-*.md 2>/dev/null | head -1
+   ls -t $PROJECTS_DIR/$SLUG/plans/*-test-plan-*.md 2>/dev/null | head -1
    ```
 2. **Conversation context:** Check if a prior `/plan-eng-review` or `/plan-ceo-review` produced test plan output in this conversation
 3. **Use whichever source is richer.** Fall back to git diff analysis only if neither is available.
@@ -465,11 +465,40 @@ Write the report to both local and project-scoped locations:
 **Local:** `.gstack/qa-reports/qa-report-{domain}-{YYYY-MM-DD}.md`
 
 **Project-scoped:** Write test outcome artifact for cross-session context:
+
 ```bash
 eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
-mkdir -p ~/.gstack/projects/$SLUG
+DATE=$(date +%Y-%m-%d)
 ```
-Write to `~/.gstack/projects/{slug}/{user}-{branch}-test-outcome-{datetime}.md`
+
+```bash
+mkdir -p $PROJECTS_DIR/$SLUG/reports
+FILE="$PROJECTS_DIR/$SLUG/reports/$BRANCH-test-outcome-$DATE.md"
+[ -f "$FILE" ] && FILE="$PROJECTS_DIR/$SLUG/reports/$BRANCH-test-outcome-$DATE-$(date +%H%M).md"
+```
+
+Write to the file path resolved above. Include YAML frontmatter:
+```yaml
+---
+type: test-outcome
+branch: {branch}
+date: {YYYY-MM-DD}
+skill: qa-only
+---
+```
+
+After writing, register in manifest:
+```bash
+~/.claude/skills/gstack/bin/gstack-manifest-append test-outcome "reports/$(basename "$FILE")" qa-only "$BRANCH"
+```
+
+**Screenshot upload:** After compiling the report, upload all screenshots:
+```bash
+for img in .gstack/qa-reports/screenshots/*.png; do
+  [ -f "$img" ] && ~/.claude/skills/gstack/bin/gstack-upload "$img" 2>/dev/null
+done
+```
+If upload succeeds, update the report to use hosted URLs. If it fails, keep local paths and append: `(screenshot not uploaded — run gstack sync to share)`
 
 ### Output Structure
 

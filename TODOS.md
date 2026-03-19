@@ -427,24 +427,11 @@ Implemented as `supabase/functions/weekly-digest/index.ts`. pg_cron Monday 9am U
 
 ## Infrastructure
 
-### /setup-gstack-upload skill (S3 bucket)
+### ~~setup-gstack-upload~~ + ~~gstack-upload helper~~ — SUPERSEDED
 
-**What:** Configure S3 bucket for image hosting. One-time setup for visual PR annotations.
-
-**Why:** Prerequisite for visual PR annotations in /ship and /review.
-
-**Effort:** M
-**Priority:** P2
-
-### gstack-upload helper
-
-**What:** `browse/bin/gstack-upload` — upload file to S3, return public URL.
-
-**Why:** Shared utility for all skills that need to embed images in PRs.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** /setup-gstack-upload
+Replaced by Supabase Storage (migration 008) + `bin/gstack-upload` + `lib/upload.ts`.
+Screenshots upload to the team's Supabase Storage bucket with public CDN URLs.
+No S3 needed.
 
 ### WebM to GIF conversion
 

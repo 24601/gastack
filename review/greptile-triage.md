@@ -212,7 +212,7 @@ After appending to both history files, sync each triage entry to the team store.
 cat > /tmp/gstack-greptile-entry.json << 'GEOF'
 {
   "date": "<YYYY-MM-DD>",
-  "repo": "<owner/repo from REMOTE_SLUG>",
+  "repo": "<owner/repo from SLUG>",
   "triage_type": "<fp|fix|already-fixed>",
   "file_pattern": "<file-pattern>",
   "category": "<category>"

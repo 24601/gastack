@@ -592,9 +592,10 @@ Compare screenshots and observations across pages for:
 **Project-scoped:**
 ```bash
 eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
-mkdir -p ~/.gstack/projects/$SLUG
+DATE=$(date +%Y-%m-%d)
+mkdir -p $PROJECTS_DIR/$SLUG/reports
 ```
-Write to: `~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md`
+Write to: `$PROJECTS_DIR/$SLUG/reports/design-{domain}-$DATE.md`
 
 **Baseline:** Write `design-baseline.json` for regression mode:
 ```json
@@ -809,11 +810,40 @@ Write the report to both local and project-scoped locations:
 **Local:** `.gstack/design-reports/design-audit-{domain}-{YYYY-MM-DD}.md`
 
 **Project-scoped:**
+
 ```bash
 eval $(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
-mkdir -p ~/.gstack/projects/$SLUG
+DATE=$(date +%Y-%m-%d)
 ```
-Write to `~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md`
+
+```bash
+mkdir -p $PROJECTS_DIR/$SLUG/reports
+FILE="$PROJECTS_DIR/$SLUG/reports/design-{domain}-$DATE.md"
+[ -f "$FILE" ] && FILE="$PROJECTS_DIR/$SLUG/reports/design-{domain}-$DATE-$(date +%H%M).md"
+```
+
+Write to the file path resolved above. Include YAML frontmatter:
+```yaml
+---
+type: design-audit
+branch: {branch}
+date: {YYYY-MM-DD}
+skill: design-review
+---
+```
+
+After writing, register in manifest:
+```bash
+~/.claude/skills/gstack/bin/gstack-manifest-append design-audit "reports/$(basename "$FILE")" design-review "$BRANCH"
+```
+
+**Screenshot upload:** After compiling the report, upload all screenshots:
+```bash
+for img in .gstack/design-reports/screenshots/*.png; do
+  [ -f "$img" ] && ~/.claude/skills/gstack/bin/gstack-upload "$img" 2>/dev/null
+done
+```
+If upload succeeds, update the report to use hosted URLs. If it fails, keep local paths and append: `(screenshot not uploaded — run gstack sync to share)`
 
 **Per-finding additions** (beyond standard design audit report):
 - Fix Status: verified / best-effort / reverted / deferred
