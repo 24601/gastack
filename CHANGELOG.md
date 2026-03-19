@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.0] - 2026-03-19 — Multi-AI Second Opinion
+
+**`/codex` — get an independent second opinion from a completely different AI.**
+
+Three modes. `/codex review` runs OpenAI's Codex CLI against your diff and gives a pass/fail gate — if Codex finds critical issues (`[P1]`), it fails. `/codex challenge` goes adversarial: it tries to find ways your code will fail in production, thinking like an attacker and a chaos engineer. `/codex <anything>` opens a conversation with Codex about your codebase, with session continuity so follow-ups remember context.
+
+When both `/review` (Claude) and `/codex review` have run, you get a cross-model analysis showing which findings overlap and which are unique to each AI — building intuition for when to trust which system.
+
+**Integrated everywhere.** After `/review` finishes, it offers a Codex second opinion. During `/ship`, you can run Codex review as an optional gate before pushing. In `/plan-eng-review`, Codex can independently critique your plan before the engineering review begins. All Codex results show up in the Review Readiness Dashboard.
+
 ## [0.7.0] - 2026-03-18 — YC Office Hours
 
 **`/office-hours` — sit down with a YC partner before you write a line of code.**
