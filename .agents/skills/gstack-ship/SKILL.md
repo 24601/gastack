@@ -660,7 +660,7 @@ Coverage line: `Test Coverage Audit: N new code paths. M covered (X%). K tests g
 
 Review the diff for structural issues that tests don't catch.
 
-1. Read `.agents/skills/gstack-review/checklist.md`. If the file cannot be read, **STOP** and report the error.
+1. Read `.agents/skills/gstack/review/checklist.md`. If the file cannot be read, **STOP** and report the error.
 
 2. Run `git diff origin/<base>` to get the full diff (scoped to feature changes against the freshly-fetched base branch).
 
@@ -682,7 +682,7 @@ eval $(~/.codex/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 
 1. **Check for DESIGN.md.** If `DESIGN.md` or `design-system.md` exists in the repo root, read it. All design findings are calibrated against it — patterns blessed in DESIGN.md are not flagged. If not found, use universal design principles.
 
-2. **Read `.agents/skills/gstack-review/design-checklist.md`.** If the file cannot be read, skip design review with a note: "Design checklist not found — skipping design review."
+2. **Read `.agents/skills/gstack/review/design-checklist.md`.** If the file cannot be read, skip design review with a note: "Design checklist not found — skipping design review."
 
 3. **Read each changed frontend file** (full file, not just diff hunks). Frontend files are identified by the patterns listed in the checklist.
 
@@ -731,7 +731,7 @@ Save the review output — it goes into the PR body in Step 8.
 
 ## Step 3.75: Address Greptile review comments (if PR exists)
 
-Read `.agents/skills/gstack-review/greptile-triage.md` and follow the fetch, filter, classify, and **escalation detection** steps.
+Read `.agents/skills/gstack/review/greptile-triage.md` and follow the fetch, filter, classify, and **escalation detection** steps.
 
 **If no PR exists, `gh` fails, API returns an error, or there are zero Greptile comments:** Skip this step silently. Continue to Step 4.
 
@@ -854,7 +854,7 @@ If Codex is not available, skip silently. Continue to Step 4.
 
 Cross-reference the project's TODOS.md against the changes being shipped. Mark completed items automatically; prompt only if the file is missing or disorganized.
 
-Read `.agents/skills/gstack-review/TODOS-format.md` for the canonical format reference.
+Read `.agents/skills/gstack/review/TODOS-format.md` for the canonical format reference.
 
 **1. Check if TODOS.md exists** in the repository root.
 

@@ -1355,7 +1355,7 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
     // Replace remaining hardcoded Claude paths with host-appropriate paths
     content = content.replace(/~\/\.claude\/skills\/gstack/g, ctx.paths.skillRoot);
     content = content.replace(/\.claude\/skills\/gstack/g, ctx.paths.localSkillRoot);
-    content = content.replace(/\.claude\/skills\/review/g, '.agents/skills/gstack-review');
+    content = content.replace(/\.claude\/skills\/review/g, '.agents/skills/gstack/review');
     content = content.replace(/\.claude\/skills/g, '.agents/skills');
   }
 

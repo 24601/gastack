@@ -214,7 +214,7 @@ Before reviewing code quality, check: **did they build what was requested — no
 
 ## Step 2: Read the checklist
 
-Read `.agents/skills/gstack-review/checklist.md`.
+Read `.agents/skills/gstack/review/checklist.md`.
 
 **If the file cannot be read, STOP and report the error.** Do not proceed without the checklist.
 
@@ -222,7 +222,7 @@ Read `.agents/skills/gstack-review/checklist.md`.
 
 ## Step 2.5: Check for Greptile review comments
 
-Read `.agents/skills/gstack-review/greptile-triage.md` and follow the fetch, filter, classify, and **escalation detection** steps.
+Read `.agents/skills/gstack/review/greptile-triage.md` and follow the fetch, filter, classify, and **escalation detection** steps.
 
 **If no PR exists, `gh` fails, API returns an error, or there are zero Greptile comments:** Skip this step silently. Greptile integration is additive — the review works without it.
 
@@ -271,7 +271,7 @@ eval $(~/.codex/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 
 1. **Check for DESIGN.md.** If `DESIGN.md` or `design-system.md` exists in the repo root, read it. All design findings are calibrated against it — patterns blessed in DESIGN.md are not flagged. If not found, use universal design principles.
 
-2. **Read `.agents/skills/gstack-review/design-checklist.md`.** If the file cannot be read, skip design review with a note: "Design checklist not found — skipping design review."
+2. **Read `.agents/skills/gstack/review/design-checklist.md`.** If the file cannot be read, skip design review with a note: "Design checklist not found — skipping design review."
 
 3. **Read each changed frontend file** (full file, not just diff hunks). Frontend files are identified by the patterns listed in the checklist.
 
