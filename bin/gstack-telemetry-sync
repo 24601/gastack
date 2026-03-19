@@ -75,8 +75,13 @@ while IFS= read -r LINE; do
   [ -z "$LINE" ] && continue
   echo "$LINE" | grep -q '^{' || continue
 
-  # Strip _repo_slug and _branch (local-only fields)
-  CLEAN="$(echo "$LINE" | sed 's/,"_repo_slug":"[^"]*"//g; s/,"_branch":"[^"]*"//g')"
+  # Strip local-only fields + map JSONL field names to Postgres column names
+  CLEAN="$(echo "$LINE" | sed \
+    -e 's/,"_repo_slug":"[^"]*"//g' \
+    -e 's/,"_branch":"[^"]*"//g' \
+    -e 's/"v":/"schema_version":/g' \
+    -e 's/"ts":/"event_timestamp":/g' \
+    -e 's/"sessions":/"concurrent_sessions":/g')"
 
   # If anonymous tier, strip installation_id
   if [ "$TIER" = "anonymous" ]; then
