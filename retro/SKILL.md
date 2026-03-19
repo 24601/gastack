@@ -267,6 +267,9 @@ find . -name '*.test.*' -o -name '*.spec.*' -o -name '*_test.*' -o -name '*_spec
 # 11. Regression test commits in window
 git log origin/<default> --since="<window>" --oneline --grep="test(qa):" --grep="test(design):" --grep="test: coverage"
 
+# 12. gstack skill usage telemetry (if available)
+cat ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
+
 # 12. Test files changed in window
 git log origin/<default> --since="<window>" --format="" --name-only | grep -E '\.(test|spec)\.' | sort -u | wc -l
 ```
@@ -318,6 +321,19 @@ Include in the metrics table:
 ```
 
 If TODOS.md doesn't exist, skip the Backlog Health row.
+
+**gstack Usage (if telemetry data exists):** Read `~/.gstack/analytics/skill-usage.jsonl` (fetched in Step 1, command 12). Filter events with `event_type: skill_run` within the retro time window (compare `ts` field). Compute:
+- Total skill runs in window
+- Top 3 skills by run count
+- Success rate: `success / total * 100`
+- Total duration (sum `duration_s`)
+
+Include in the metrics table:
+```
+| gstack usage | N skill runs · top: /skill1 (X), /skill2 (Y) · Z% success rate |
+```
+
+If the file doesn't exist or has no events in the window, skip the gstack usage row.
 
 ### Step 3: Commit Time Distribution
 
