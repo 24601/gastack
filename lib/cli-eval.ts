@@ -310,7 +310,7 @@ async function cmdPush(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const { validateEvalResult } = await import('./eval-format');
+  const { validateEvalResult, normalizeToLegacy } = await import('./eval-format');
   const validation = validateEvalResult(data);
   if (!validation.valid) {
     console.error('Validation errors:');
@@ -318,12 +318,13 @@ async function cmdPush(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Copy to local eval dir
+  // Normalize to legacy format for local tooling (eval:summary, eval:trend, eval:compare)
+  const legacyData = normalizeToLegacy(data as any);
   const basename = path.basename(resolved);
   const localPath = path.join(EVAL_DIR, basename);
   fs.mkdirSync(EVAL_DIR, { recursive: true });
-  fs.copyFileSync(resolved, localPath);
-  console.log(`Saved to ${localPath}`);
+  fs.writeFileSync(localPath, JSON.stringify(legacyData, null, 2) + '\n');
+  console.log(`Saved to ${localPath} (normalized to legacy format)`);
 
   // Push to team store (non-fatal)
   try {
