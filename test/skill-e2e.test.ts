@@ -2770,13 +2770,17 @@ Output the diagram directly.`,
 
     // Check output contains coverage diagram elements
     const output = result.output || '';
-    const hasGap = output.includes('GAP') || output.includes('gap') || output.includes('NO TEST');
-    const hasTested = output.includes('TESTED') || output.includes('tested') || output.includes('✓');
-    const hasCoverage = output.includes('COVERAGE') || output.includes('coverage') || output.includes('paths tested');
+    const outputLower = output.toLowerCase();
+    const hasGap = outputLower.includes('gap') || outputLower.includes('no test');
+    const hasTested = outputLower.includes('tested') || output.includes('✓') || output.includes('★');
+    const hasCoverage = outputLower.includes('coverage') || outputLower.includes('paths tested');
 
     console.log(`Output has GAP markers: ${hasGap}`);
     console.log(`Output has TESTED markers: ${hasTested}`);
     console.log(`Output has coverage summary: ${hasCoverage}`);
+
+    // The agent MUST produce a coverage diagram with gap and tested markers
+    expect(hasGap || hasTested).toBe(true);
 
     // At minimum, the agent should have read the source and test files
     const readCalls = result.toolCalls.filter(tc => tc.tool === 'Read');
@@ -2836,13 +2840,17 @@ Output the diagram directly.`,
 
     // Check output contains coverage diagram elements
     const output = result.output || '';
-    const hasGap = output.includes('GAP') || output.includes('gap') || output.includes('NO TEST');
-    const hasTested = output.includes('TESTED') || output.includes('tested') || output.includes('✓');
-    const hasCoverage = output.includes('COVERAGE') || output.includes('coverage') || output.includes('paths tested');
+    const outputLower = output.toLowerCase();
+    const hasGap = outputLower.includes('gap') || outputLower.includes('no test');
+    const hasTested = outputLower.includes('tested') || output.includes('✓') || output.includes('★');
+    const hasCoverage = outputLower.includes('coverage') || outputLower.includes('paths tested');
 
     console.log(`Output has GAP markers: ${hasGap}`);
     console.log(`Output has TESTED markers: ${hasTested}`);
     console.log(`Output has coverage summary: ${hasCoverage}`);
+
+    // The agent MUST produce a coverage diagram with gap and tested markers
+    expect(hasGap || hasTested).toBe(true);
 
     // At minimum, the agent should have read the source and test files
     const readCalls = result.toolCalls.filter(tc => tc.tool === 'Read');
