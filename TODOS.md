@@ -173,7 +173,7 @@
 
 **Effort:** S
 **Priority:** P2
-**Depends on:** Test failure ownership triage (bin/gstack-repo-mode + {{TEST_FAILURE_TRIAGE}})
+**Depends on:** Test failure ownership triage (bin/gstack-repo-mode + test failure triage in ship/SKILL.md)
 
 ### Post-deploy verification (ship + browse)
 
