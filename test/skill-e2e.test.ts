@@ -2911,6 +2911,125 @@ Write the full output (including the GATE verdict) to ${codexDir}/codex-output.m
   }, 360_000);
 });
 
+// --- Office Hours Spec Review E2E ---
+
+describeIfSelected('Office Hours Spec Review E2E', ['office-hours-spec-review'], () => {
+  let ohDir: string;
+
+  beforeAll(() => {
+    ohDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-oh-spec-'));
+    const run = (cmd: string, args: string[]) =>
+      spawnSync(cmd, args, { cwd: ohDir, stdio: 'pipe', timeout: 5000 });
+
+    run('git', ['init', '-b', 'main']);
+    run('git', ['config', 'user.email', 'test@test.com']);
+    run('git', ['config', 'user.name', 'Test']);
+    fs.writeFileSync(path.join(ohDir, 'README.md'), '# Test Project\n');
+    run('git', ['add', '.']);
+    run('git', ['commit', '-m', 'init']);
+
+    // Copy office-hours skill
+    fs.mkdirSync(path.join(ohDir, 'office-hours'), { recursive: true });
+    fs.copyFileSync(
+      path.join(ROOT, 'office-hours', 'SKILL.md'),
+      path.join(ohDir, 'office-hours', 'SKILL.md'),
+    );
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(ohDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test('/office-hours SKILL.md contains spec review loop', async () => {
+    const result = await runSkillTest({
+      prompt: `Read office-hours/SKILL.md. I want to understand the spec review loop.
+
+Summarize what the "Spec Review Loop" section does — specifically:
+1. How many dimensions does the reviewer check?
+2. What tool is used to dispatch the reviewer?
+3. What's the maximum number of iterations?
+4. What metrics are tracked?
+
+Write your summary to ${ohDir}/spec-review-summary.md`,
+      workingDirectory: ohDir,
+      maxTurns: 8,
+      timeout: 120_000,
+      testName: 'office-hours-spec-review',
+      runId,
+    });
+
+    logCost('/office-hours spec review', result);
+    recordE2E('/office-hours-spec-review', 'Office Hours Spec Review E2E', result);
+    expect(result.exitReason).toBe('success');
+
+    const summaryPath = path.join(ohDir, 'spec-review-summary.md');
+    if (fs.existsSync(summaryPath)) {
+      const summary = fs.readFileSync(summaryPath, 'utf-8').toLowerCase();
+      expect(summary).toMatch(/5.*dimension|dimension.*5|completeness|consistency|clarity|scope|feasibility/);
+      expect(summary).toMatch(/agent|subagent/);
+      expect(summary).toMatch(/3.*iteration|iteration.*3|maximum.*3/);
+    }
+  }, 180_000);
+});
+
+// --- Plan CEO Review Benefits-From E2E ---
+
+describeIfSelected('Plan CEO Review Benefits-From E2E', ['plan-ceo-review-benefits'], () => {
+  let benefitsDir: string;
+
+  beforeAll(() => {
+    benefitsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-benefits-'));
+    const run = (cmd: string, args: string[]) =>
+      spawnSync(cmd, args, { cwd: benefitsDir, stdio: 'pipe', timeout: 5000 });
+
+    run('git', ['init', '-b', 'main']);
+    run('git', ['config', 'user.email', 'test@test.com']);
+    run('git', ['config', 'user.name', 'Test']);
+    fs.writeFileSync(path.join(benefitsDir, 'README.md'), '# Test Project\n');
+    run('git', ['add', '.']);
+    run('git', ['commit', '-m', 'init']);
+
+    fs.mkdirSync(path.join(benefitsDir, 'plan-ceo-review'), { recursive: true });
+    fs.copyFileSync(
+      path.join(ROOT, 'plan-ceo-review', 'SKILL.md'),
+      path.join(benefitsDir, 'plan-ceo-review', 'SKILL.md'),
+    );
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(benefitsDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test('/plan-ceo-review SKILL.md contains prerequisite skill offer', async () => {
+    const result = await runSkillTest({
+      prompt: `Read plan-ceo-review/SKILL.md. Search for sections about "Prerequisite" or "office-hours" or "design doc found".
+
+Summarize what happens when no design doc is found — specifically:
+1. Is /office-hours offered as a prerequisite?
+2. What options does the user get?
+3. Is there a mid-session detection for when the user seems lost?
+
+Write your summary to ${benefitsDir}/benefits-summary.md`,
+      workingDirectory: benefitsDir,
+      maxTurns: 8,
+      timeout: 120_000,
+      testName: 'plan-ceo-review-benefits',
+      runId,
+    });
+
+    logCost('/plan-ceo-review benefits-from', result);
+    recordE2E('/plan-ceo-review-benefits', 'Plan CEO Review Benefits-From E2E', result);
+    expect(result.exitReason).toBe('success');
+
+    const summaryPath = path.join(benefitsDir, 'benefits-summary.md');
+    if (fs.existsSync(summaryPath)) {
+      const summary = fs.readFileSync(summaryPath, 'utf-8').toLowerCase();
+      expect(summary).toMatch(/office.hours/);
+      expect(summary).toMatch(/design doc|no design/i);
+    }
+  }, 180_000);
+});
+
 // --- Land-and-Deploy / Canary / Benchmark / Setup-Deploy E2E ---
 
 describeIfSelected('Land-and-Deploy skill E2E', ['land-and-deploy-workflow'], () => {
@@ -2918,7 +3037,6 @@ describeIfSelected('Land-and-Deploy skill E2E', ['land-and-deploy-workflow'], ()
 
   beforeAll(() => {
     landDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-land-deploy-'));
-
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: landDir, stdio: 'pipe', timeout: 5000 });
 
@@ -2926,19 +3044,16 @@ describeIfSelected('Land-and-Deploy skill E2E', ['land-and-deploy-workflow'], ()
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
-    // Create initial app
     fs.writeFileSync(path.join(landDir, 'app.ts'), 'export function hello() { return "world"; }\n');
     fs.writeFileSync(path.join(landDir, 'fly.toml'), 'app = "test-app"\n\n[http_service]\n  internal_port = 3000\n');
     run('git', ['add', '.']);
     run('git', ['commit', '-m', 'initial']);
 
-    // Create feature branch with changes
     run('git', ['checkout', '-b', 'feat/add-deploy']);
     fs.writeFileSync(path.join(landDir, 'app.ts'), 'export function hello() { return "deployed"; }\n');
     run('git', ['add', '.']);
     run('git', ['commit', '-m', 'feat: update hello']);
 
-    // Copy skill
     copyDirSync(path.join(ROOT, 'land-and-deploy'), path.join(landDir, 'land-and-deploy'));
   });
 
@@ -2975,7 +3090,6 @@ Do NOT use AskUserQuestion. Do NOT run gh or fly commands.`,
     recordE2E('/land-and-deploy workflow', 'Land-and-Deploy skill E2E', result);
     expect(result.exitReason).toBe('success');
 
-    // Verify deploy config was written to CLAUDE.md
     const claudeMd = path.join(landDir, 'CLAUDE.md');
     if (fs.existsSync(claudeMd)) {
       const content = fs.readFileSync(claudeMd, 'utf-8');
@@ -2983,7 +3097,6 @@ Do NOT use AskUserQuestion. Do NOT run gh or fly commands.`,
       expect(hasFly).toBe(true);
     }
 
-    // Verify deploy report directory was created
     const reportDir = path.join(landDir, '.gstack', 'deploy-reports');
     expect(fs.existsSync(reportDir)).toBe(true);
   }, 180_000);
@@ -2994,7 +3107,6 @@ describeIfSelected('Canary skill E2E', ['canary-workflow'], () => {
 
   beforeAll(() => {
     canaryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-canary-'));
-
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: canaryDir, stdio: 'pipe', timeout: 5000 });
 
@@ -3006,7 +3118,6 @@ describeIfSelected('Canary skill E2E', ['canary-workflow'], () => {
     run('git', ['add', '.']);
     run('git', ['commit', '-m', 'initial']);
 
-    // Copy skill
     copyDirSync(path.join(ROOT, 'canary'), path.join(canaryDir, 'canary'));
   });
 
@@ -3043,10 +3154,7 @@ Just create the directory structure and report files showing the correct schema.
     recordE2E('/canary workflow', 'Canary skill E2E', result);
     expect(result.exitReason).toBe('success');
 
-    // Verify directory structure
     expect(fs.existsSync(path.join(canaryDir, '.gstack', 'canary-reports'))).toBe(true);
-
-    // Verify baseline or report was created
     const reportDir = path.join(canaryDir, '.gstack', 'canary-reports');
     const files = fs.readdirSync(reportDir, { recursive: true }) as string[];
     expect(files.length).toBeGreaterThan(0);
@@ -3058,7 +3166,6 @@ describeIfSelected('Benchmark skill E2E', ['benchmark-workflow'], () => {
 
   beforeAll(() => {
     benchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-benchmark-'));
-
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: benchDir, stdio: 'pipe', timeout: 5000 });
 
@@ -3070,7 +3177,6 @@ describeIfSelected('Benchmark skill E2E', ['benchmark-workflow'], () => {
     run('git', ['add', '.']);
     run('git', ['commit', '-m', 'initial']);
 
-    // Copy skill
     copyDirSync(path.join(ROOT, 'benchmark'), path.join(benchDir, 'benchmark'));
   });
 
@@ -3109,10 +3215,7 @@ Just create the files showing the correct schema and report format.`,
     recordE2E('/benchmark workflow', 'Benchmark skill E2E', result);
     expect(result.exitReason).toBe('success');
 
-    // Verify directory structure
     expect(fs.existsSync(path.join(benchDir, '.gstack', 'benchmark-reports'))).toBe(true);
-
-    // Verify baseline was created
     const baselineDir = path.join(benchDir, '.gstack', 'benchmark-reports', 'baselines');
     if (fs.existsSync(baselineDir)) {
       const files = fs.readdirSync(baselineDir);
@@ -3126,7 +3229,6 @@ describeIfSelected('Setup-Deploy skill E2E', ['setup-deploy-workflow'], () => {
 
   beforeAll(() => {
     setupDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-setup-deploy-'));
-
     const run = (cmd: string, args: string[]) =>
       spawnSync(cmd, args, { cwd: setupDir, stdio: 'pipe', timeout: 5000 });
 
@@ -3134,13 +3236,11 @@ describeIfSelected('Setup-Deploy skill E2E', ['setup-deploy-workflow'], () => {
     run('git', ['config', 'user.email', 'test@test.com']);
     run('git', ['config', 'user.name', 'Test']);
 
-    // Create a project with fly.toml
     fs.writeFileSync(path.join(setupDir, 'app.ts'), 'export default { port: 3000 };\n');
     fs.writeFileSync(path.join(setupDir, 'fly.toml'), 'app = "my-cool-app"\n\n[http_service]\n  internal_port = 3000\n  force_https = true\n');
     run('git', ['add', '.']);
     run('git', ['commit', '-m', 'initial']);
 
-    // Copy skill
     copyDirSync(path.join(ROOT, 'setup-deploy'), path.join(setupDir, 'setup-deploy'));
   });
 
@@ -3174,16 +3274,12 @@ Just detect the platform and write the config.`,
     recordE2E('/setup-deploy workflow', 'Setup-Deploy skill E2E', result);
     expect(result.exitReason).toBe('success');
 
-    // Verify CLAUDE.md was created with deploy config
     const claudeMd = path.join(setupDir, 'CLAUDE.md');
     expect(fs.existsSync(claudeMd)).toBe(true);
 
     const content = fs.readFileSync(claudeMd, 'utf-8');
-    // Should mention Fly.io or fly
     expect(content.toLowerCase()).toContain('fly');
-    // Should mention the app name
     expect(content).toContain('my-cool-app');
-    // Should have the deploy configuration header
     expect(content).toContain('Deploy Configuration');
   }, 180_000);
 });

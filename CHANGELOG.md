@@ -16,6 +16,15 @@
 - Incorporated canary monitoring and benchmark patterns from community PR #151 (HMAKT99).
 - 3 new skills registered across gen-skill-docs.ts, skill-check.ts, skill-validation, and gen-skill-docs tests.
 
+## [0.9.1.0] - 2026-03-20 — Adversarial Spec Review + Skill Chaining
+
+### Added
+
+- **Your design docs now get stress-tested before you see them.** When you run `/office-hours`, an independent AI reviewer checks your design doc for completeness, consistency, clarity, scope creep, and feasibility — up to 3 rounds. You get a quality score (1-10) and a summary of what was caught and fixed. The doc you approve has already survived adversarial review.
+- **Visual wireframes during brainstorming.** For UI ideas, `/office-hours` now generates a rough HTML wireframe using your project's design system (from DESIGN.md) and screenshots it. You see what you're designing while you're still thinking, not after you've coded it.
+- **Skills help each other now.** `/plan-ceo-review` and `/plan-eng-review` detect when you'd benefit from running `/office-hours` first and offer it — one-tap to switch, one-tap to decline. If you seem lost during a CEO review, it'll gently suggest brainstorming first.
+- **Spec review metrics.** Every adversarial review logs iterations, issues found/fixed, and quality score to `~/.gstack/analytics/spec-review.jsonl`. Over time, you can see if your design docs are getting better.
+
 ## [0.9.0.1] - 2026-03-19
 
 ### Changed
@@ -87,7 +96,6 @@
 - **`/debug` renamed to `/investigate`.** Claude Code has a built-in `/debug` command that shadowed the gstack skill. The systematic root-cause debugging workflow now lives at `/investigate`. (Closes #190)
 - **Shell injection surface removed.** All skill templates now use `source <(gstack-slug)` instead of `eval $(gstack-slug)`. Same behavior, no `eval`. (Closes #133)
 - **25 new security tests.** URL validation (16 tests) and path traversal validation (14 tests) now have dedicated unit test suites covering scheme blocking, metadata IP blocking, directory escapes, and prefix collision edge cases.
->>>>>>> origin/main
 
 ## [0.8.2] - 2026-03-19
 
@@ -169,7 +177,6 @@ Both modes write a design doc that feeds directly into `/plan-ceo-review` and `/
 **`/debug` — find the root cause, not the symptom.**
 
 When something is broken and you don't know why, `/debug` is your systematic debugger. It follows the Iron Law: no fixes without root cause investigation first. Traces data flow, matches against known bug patterns (race conditions, nil propagation, stale cache, config drift), and tests hypotheses one at a time. If 3 fixes fail, it stops and questions the architecture instead of thrashing.
->>>>>>> origin/main
 
 ## [0.6.4.1] - 2026-03-18
 
