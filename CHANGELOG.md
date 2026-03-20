@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.5.0] - 2026-03-20 — Test Coverage Catalog
+
+### Added
+
+- **Every skill now traces your code changes and maps test coverage.** `/plan-eng-review` traces codepaths in your plan, `/ship` auto-generates tests for gaps, and `/review` finds untested paths during code review — all using the same shared methodology. One consistent coverage audit everywhere it matters.
+- **ASCII coverage diagrams show exactly what's tested and what isn't.** Every code path, user flow, and error state gets a quality rating (★ to ★★★) so you can see at a glance where the gaps are.
+- **E2E test recommendations built in.** The coverage audit now knows when to recommend E2E tests (common user flows, tricky integrations) vs unit tests, and flags LLM prompt changes that need eval coverage.
+- **Regression detection iron rule.** When a code change modifies existing behavior, gstack now always generates a regression test — no asking, no skipping.
+- **Test framework auto-detection.** Reads your CLAUDE.md for test commands first, then auto-detects from project files. Works with any framework.
+
 ## [0.9.4.0] - 2026-03-20 — Codex Reviews On By Default
 
 ### Changed
