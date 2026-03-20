@@ -81,19 +81,37 @@ else
 fi
 echo ""
 
-# ─── Crash clusters ──────────────────────────────────────────
-echo "Top crash clusters"
-echo "──────────────────"
+# ─── Errors (last 7 days) ────────────────────────────────────
+echo "Top errors (last 7 days)"
+echo "────────────────────────"
 
-CRASHES="$(query "crash_clusters" "select=error_class,gstack_version,total_occurrences,identified_users&limit=5" 2>/dev/null || echo "[]")"
+ERRORS="$(query "telemetry_events" "select=skill,error_class,error_message,failed_step,duration_s,session_id&outcome=eq.error&event_timestamp=gte.${WEEK_AGO}&order=event_timestamp.desc&limit=200" 2>/dev/null || echo "[]")"
 
-if [ "$CRASHES" != "[]" ] && [ -n "$CRASHES" ]; then
-  echo "$CRASHES" | grep -o '"error_class":"[^"]*"' | awk -F'"' '{print $4}' | head -5 | while read -r ERR; do
-    C="$(echo "$CRASHES" | grep -o "\"error_class\":\"$ERR\"[^}]*\"total_occurrences\":[0-9]*" | grep -o '"total_occurrences":[0-9]*' | head -1 | grep -o '[0-9]*')"
-    printf "  %-30s %s occurrences\n" "$ERR" "${C:-?}"
-  done
+if [ "$ERRORS" != "[]" ] && [ -n "$ERRORS" ]; then
+  # Group by skill + error_class, show count and example message
+  echo "$ERRORS" | grep -o '"skill":"[^"]*"[^}]*"error_class":"[^"]*"' | \
+    sed 's/.*"skill":"//;s/".*"error_class":"/\t/' | sed 's/"$//' | \
+    sort | uniq -c | sort -rn | head -8 | while read -r COUNT COMBO; do
+      SKILL="$(echo "$COMBO" | cut -f1)"
+      ERR="$(echo "$COMBO" | cut -f2)"
+      # Find an example error_message for this combo
+      MSG="$(echo "$ERRORS" | grep -o "\"skill\":\"${SKILL}\"[^}]*\"error_message\":\"[^\"]*\"" | \
+        grep -o '"error_message":"[^"]*"' | head -1 | sed 's/"error_message":"//;s/"$//' || true)"
+      # Find an example failed_step
+      STEP="$(echo "$ERRORS" | grep -o "\"skill\":\"${SKILL}\"[^}]*\"failed_step\":\"[^\"]*\"" | \
+        grep -o '"failed_step":"[^"]*"' | head -1 | sed 's/"failed_step":"//;s/"$//' || true)"
+
+      printf "  /%-12s %-18s %3d errors\n" "$SKILL" "${ERR:-unknown}" "$COUNT"
+      [ -n "$STEP" ] && printf "               step: %s\n" "$STEP"
+      [ -n "$MSG" ] && printf "               e.g.: %s\n" "$(echo "$MSG" | head -c 80)"
+    done
+
+  # Show how many unique sessions have errors
+  ERR_SESSIONS="$(echo "$ERRORS" | grep -o '"session_id":"[^"]*"' | sort -u | wc -l | tr -d ' ')"
+  echo ""
+  echo "  ${ERR_SESSIONS} unique session(s) with errors"
 else
-  echo "  No crashes reported"
+  echo "  No errors reported"
 fi
 echo ""
 
