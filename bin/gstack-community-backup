@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# gstack-community-backup — sync local state to Supabase for cloud backup
+#
+# Backs up: config, analytics summary, retro history.
+# Requires community tier + valid auth token.
+# Rate limited to once per 30 minutes.
+#
+# Env overrides (for testing):
+#   GSTACK_STATE_DIR           — override ~/.gstack state directory
+#   GSTACK_DIR                 — override auto-detected gstack root
+set -uo pipefail
+
+GSTACK_DIR="${GSTACK_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+STATE_DIR="${GSTACK_STATE_DIR:-$HOME/.gstack}"
+ANALYTICS_DIR="$STATE_DIR/analytics"
+JSONL_FILE="$ANALYTICS_DIR/skill-usage.jsonl"
+BACKUP_RATE_FILE="$ANALYTICS_DIR/.last-backup-time"
+CONFIG_CMD="$GSTACK_DIR/bin/gstack-config"
+AUTH_REFRESH="$GSTACK_DIR/bin/gstack-auth-refresh"
+
+# Source Supabase config
+if [ -f "$GSTACK_DIR/supabase/config.sh" ]; then
+  . "$GSTACK_DIR/supabase/config.sh"
+fi
+ENDPOINT="${GSTACK_TELEMETRY_ENDPOINT:-}"
+ANON_KEY="${GSTACK_SUPABASE_ANON_KEY:-}"
+
+# ─── Pre-checks ─────────────────────────────────────────────
+# Must be community tier
+TIER="$("$CONFIG_CMD" get telemetry 2>/dev/null || true)"
+[ "$TIER" != "community" ] && exit 0
+
+# Must have auth
+"$AUTH_REFRESH" --check 2>/dev/null || exit 0
+
+# Must have endpoint
+[ -z "$ENDPOINT" ] && exit 0
+
+# Rate limit: once per 30 minutes
+if [ -f "$BACKUP_RATE_FILE" ]; then
+  STALE=$(find "$BACKUP_RATE_FILE" -mmin +30 2>/dev/null || true)
+  [ -z "$STALE" ] && exit 0
+fi
+
+# ─── Get auth token ─────────────────────────────────────────
+ACCESS_TOKEN="$("$AUTH_REFRESH" 2>/dev/null || true)"
+[ -z "$ACCESS_TOKEN" ] && exit 0
+
+# Read user info from auth file
+AUTH_JSON="$(cat "$STATE_DIR/auth-token.json" 2>/dev/null || echo "{}")"
+USER_ID="$(echo "$AUTH_JSON" | grep -o '"user_id":"[^"]*"' | head -1 | sed 's/"user_id":"//;s/"//')"
+EMAIL="$(echo "$AUTH_JSON" | grep -o '"email":"[^"]*"' | head -1 | sed 's/"email":"//;s/"//')"
+
+[ -z "$USER_ID" ] && exit 0
+
+# ─── Build config snapshot ───────────────────────────────────
+CONFIG_SNAPSHOT="{}"
+if [ -f "$STATE_DIR/config.yaml" ]; then
+  # Convert YAML-like config to JSON
+  CONFIG_SNAPSHOT="{"
+  FIRST=true
+  while IFS=': ' read -r KEY VALUE; do
+    [ -z "$KEY" ] && continue
+    [ -z "$VALUE" ] && continue
+    if [ "$FIRST" = "true" ]; then FIRST=false; else CONFIG_SNAPSHOT="$CONFIG_SNAPSHOT,"; fi
+    CONFIG_SNAPSHOT="$CONFIG_SNAPSHOT\"$KEY\":\"$VALUE\""
+  done < "$STATE_DIR/config.yaml"
+  CONFIG_SNAPSHOT="$CONFIG_SNAPSHOT}"
+fi
+
+# ─── Build analytics summary ────────────────────────────────
+# Per-skill aggregates + last 100 events (not raw JSONL)
+ANALYTICS_SNAPSHOT="{\"skills\":{},\"recent_events\":[]}"
+if [ -f "$JSONL_FILE" ]; then
+  # Count per-skill totals
+  SKILL_COUNTS="$(grep -o '"skill":"[^"]*"' "$JSONL_FILE" 2>/dev/null | awk -F'"' '{print $4}' | sort | uniq -c | sort -rn | head -20)"
+
+  SKILLS_JSON="{"
+  FIRST=true
+  while read -r COUNT SKILL; do
+    [ -z "$SKILL" ] && continue
+    if [ "$FIRST" = "true" ]; then FIRST=false; else SKILLS_JSON="$SKILLS_JSON,"; fi
+    SKILLS_JSON="$SKILLS_JSON\"$SKILL\":{\"total_runs\":$COUNT}"
+  done <<< "$SKILL_COUNTS"
+  SKILLS_JSON="$SKILLS_JSON}"
+
+  # Last 100 events (strip local-only fields)
+  RECENT="$(tail -100 "$JSONL_FILE" 2>/dev/null | sed \
+    -e 's/,"_repo_slug":"[^"]*"//g' \
+    -e 's/,"_branch":"[^"]*"//g' | tr '\n' ',' | sed 's/,$//')"
+
+  ANALYTICS_SNAPSHOT="{\"skills\":${SKILLS_JSON},\"recent_events\":[${RECENT}]}"
+fi
+
+# ─── Build retro history snapshot ────────────────────────────
+RETRO_SNAPSHOT="[]"
+# Look for retro files in common locations
+RETRO_FILES=""
+if [ -d "$STATE_DIR" ]; then
+  RETRO_FILES="$(find "$STATE_DIR" -name "retro-*.json" -o -name "retro_*.json" 2>/dev/null | head -20 || true)"
+fi
+
+if [ -n "$RETRO_FILES" ]; then
+  RETRO_SNAPSHOT="["
+  FIRST=true
+  while IFS= read -r RFILE; do
+    [ -f "$RFILE" ] || continue
+    CONTENT="$(cat "$RFILE" 2>/dev/null || true)"
+    [ -z "$CONTENT" ] && continue
+    if [ "$FIRST" = "true" ]; then FIRST=false; else RETRO_SNAPSHOT="$RETRO_SNAPSHOT,"; fi
+    RETRO_SNAPSHOT="$RETRO_SNAPSHOT$CONTENT"
+  done <<< "$RETRO_FILES"
+  RETRO_SNAPSHOT="$RETRO_SNAPSHOT]"
+fi
+
+# ─── Upsert to installations table ──────────────────────────
+GSTACK_VERSION="$(cat "$GSTACK_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo "unknown")"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# Escape JSON strings that might contain special characters
+# Config and retro snapshots are already JSON, analytics too
+PAYLOAD="{
+  \"installation_id\": \"${USER_ID}\",
+  \"user_id\": \"${USER_ID}\",
+  \"email\": \"${EMAIL}\",
+  \"gstack_version\": \"${GSTACK_VERSION}\",
+  \"os\": \"${OS}\",
+  \"config_snapshot\": ${CONFIG_SNAPSHOT},
+  \"analytics_snapshot\": ${ANALYTICS_SNAPSHOT},
+  \"retro_history\": ${RETRO_SNAPSHOT},
+  \"last_backup_at\": \"${NOW_ISO}\",
+  \"last_seen\": \"${NOW_ISO}\"
+}"
+
+# Upsert (POST with Prefer: resolution=merge-duplicates)
+HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+  -X POST "${ENDPOINT}/installations" \
+  -H "Content-Type: application/json" \
+  -H "apikey: ${ANON_KEY}" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "$PAYLOAD" 2>/dev/null || echo "000")"
+
+# Update rate limit marker on success
+case "$HTTP_CODE" in
+  2*) touch "$BACKUP_RATE_FILE" 2>/dev/null || true ;;
+esac
+
+exit 0
