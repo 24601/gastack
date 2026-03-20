@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# gstack-auth — authenticate with Supabase via email OTP + magic link
+#
+# Usage:
+#   gstack-auth [email]        — start auth flow (prompts if no email)
+#   gstack-auth status         — show current auth status
+#   gstack-auth logout         — remove saved tokens
+#
+# Two-path authentication:
+#   1. OTP: user enters 6-digit code from email in terminal
+#   2. Magic link: user clicks link → redirects to local server
+#   Whichever completes first wins.
+#
+# Env overrides (for testing):
+#   GSTACK_STATE_DIR           — override ~/.gstack state directory
+#   GSTACK_DIR                 — override auto-detected gstack root
+set -euo pipefail
+
+GSTACK_DIR="${GSTACK_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+STATE_DIR="${GSTACK_STATE_DIR:-$HOME/.gstack}"
+AUTH_FILE="$STATE_DIR/auth-token.json"
+
+# Source Supabase config
+if [ -f "$GSTACK_DIR/supabase/config.sh" ]; then
+  . "$GSTACK_DIR/supabase/config.sh"
+fi
+SUPABASE_URL="${GSTACK_SUPABASE_URL:-}"
+ANON_KEY="${GSTACK_SUPABASE_ANON_KEY:-}"
+
+if [ -z "$SUPABASE_URL" ] || [ -z "$ANON_KEY" ]; then
+  echo "Error: Supabase not configured. Check supabase/config.sh"
+  exit 1
+fi
+
+AUTH_URL="${SUPABASE_URL}/auth/v1"
+
+# ─── Helper: write auth token file ──────────────────────────
+save_token() {
+  local access_token="$1"
+  local refresh_token="$2"
+  local expires_in="$3"
+  local email="$4"
+  local user_id="$5"
+
+  local expires_at
+  expires_at=$(( $(date +%s) + expires_in ))
+
+  mkdir -p "$STATE_DIR"
+  cat > "$AUTH_FILE" <<TOKJSON
+{
+  "access_token": "${access_token}",
+  "refresh_token": "${refresh_token}",
+  "expires_at": ${expires_at},
+  "email": "${email}",
+  "user_id": "${user_id}"
+}
+TOKJSON
+  chmod 600 "$AUTH_FILE"
+}
+
+# ─── Helper: extract JSON field (portable, no jq dependency) ─
+json_field() {
+  local json="$1"
+  local field="$2"
+  echo "$json" | grep -o "\"${field}\":[^,}]*" | head -1 | sed "s/\"${field}\"://;s/\"//g;s/ //g"
+}
+
+# ─── Helper: clean up background processes ───────────────────
+cleanup() {
+  # Kill the local server if running
+  [ -n "${SERVER_PID:-}" ] && kill "$SERVER_PID" 2>/dev/null || true
+  # Remove temp files
+  [ -n "${CALLBACK_FILE:-}" ] && rm -f "$CALLBACK_FILE" 2>/dev/null || true
+  [ -n "${RESPONSE_FILE:-}" ] && rm -f "$RESPONSE_FILE" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# ─── Subcommand: status ─────────────────────────────────────
+if [ "${1:-}" = "status" ]; then
+  if [ ! -f "$AUTH_FILE" ]; then
+    echo "Not authenticated. Run: gstack auth <email>"
+    exit 0
+  fi
+  AUTH_JSON="$(cat "$AUTH_FILE")"
+  EMAIL="$(json_field "$AUTH_JSON" "email")"
+  EXPIRES_AT="$(json_field "$AUTH_JSON" "expires_at")"
+  NOW="$(date +%s)"
+  if [ "$NOW" -lt "$EXPIRES_AT" ] 2>/dev/null; then
+    REMAINING=$(( (EXPIRES_AT - NOW) / 60 ))
+    echo "Authenticated as: $EMAIL"
+    echo "Token expires in: ${REMAINING}m"
+  else
+    echo "Authenticated as: $EMAIL (token expired — will auto-refresh)"
+  fi
+  exit 0
+fi
+
+# ─── Subcommand: logout ─────────────────────────────────────
+if [ "${1:-}" = "logout" ]; then
+  rm -f "$AUTH_FILE"
+  echo "Logged out. Auth token removed."
+  exit 0
+fi
+
+# ─── Main: auth flow ────────────────────────────────────────
+EMAIL="${1:-}"
+if [ -z "$EMAIL" ]; then
+  printf "Enter your email: "
+  read -r EMAIL
+fi
+
+if [ -z "$EMAIL" ]; then
+  echo "Error: email is required"
+  exit 1
+fi
+
+# Validate email format (basic check)
+if ! echo "$EMAIL" | grep -qE '^[^@]+@[^@]+\.[^@]+$'; then
+  echo "Error: invalid email format"
+  exit 1
+fi
+
+# ─── Find a free port for magic link callback ────────────────
+find_free_port() {
+  # Try to find a free port using Python (available on macOS)
+  python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()' 2>/dev/null || echo "0"
+}
+
+CALLBACK_PORT="$(find_free_port)"
+CALLBACK_URL="http://localhost:${CALLBACK_PORT}/callback"
+CALLBACK_FILE="$(mktemp)"
+RESPONSE_FILE="$(mktemp)"
+
+# ─── Step 1: Send OTP (also sends magic link) ────────────────
+echo ""
+echo "Sending verification email to ${EMAIL}..."
+
+# If we got a valid port, include redirect URL for magic link
+OTP_BODY="{\"email\":\"${EMAIL}\"}"
+if [ "$CALLBACK_PORT" != "0" ]; then
+  OTP_BODY="{\"email\":\"${EMAIL}\",\"options\":{\"emailRedirectTo\":\"${CALLBACK_URL}\"}}"
+fi
+
+HTTP_RESPONSE="$(curl -s -w "\n%{http_code}" \
+  -X POST "${AUTH_URL}/otp" \
+  -H "Content-Type: application/json" \
+  -H "apikey: ${ANON_KEY}" \
+  -d "$OTP_BODY" 2>/dev/null || echo -e "\n000")"
+
+HTTP_BODY="$(echo "$HTTP_RESPONSE" | head -n -1)"
+HTTP_CODE="$(echo "$HTTP_RESPONSE" | tail -1)"
+
+case "$HTTP_CODE" in
+  2*)
+    ;; # success
+  429)
+    echo "Rate limited — please wait 60 seconds and try again."
+    exit 1
+    ;;
+  *)
+    echo "Error sending OTP (HTTP ${HTTP_CODE}): ${HTTP_BODY}"
+    exit 1
+    ;;
+esac
+
+echo ""
+echo "Check your email! Two ways to authenticate:"
+echo "  1. Enter the 6-digit code below"
+if [ "$CALLBACK_PORT" != "0" ]; then
+  echo "  2. Or click the magic link in the email"
+fi
+echo ""
+
+# ─── Step 2: Start local server for magic link (background) ──
+if [ "$CALLBACK_PORT" != "0" ]; then
+  # Start a simple HTTP listener that captures the callback
+  (
+    # Use nc to listen for one connection
+    while true; do
+      REQUEST="$(echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body><h2>gstack authenticated!</h2><p>You can close this tab.</p></body></html>" | nc -l "$CALLBACK_PORT" 2>/dev/null || true)"
+      if echo "$REQUEST" | grep -q "GET /callback"; then
+        # Extract token_hash or access_token from query params
+        QUERY="$(echo "$REQUEST" | grep "GET /callback" | sed 's/GET \/callback?//' | awk '{print $1}')"
+        echo "$QUERY" > "$CALLBACK_FILE"
+        break
+      fi
+    done
+  ) &
+  SERVER_PID=$!
+fi
+
+# ─── Step 3: Race OTP input vs magic link callback ───────────
+printf "Enter code: "
+
+# Read with 5-minute timeout
+OTP_CODE=""
+if read -r -t 300 OTP_CODE 2>/dev/null; then
+  : # Got OTP code from terminal
+fi
+
+# Check if magic link callback arrived while we waited
+MAGIC_LINK_TOKEN=""
+if [ -f "$CALLBACK_FILE" ] && [ -s "$CALLBACK_FILE" ]; then
+  CALLBACK_DATA="$(cat "$CALLBACK_FILE")"
+  # Extract access_token from URL params
+  MAGIC_LINK_TOKEN="$(echo "$CALLBACK_DATA" | grep -o 'access_token=[^&]*' | sed 's/access_token=//' || true)"
+fi
+
+# ─── Step 4: Verify (OTP path or magic link path) ────────────
+if [ -n "$MAGIC_LINK_TOKEN" ]; then
+  # Magic link path — token already obtained
+  echo ""
+  echo "Magic link authenticated!"
+
+  # Get user info from the token
+  USER_RESPONSE="$(curl -s \
+    -H "Authorization: Bearer ${MAGIC_LINK_TOKEN}" \
+    -H "apikey: ${ANON_KEY}" \
+    "${AUTH_URL}/user" 2>/dev/null || echo "{}")"
+
+  USER_ID="$(json_field "$USER_RESPONSE" "id")"
+  # Extract refresh_token from callback params
+  REFRESH_TOKEN="$(echo "$CALLBACK_DATA" | grep -o 'refresh_token=[^&]*' | sed 's/refresh_token=//' || true)"
+  EXPIRES_IN="$(echo "$CALLBACK_DATA" | grep -o 'expires_in=[^&]*' | sed 's/expires_in=//' || echo "3600")"
+
+  save_token "$MAGIC_LINK_TOKEN" "$REFRESH_TOKEN" "$EXPIRES_IN" "$EMAIL" "$USER_ID"
+
+elif [ -n "$OTP_CODE" ]; then
+  # OTP path — verify the code
+  OTP_CODE="$(echo "$OTP_CODE" | tr -d '[:space:]')"
+
+  if ! echo "$OTP_CODE" | grep -qE '^[0-9]{6}$'; then
+    echo "Error: code must be exactly 6 digits"
+    exit 1
+  fi
+
+  VERIFY_RESPONSE="$(curl -s \
+    -X POST "${AUTH_URL}/verify" \
+    -H "Content-Type: application/json" \
+    -H "apikey: ${ANON_KEY}" \
+    -d "{\"email\":\"${EMAIL}\",\"token\":\"${OTP_CODE}\",\"type\":\"email\"}" \
+    2>/dev/null || echo "{}")"
+
+  ACCESS_TOKEN="$(json_field "$VERIFY_RESPONSE" "access_token")"
+  REFRESH_TOKEN="$(json_field "$VERIFY_RESPONSE" "refresh_token")"
+  EXPIRES_IN="$(json_field "$VERIFY_RESPONSE" "expires_in")"
+  USER_ID="$(json_field "$VERIFY_RESPONSE" "id" 2>/dev/null || true)"
+
+  # Try to get user_id from nested user object if not at top level
+  if [ -z "$USER_ID" ]; then
+    USER_ID="$(echo "$VERIFY_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')"
+  fi
+
+  if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
+    ERROR_MSG="$(json_field "$VERIFY_RESPONSE" "error_description" 2>/dev/null || json_field "$VERIFY_RESPONSE" "msg" 2>/dev/null || echo "unknown error")"
+    echo ""
+    echo "Verification failed: $ERROR_MSG"
+    echo "Check the code and try again."
+    exit 1
+  fi
+
+  save_token "$ACCESS_TOKEN" "$REFRESH_TOKEN" "${EXPIRES_IN:-3600}" "$EMAIL" "$USER_ID"
+
+else
+  echo ""
+  echo "Timed out — no code entered and magic link not clicked."
+  exit 1
+fi
+
+# ─── Step 5: Save email to config ────────────────────────────
+"$GSTACK_DIR/bin/gstack-config" set email "$EMAIL"
+
+echo ""
+echo "Authenticated as: ${EMAIL}"
+echo "Token saved to: ${AUTH_FILE}"
