@@ -423,17 +423,9 @@ Shipped as v0.5.0 on main. Includes `/plan-design-review` (report-only design au
 
 ## Document-Release
 
-### Auto-invoke /document-release from /ship
+### Auto-invoke /document-release from /ship — SHIPPED
 
-**What:** Add Step 8.5 to /ship that reads document-release/SKILL.md and executes the doc update workflow after creating the PR.
-
-**Why:** Zero-friction doc updates — user runs /ship and docs are automatically current. No extra command to remember.
-
-**Context:** /ship currently ends at Step 8 (PR URL output). Step 8.5 would continue into the document-release workflow. Same pattern as /ship calling /review's checklist in Step 3.5.
-
-**Effort:** S
-**Priority:** P1
-**Depends on:** /document-release shipped
+Shipped in v0.8.3. Step 8.5 added to `/ship` — after creating the PR, `/ship` automatically reads `document-release/SKILL.md` and executes the doc update workflow. Zero-friction doc updates.
 
 ### `{{DOC_VOICE}}` shared resolver
 
@@ -490,25 +482,25 @@ Shipped as `/careful`, `/freeze`, `/guard`, and `/unfreeze` in v0.6.5. Includes 
 
 Shipped in v0.6.5. TemplateContext in gen-skill-docs.ts bakes skill name into preamble telemetry line. Analytics CLI (`bun run analytics`) for querying. /retro integration shows skills-used-this-week.
 
-### /debug scoped debugging enhancements (gated on telemetry)
+### /investigate scoped debugging enhancements (gated on telemetry)
 
-**What:** Six enhancements to /debug auto-freeze, contingent on telemetry showing the freeze hook actually fires in real debugging sessions.
+**What:** Six enhancements to /investigate auto-freeze, contingent on telemetry showing the freeze hook actually fires in real debugging sessions.
 
-**Why:** /debug v0.7.1 auto-freezes edits to the module being debugged. If telemetry shows the hook fires often, these enhancements make the experience smarter. If it never fires, the problem wasn't real and these aren't worth building.
+**Why:** /investigate v0.7.1 auto-freezes edits to the module being debugged. If telemetry shows the hook fires often, these enhancements make the experience smarter. If it never fires, the problem wasn't real and these aren't worth building.
 
-**Context:** All items are prose additions to `debug/SKILL.md.tmpl`. No new scripts.
+**Context:** All items are prose additions to `investigate/SKILL.md.tmpl`. No new scripts.
 
 **Items:**
 1. Stack trace auto-detection for freeze directory (parse deepest app frame)
 2. Freeze boundary widening (ask to widen instead of hard-block when hitting boundary)
 3. Post-fix auto-unfreeze + full test suite run
 4. Debug instrumentation cleanup (tag with DEBUG-TEMP, remove before commit)
-5. Debug session persistence (~/.gstack/debug-sessions/ — save investigation for reuse)
+5. Debug session persistence (~/.gstack/investigate-sessions/ — save investigation for reuse)
 6. Investigation timeline in debug report (hypothesis log with timing)
 
 **Effort:** M (all 6 combined)
 **Priority:** P3
-**Depends on:** Telemetry data showing freeze hook fires in real /debug sessions
+**Depends on:** Telemetry data showing freeze hook fires in real /investigate sessions
 
 ## Completed
 
