@@ -233,7 +233,19 @@ RECOMMENDATION: [what the user should do next]
 After the skill workflow completes (success, error, or abort), log the telemetry event.
 Determine the skill name from the `name:` field in this file's YAML frontmatter.
 Determine the outcome from the workflow result (success if completed normally, error
-if it failed, abort if the user interrupted). Run this bash:
+if it failed, abort if the user interrupted).
+
+**For errors:** Also determine:
+- `ERROR_CLASS`: a short category — one of: `timeout`, `test_failure`, `build_failure`,
+  `git_error`, `auth_error`, `network_error`, `browse_error`, `lint_error`,
+  `merge_conflict`, `permission_error`, `unknown_error`. Pick the most specific match.
+- `ERROR_MESSAGE`: a one-line summary of what went wrong (max 200 chars). Include the
+  command that failed and the key error text. Example: `"bun test: 3 tests failed in
+  auth.test.ts — expected 200 got 401"`. Never include file paths, secrets, or PII.
+- `FAILED_STEP`: which step in the skill workflow failed. Example: `"run_tests"`,
+  `"create_pr"`, `"merge_base"`, `"build"`, `"qa_browse"`. Use snake_case, max 30 chars.
+
+Run this bash:
 
 ```bash
 _TEL_END=$(date +%s)
@@ -241,12 +253,16 @@ _TEL_DUR=$(( _TEL_END - _TEL_START ))
 rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 ~/.claude/skills/gstack/bin/gstack-telemetry-log \
   --skill "SKILL_NAME" --duration "$_TEL_DUR" --outcome "OUTCOME" \
-  --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" 2>/dev/null &
+  --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" \
+  --error-class "ERROR_CLASS" --error-message "ERROR_MESSAGE" \
+  --failed-step "FAILED_STEP" 2>/dev/null &
 ```
 
 Replace `SKILL_NAME` with the actual skill name from frontmatter, `OUTCOME` with
 success/error/abort, and `USED_BROWSE` with true/false based on whether `$B` was used.
-If you cannot determine the outcome, use "unknown". This runs in the background and
+For `ERROR_CLASS`, `ERROR_MESSAGE`, and `FAILED_STEP`: use empty string `""` if the
+outcome is not error. If the outcome is error but you cannot determine the details,
+use `"unknown_error"`, `""`, and `""` respectively. This runs in the background and
 never blocks the user.
 
 # /qa-only: Report-Only QA Testing
