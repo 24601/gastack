@@ -152,15 +152,22 @@ export function listProfiles(browserName: string): ProfileEntry[] {
     const cookiePath = path.join(browserDir, entry.name, 'Cookies');
     if (!fs.existsSync(cookiePath)) continue;
 
-    // Try to read display name from Preferences
+    // Try to read display name from Preferences.
+    // Prefer account email — signed-in Chrome profiles often have generic
+    // names like "Person 2" while the email is far more readable.
     let displayName = entry.name;
     try {
       const prefsPath = path.join(browserDir, entry.name, 'Preferences');
       if (fs.existsSync(prefsPath)) {
         const prefs = JSON.parse(fs.readFileSync(prefsPath, 'utf-8'));
-        const profileName = prefs?.profile?.name;
-        if (profileName && typeof profileName === 'string') {
-          displayName = profileName;
+        const email = prefs?.account_info?.[0]?.email;
+        if (email && typeof email === 'string') {
+          displayName = email;
+        } else {
+          const profileName = prefs?.profile?.name;
+          if (profileName && typeof profileName === 'string') {
+            displayName = profileName;
+          }
         }
       }
     } catch {
