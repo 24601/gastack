@@ -98,6 +98,12 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   // gstack-upgrade
   'gstack-upgrade-happy-path': ['gstack-upgrade/**'],
 
+  // Deploy skills
+  'land-and-deploy-workflow':   ['land-and-deploy/**', 'scripts/gen-skill-docs.ts'],
+  'canary-workflow':            ['canary/**', 'browse/src/**'],
+  'benchmark-workflow':         ['benchmark/**', 'browse/src/**'],
+  'setup-deploy-workflow':      ['setup-deploy/**', 'scripts/gen-skill-docs.ts'],
+
   // Skill routing — journey-stage tests (depend on ALL skill descriptions)
   'journey-ideation':       ['*/SKILL.md.tmpl', 'SKILL.md.tmpl', 'scripts/gen-skill-docs.ts'],
   'journey-plan-eng':       ['*/SKILL.md.tmpl', 'SKILL.md.tmpl', 'scripts/gen-skill-docs.ts'],
@@ -139,6 +145,12 @@ export const LLM_JUDGE_TOUCHFILES: Record<string, string[]> = {
   // Design skills
   'design-review/SKILL.md fix loop':      ['design-review/SKILL.md', 'design-review/SKILL.md.tmpl'],
   'design-consultation/SKILL.md research': ['design-consultation/SKILL.md', 'design-consultation/SKILL.md.tmpl'],
+
+  // Deploy skills
+  'land-and-deploy/SKILL.md workflow':    ['land-and-deploy/SKILL.md', 'land-and-deploy/SKILL.md.tmpl'],
+  'canary/SKILL.md monitoring loop':      ['canary/SKILL.md', 'canary/SKILL.md.tmpl'],
+  'benchmark/SKILL.md perf collection':   ['benchmark/SKILL.md', 'benchmark/SKILL.md.tmpl'],
+  'setup-deploy/SKILL.md platform setup': ['setup-deploy/SKILL.md', 'setup-deploy/SKILL.md.tmpl'],
 
   // Other skills
   'retro/SKILL.md instructions':          ['retro/SKILL.md', 'retro/SKILL.md.tmpl'],
