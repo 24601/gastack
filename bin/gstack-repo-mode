@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# gstack-repo-mode — detect solo vs collaborative repo mode
+# Usage: source <(gstack-repo-mode)  → sets REPO_MODE variable
+# Or:    gstack-repo-mode           → prints REPO_MODE=... line
+#
+# Detection heuristic (90-day window):
+#   Solo:          top author >= 80% of commits AND <= 2 distinct authors
+#   Collaborative: everything else
+#
+# Override: gstack-config set repo_mode solo|collaborative
+# Cache:    ~/.gstack/projects/$SLUG/repo-mode.json (7-day TTL)
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+eval $("$SCRIPT_DIR/gstack-slug" 2>/dev/null) || { echo "REPO_MODE=unknown"; exit 0; }
+[ -z "${SLUG:-}" ] && { echo "REPO_MODE=unknown"; exit 0; }
+
+# Config override takes precedence
+OVERRIDE=$("$SCRIPT_DIR/gstack-config" get repo_mode 2>/dev/null || true)
+if [ -n "$OVERRIDE" ] && [ "$OVERRIDE" != "null" ]; then
+  echo "REPO_MODE=$OVERRIDE"
+  exit 0
+fi
+
+# Check cache (7-day TTL)
+CACHE_DIR="$HOME/.gstack/projects/$SLUG"
+CACHE_FILE="$CACHE_DIR/repo-mode.json"
+if [ -f "$CACHE_FILE" ]; then
+  CACHE_AGE=$(( $(date +%s) - $(stat -f %m "$CACHE_FILE" 2>/dev/null || stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0) ))
+  if [ "$CACHE_AGE" -lt 604800 ]; then  # 7 days in seconds
+    MODE=$(grep -o '"mode":"[^"]*"' "$CACHE_FILE" | head -1 | cut -d'"' -f4)
+    [ -n "$MODE" ] && echo "REPO_MODE=$MODE" && exit 0
+  fi
+fi
+
+# Compute from git history (90-day window)
+SHORTLOG=$(git shortlog -sn --since="90 days ago" --no-merges HEAD 2>/dev/null | head -20)
+if [ -z "$SHORTLOG" ]; then
+  echo "REPO_MODE=unknown"
+  exit 0
+fi
+
+TOTAL=$(echo "$SHORTLOG" | awk '{s+=$1} END {print s}')
+TOP=$(echo "$SHORTLOG" | head -1 | awk '{print $1}')
+AUTHORS=$(echo "$SHORTLOG" | wc -l | tr -d ' ')
+
+# Minimum sample: need at least 5 commits to classify
+if [ "$TOTAL" -lt 5 ]; then
+  echo "REPO_MODE=unknown"
+  exit 0
+fi
+
+TOP_PCT=$(( TOP * 100 / TOTAL ))
+
+# Solo: top author >= 80% of commits (occasional outside PRs don't change mode)
+if [ "$TOP_PCT" -ge 80 ]; then
+  MODE=solo
+else
+  MODE=collaborative
+fi
+
+# Cache result (fail silently if ~/.gstack is unwritable)
+mkdir -p "$CACHE_DIR" 2>/dev/null || true
+echo "{\"mode\":\"$MODE\",\"top_pct\":$TOP_PCT,\"authors\":$AUTHORS,\"total\":$TOTAL,\"computed\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > "$CACHE_FILE" 2>/dev/null || true
+
+echo "REPO_MODE=$MODE"
