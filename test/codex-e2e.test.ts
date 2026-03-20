@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  * - `codex` binary installed (npm install -g @openai/codex)
- * - OPENAI_API_KEY env var set
+ * - Codex authenticated via ~/.codex/ config (no OPENAI_API_KEY env var needed)
  * - EVALS=1 env var set (same gate as Claude E2E tests)
  *
  * Skips gracefully when prerequisites are not met.
@@ -34,11 +34,11 @@ const CODEX_AVAILABLE = (() => {
   } catch { return false; }
 })();
 
-const HAS_API_KEY = !!process.env.OPENAI_API_KEY;
 const evalsEnabled = !!process.env.EVALS;
 
-// Skip all tests if codex is not available, API key is not set, or EVALS is not set
-const SKIP = !CODEX_AVAILABLE || !HAS_API_KEY || !evalsEnabled;
+// Skip all tests if codex is not available or EVALS is not set.
+// Note: Codex uses its own auth from ~/.codex/ config — no OPENAI_API_KEY env var needed.
+const SKIP = !CODEX_AVAILABLE || !evalsEnabled;
 
 const describeCodex = SKIP ? describe.skip : describe;
 
@@ -47,8 +47,6 @@ if (!evalsEnabled) {
   // Silent — same as Claude E2E tests, EVALS=1 required
 } else if (!CODEX_AVAILABLE) {
   process.stderr.write('\nCodex E2E: SKIPPED — codex binary not found (install: npm i -g @openai/codex)\n');
-} else if (!HAS_API_KEY) {
-  process.stderr.write('\nCodex E2E: SKIPPED — OPENAI_API_KEY not set\n');
 }
 
 // --- Diff-based test selection ---
@@ -155,7 +153,7 @@ describeCodex('Codex E2E', () => {
     const result = await runCodexSkill({
       skillDir,
       prompt: 'Run the gstack-review skill on this repository. Review the current branch diff and report your findings.',
-      timeoutMs: 300_000,
+      timeoutMs: 540_000,
       cwd: ROOT,
       skillName: 'gstack-review',
     });
@@ -183,5 +181,5 @@ describeCodex('Codex E2E', () => {
       outputLower.includes('p1') ||
       outputLower.includes('p2');
     expect(hasReviewContent).toBe(true);
-  }, 360_000);
+  }, 600_000);
 });

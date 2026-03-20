@@ -164,9 +164,29 @@ export async function runCodexSkill(opts: {
 
   // Set up temp HOME with skill installed
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-e2e-'));
+  const realHome = os.homedir();
 
   try {
     installSkillToTempHome(skillDir, name, tempHome);
+
+    // Symlink real Codex auth config so codex can authenticate from temp HOME.
+    // Codex stores auth in ~/.codex/ — we need the config but not the skills
+    // (we install our own test skills above).
+    const realCodexConfig = path.join(realHome, '.codex');
+    const tempCodexDir = path.join(tempHome, '.codex');
+    if (fs.existsSync(realCodexConfig)) {
+      // Copy auth-related files from real ~/.codex/ into temp ~/.codex/
+      // (skills/ is already set up by installSkillToTempHome)
+      const entries = fs.readdirSync(realCodexConfig);
+      for (const entry of entries) {
+        if (entry === 'skills') continue; // don't clobber our test skills
+        const src = path.join(realCodexConfig, entry);
+        const dst = path.join(tempCodexDir, entry);
+        if (!fs.existsSync(dst)) {
+          fs.cpSync(src, dst, { recursive: true });
+        }
+      }
+    }
 
     // Build codex exec command
     const args = ['exec', prompt, '--json', '-s', sandbox];
