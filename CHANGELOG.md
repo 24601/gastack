@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.1.1] - 2026-03-20
+
+### Fixed
+
+- **gstack now works on Windows 11.** Setup no longer hangs, and the browse server automatically falls back to Node.js to work around a Bun pipe-handling bug on Windows. Just make sure Node.js is installed alongside Bun. macOS and Linux are completely unaffected. (Thanks @sozairali — PR #194)
+
 ## [0.9.1.0] - 2026-03-20 — Adversarial Spec Review + Skill Chaining
 
 ### Added
