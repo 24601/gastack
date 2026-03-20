@@ -1324,3 +1324,58 @@ describe('Codex skill validation', () => {
     }
   });
 });
+
+// --- Repo mode and test failure triage validation ---
+
+describe('Repo mode preamble validation', () => {
+  test('generated SKILL.md preamble contains REPO_MODE output', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
+    expect(content).toContain('REPO_MODE:');
+    expect(content).toContain('gstack-repo-mode');
+  });
+
+  test('generated SKILL.md contains See Something Say Something section', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
+    expect(content).toContain('See Something, Say Something');
+    expect(content).toContain('REPO_MODE');
+    expect(content).toContain('solo');
+    expect(content).toContain('collaborative');
+  });
+});
+
+describe('Test failure triage in ship skill', () => {
+  test('ship/SKILL.md contains Test Failure Ownership Triage', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('Test Failure Ownership Triage');
+  });
+
+  test('ship/SKILL.md triage uses git diff for classification', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('git diff origin/<base>...HEAD --name-only');
+  });
+
+  test('ship/SKILL.md triage has solo and collaborative paths', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('REPO_MODE');
+    expect(content).toContain('solo');
+    expect(content).toContain('collaborative');
+    expect(content).toContain('Investigate and fix now');
+    expect(content).toContain('Add as P0 TODO');
+  });
+
+  test('ship/SKILL.md triage has GitHub issue assignment for collaborative mode', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('gh issue create');
+    expect(content).toContain('--assignee');
+  });
+
+  test('{{TEST_FAILURE_TRIAGE}} placeholder is fully resolved in ship/SKILL.md', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).not.toContain('{{TEST_FAILURE_TRIAGE}}');
+  });
+
+  test('ship/SKILL.md uses in-branch language for stop condition', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('In-branch test failures');
+  });
+});
