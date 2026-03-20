@@ -416,6 +416,105 @@ describe('REVIEW_DASHBOARD resolver', () => {
   });
 });
 
+// ─── Test Coverage Audit Resolver Tests ─────────────────────
+
+describe('TEST_COVERAGE_AUDIT placeholders', () => {
+  const planSkill = fs.readFileSync(path.join(ROOT, 'plan-eng-review', 'SKILL.md'), 'utf-8');
+  const shipSkill = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+  const reviewSkill = fs.readFileSync(path.join(ROOT, 'review', 'SKILL.md'), 'utf-8');
+
+  test('all three modes share codepath tracing methodology', () => {
+    const sharedPhrases = [
+      'Trace every codepath changed',
+      'Trace data flow',
+      'Diagram the execution',
+      'Quality scoring rubric',
+      '★★★',
+      '★★',
+      'GAP',
+    ];
+    for (const phrase of sharedPhrases) {
+      expect(planSkill).toContain(phrase);
+      expect(shipSkill).toContain(phrase);
+      expect(reviewSkill).toContain(phrase);
+    }
+  });
+
+  test('all three modes include E2E decision matrix', () => {
+    for (const skill of [planSkill, shipSkill, reviewSkill]) {
+      expect(skill).toContain('E2E Test Decision Matrix');
+      expect(skill).toContain('→E2E');
+      expect(skill).toContain('→EVAL');
+    }
+  });
+
+  test('all three modes include regression rule', () => {
+    for (const skill of [planSkill, shipSkill, reviewSkill]) {
+      expect(skill).toContain('REGRESSION RULE');
+      expect(skill).toContain('IRON RULE');
+    }
+  });
+
+  test('all three modes include test framework detection', () => {
+    for (const skill of [planSkill, shipSkill, reviewSkill]) {
+      expect(skill).toContain('Test Framework Detection');
+      expect(skill).toContain('CLAUDE.md');
+    }
+  });
+
+  test('plan mode adds tests to plan + includes test plan artifact', () => {
+    expect(planSkill).toContain('Add missing tests to the plan');
+    expect(planSkill).toContain('eng-review-test-plan');
+    expect(planSkill).toContain('Test Plan Artifact');
+  });
+
+  test('ship mode auto-generates tests + includes before/after count', () => {
+    expect(shipSkill).toContain('Generate tests for uncovered paths');
+    expect(shipSkill).toContain('Before/after test count');
+    expect(shipSkill).toContain('30 code paths max');
+    expect(shipSkill).toContain('ship-test-plan');
+  });
+
+  test('review mode generates via Fix-First + gaps are INFORMATIONAL', () => {
+    expect(reviewSkill).toContain('Fix-First');
+    expect(reviewSkill).toContain('INFORMATIONAL');
+    expect(reviewSkill).toContain('Step 4.75');
+    expect(reviewSkill).toContain('subsumes the "Test Gaps" category');
+  });
+
+  test('plan mode does NOT include ship-specific content', () => {
+    expect(planSkill).not.toContain('Before/after test count');
+    expect(planSkill).not.toContain('30 code paths max');
+    expect(planSkill).not.toContain('ship-test-plan');
+  });
+
+  test('review mode does NOT include test plan artifact', () => {
+    expect(reviewSkill).not.toContain('Test Plan Artifact');
+    expect(reviewSkill).not.toContain('eng-review-test-plan');
+    expect(reviewSkill).not.toContain('ship-test-plan');
+  });
+
+  // Regression guard: ship output contains key phrases from before the refactor
+  test('ship SKILL.md regression guard — key phrases preserved', () => {
+    const regressionPhrases = [
+      '100% coverage is the goal',
+      'ASCII coverage diagram',
+      'processPayment',
+      'refundPayment',
+      'billing.test.ts',
+      'checkout.e2e.ts',
+      'COVERAGE:',
+      'QUALITY:',
+      'GAPS:',
+      'Code paths:',
+      'User flows:',
+    ];
+    for (const phrase of regressionPhrases) {
+      expect(shipSkill).toContain(phrase);
+    }
+  });
+});
+
 // ─── Codex Generation Tests ─────────────────────────────────
 
 describe('Codex generation (--host codex)', () => {
