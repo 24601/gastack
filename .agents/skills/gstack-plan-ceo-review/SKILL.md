@@ -35,6 +35,12 @@ _TEL_START=$(date +%s)
 _SESSION_ID="$$-$(date +%s)"
 echo "TELEMETRY: ${_TEL:-off}"
 echo "TEL_PROMPTED: $_TEL_PROMPTED"
+_EMAIL=$(~/.codex/skills/gstack/bin/gstack-config get email 2>/dev/null || true)
+_COMM_PROMPTED=$([ -f ~/.gstack/.community-prompted ] && echo "yes" || echo "no")
+_AUTH_OK=$(~/.codex/skills/gstack/bin/gstack-auth-refresh --check 2>/dev/null && echo "yes" || echo "no")
+echo "EMAIL: ${_EMAIL:-none}"
+echo "COMM_PROMPTED: $_COMM_PROMPTED"
+echo "AUTH: $_AUTH_OK"
 mkdir -p ~/.gstack/analytics
 echo '{"skill":"plan-ceo-review","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
 for _PF in ~/.gstack/analytics/.pending-*; do [ -f "$_PF" ] && ~/.codex/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
@@ -60,16 +66,31 @@ Only run `open` if the user says yes. Always run `touch` to mark as seen. This o
 If `TEL_PROMPTED` is `no` AND `LAKE_INTRO` is `yes`: After the lake intro is handled,
 ask the user about telemetry. Use AskUserQuestion:
 
-> gstack can share anonymous usage data (which skills you use, how long they take, crash info)
+> gstack can share usage data (which skills you use, how long they take, crash info)
 > to help improve the project. No code, file paths, or repo names are ever sent.
+>
+> The **community tier** unlocks extra features:
+> - **Cloud backup** of your gstack config + history (restore on new machines)
+> - **Benchmarks**: see how your usage compares to other builders
+> - **Skill recommendations** based on community patterns
+>
 > Change anytime with `gstack-config set telemetry off`.
 
 Options:
-- A) Yes, share anonymous data (recommended)
-- B) No thanks
+- A) Community — share data + email for backup, benchmarks & recommendations (recommended)
+- B) Anonymous — share data only, no account
+- C) No thanks
 
-If A: run `~/.codex/skills/gstack/bin/gstack-config set telemetry anonymous`
-If B: run `~/.codex/skills/gstack/bin/gstack-config set telemetry off`
+If A: ask for their email via a follow-up AskUserQuestion, then run:
+```bash
+~/.codex/skills/gstack/bin/gstack-config set telemetry community
+~/.codex/skills/gstack/bin/gstack-auth <user-provided-email>
+```
+The auth script will send a verification code to their email. Wait for them to enter the 6-digit code.
+If auth succeeds, continue with the skill. If it fails, fall back to anonymous tier.
+
+If B: run `~/.codex/skills/gstack/bin/gstack-config set telemetry anonymous`
+If C: run `~/.codex/skills/gstack/bin/gstack-config set telemetry off`
 
 Always run:
 ```bash
@@ -77,6 +98,33 @@ touch ~/.gstack/.telemetry-prompted
 ```
 
 This only happens once. If `TEL_PROMPTED` is `yes`, skip this entirely.
+
+If `TELEMETRY` is `anonymous` AND `COMM_PROMPTED` is `no`: After the main skill workflow
+begins (not during preamble), offer the community tier upgrade once. Use AskUserQuestion:
+
+> You're already sharing anonymous usage data — nice! Want to unlock more?
+>
+> The **community tier** adds:
+> - Cloud backup of your gstack config (restore on new machines)
+> - Benchmarks: see how your /qa times compare to the community
+> - Skill recommendations based on what other builders use
+>
+> Just needs your email (verified via a one-time code).
+
+Options:
+- A) Yes, join community (enter email)
+- B) Not now
+
+If A: ask for their email, then run `~/.codex/skills/gstack/bin/gstack-auth <email>`.
+Wait for the verification code. On success, run `~/.codex/skills/gstack/bin/gstack-config set telemetry community`.
+If B: do nothing.
+
+Always run:
+```bash
+touch ~/.gstack/.community-prompted
+```
+
+This only happens once. If `COMM_PROMPTED` is `yes`, skip this entirely.
 
 ## AskUserQuestion Format
 
