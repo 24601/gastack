@@ -203,10 +203,7 @@ You are running the `/ship` workflow. This is a **non-interactive, fully automat
 After completing the review, read the review log and config to display the dashboard.
 
 ```bash
-eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
-cat ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl 2>/dev/null || echo "NO_REVIEWS"
-echo "---CONFIG---"
-~/.codex/skills/gstack/bin/gstack-config get skip_eng_review 2>/dev/null || echo "false"
+~/.codex/skills/gstack/bin/gstack-review-read
 ```
 
 Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, plan-design-review, design-review-lite, codex-review). Ignore entries with timestamps older than 7 days. For Design Review, show whichever is more recent between `plan-design-review` (full visual audit) and `design-review-lite` (code-level check). Append "(FULL)" or "(LITE)" to the status to distinguish. Display:
@@ -238,11 +235,17 @@ Parse the output. Find the most recent entry for each skill (plan-ceo-review, pl
 - CEO, Design, and Codex reviews are shown for context but never block shipping
 - If \`skip_eng_review\` config is \`true\`, Eng Review shows "SKIPPED (global)" and verdict is CLEARED
 
+**Staleness detection:** After displaying the dashboard, check if any existing reviews may be stale:
+- Parse the \`---HEAD---\` section from the bash output to get the current HEAD commit hash
+- For each review entry that has a \`commit\` field: compare it against the current HEAD. If different, count elapsed commits: \`git rev-list --count STORED_COMMIT..HEAD\`. Display: "Note: {skill} review from {date} may be stale — {N} commits since review"
+- For entries without a \`commit\` field (legacy entries): display "Note: {skill} review from {date} has no commit tracking — consider re-running for accurate staleness detection"
+- If all reviews match the current HEAD, do not display any staleness notes
+
 If the Eng Review is NOT "CLEAR":
 
 1. **Check for a prior override on this branch:**
    ```bash
-   eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
+   source <(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
    grep '"skill":"ship-review-override"' ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl 2>/dev/null || echo "NO_OVERRIDE"
    ```
    If an override exists, display the dashboard and note "Review gate previously accepted — continuing." Do NOT ask again.
@@ -252,11 +255,11 @@ If the Eng Review is NOT "CLEAR":
    - RECOMMENDATION: Choose C if the change is obviously trivial (< 20 lines, typo fix, config-only); Choose B for larger changes
    - Options: A) Ship anyway  B) Abort — run /plan-eng-review first  C) Change is too small to need eng review
    - If CEO Review is missing, mention as informational ("CEO Review not run — recommended for product changes") but do NOT block
-   - For Design Review: run `eval $(~/.codex/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)`. If `SCOPE_FRONTEND=true` and no design review (plan-design-review or design-review-lite) exists in the dashboard, mention: "Design Review not run — this PR changes frontend code. The lite design check will run automatically in Step 3.5, but consider running /design-review for a full visual audit post-implementation." Still never block.
+   - For Design Review: run `source <(~/.codex/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)`. If `SCOPE_FRONTEND=true` and no design review (plan-design-review or design-review-lite) exists in the dashboard, mention: "Design Review not run — this PR changes frontend code. The lite design check will run automatically in Step 3.5, but consider running /design-review for a full visual audit post-implementation." Still never block.
 
 3. **If the user chooses A or C,** persist the decision so future `/ship` runs on this branch skip the gate:
    ```bash
-   eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
+   source <(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
    echo '{"skill":"ship-review-override","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","decision":"USER_CHOICE"}' >> ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl
    ```
    Substitute USER_CHOICE with "ship_anyway" or "not_relevant".
@@ -673,7 +676,7 @@ Review the diff for structural issues that tests don't catch.
 Check if the diff touches frontend files using `gstack-diff-scope`:
 
 ```bash
-eval $(~/.codex/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
+source <(~/.codex/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 ```
 
 **If `SCOPE_FRONTEND=false`:** Skip design review silently. No output.
@@ -696,12 +699,10 @@ eval $(~/.codex/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 6. **Log the result** for the Review Readiness Dashboard:
 
 ```bash
-eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
-mkdir -p ~/.gstack/projects/$SLUG
-echo '{"skill":"design-review-lite","timestamp":"TIMESTAMP","status":"STATUS","findings":N,"auto_fixed":M}' >> ~/.gstack/projects/$SLUG/$BRANCH-reviews.jsonl
+~/.codex/skills/gstack/bin/gstack-review-log '{"skill":"design-review-lite","timestamp":"TIMESTAMP","status":"STATUS","findings":N,"auto_fixed":M,"commit":"COMMIT"}'
 ```
 
-Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count.
+Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count, COMMIT = output of `git rev-parse --short HEAD`.
 
    Include any design findings alongside the code review findings. They follow the same Fix-First flow below.
 
@@ -793,10 +794,7 @@ Present the full output verbatim under a `CODEX SAYS:` header. Check for `[P1]` 
 to determine pass/fail gate. Persist the result:
 
 ```bash
-eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
-BRANCH_SLUG=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-')
-mkdir -p ~/.gstack/projects/$SLUG
-echo '{"skill":"codex-review","timestamp":"TIMESTAMP","status":"STATUS","gate":"GATE"}' >> ~/.gstack/projects/$SLUG/$BRANCH_SLUG-reviews.jsonl
+~/.codex/skills/gstack/bin/gstack-review-log '{"skill":"codex-review","timestamp":"TIMESTAMP","status":"STATUS","gate":"GATE"}'
 ```
 
 If GATE is FAIL, use AskUserQuestion: "Codex found critical issues. Ship anyway?"
@@ -1018,7 +1016,28 @@ EOF
 )"
 ```
 
-**Output the PR URL** — this should be the final output the user sees.
+**Output the PR URL** — then proceed to Step 8.5.
+
+---
+
+## Step 8.5: Auto-invoke /document-release
+
+After the PR is created, automatically sync project documentation. Read the
+`document-release/SKILL.md` skill file (adjacent to this skill's directory) and
+execute its full workflow:
+
+1. Read the `/document-release` skill: `cat ${CLAUDE_SKILL_DIR}/../document-release/SKILL.md`
+2. Follow its instructions — it reads all .md files in the project, cross-references
+   the diff, and updates anything that drifted (README, ARCHITECTURE, CONTRIBUTING,
+   CLAUDE.md, TODOS, etc.)
+3. If any docs were updated, commit the changes and push to the same branch:
+   ```bash
+   git add -A && git commit -m "docs: sync documentation with shipped changes" && git push
+   ```
+4. If no docs needed updating, say "Documentation is current — no updates needed."
+
+This step is automatic. Do not ask the user for confirmation. The goal is zero-friction
+doc updates — the user runs `/ship` and documentation stays current without a separate command.
 
 ---
 
@@ -1035,4 +1054,4 @@ EOF
 - **Use Greptile reply templates from greptile-triage.md.** Every reply includes evidence (inline diff, code references, re-rank suggestion). Never post vague replies.
 - **Never push without fresh verification evidence.** If code changed after Step 3 tests, re-run before pushing.
 - **Step 3.4 generates coverage tests.** They must pass before committing. Never commit failing tests.
-- **The goal is: user says `/ship`, next thing they see is the review + PR URL.**
+- **The goal is: user says `/ship`, next thing they see is the review + PR URL + auto-synced docs.**

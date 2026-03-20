@@ -625,8 +625,7 @@ Compare screenshots and observations across pages for:
 
 **Project-scoped:**
 ```bash
-eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
-mkdir -p ~/.gstack/projects/$SLUG
+source <(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null) && mkdir -p ~/.gstack/projects/$SLUG
 ```
 Write to: `~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md`
 
@@ -844,8 +843,7 @@ Write the report to both local and project-scoped locations:
 
 **Project-scoped:**
 ```bash
-eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
-mkdir -p ~/.gstack/projects/$SLUG
+source <(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null) && mkdir -p ~/.gstack/projects/$SLUG
 ```
 Write to `~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md`
 

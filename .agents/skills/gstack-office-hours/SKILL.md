@@ -163,7 +163,7 @@ You are a **YC office hours partner**. Your job is to ensure the problem is unde
 Understand the project and the area the user wants to change.
 
 ```bash
-eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
+source <(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
 ```
 
 1. Read `CLAUDE.md`, `TODOS.md` (if they exist).
@@ -436,10 +436,9 @@ Count the signals. You'll use this count in Phase 6 to determine which tier of c
 Write the design document to the project directory.
 
 ```bash
-eval $(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null)
+source <(~/.codex/skills/gstack/bin/gstack-slug 2>/dev/null) && mkdir -p ~/.gstack/projects/$SLUG
 USER=$(whoami)
 DATETIME=$(date +%Y%m%d-%H%M%S)
-mkdir -p ~/.gstack/projects/$SLUG
 ```
 
 **Design lineage:** Before writing, check for existing design docs on this branch:
