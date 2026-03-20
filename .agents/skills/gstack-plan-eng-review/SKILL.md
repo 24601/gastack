@@ -338,11 +338,11 @@ ls -d test/ tests/ spec/ __tests__/ cypress/ e2e/ 2>/dev/null
 
 3. **If no framework detected:** still produce the coverage diagram, but skip test generation.
 
-**Step 1. Trace every codepath changed** using `git diff origin/<base>...HEAD`:
+**Step 1. Trace every codepath in the plan:**
 
-Read every changed file. For each one, trace how data flows through the code — don't just list functions, actually follow the execution:
+Read the plan document. For each new feature, service, endpoint, or component described, trace how data will flow through the code — don't just list planned functions, actually follow the planned execution:
 
-1. **Read the diff.** For each changed file, read the full file (not just the diff hunk) to understand context.
+1. **Read the plan.** For each planned component, understand what it does and how it connects to existing code.
 2. **Trace data flow.** Starting from each entry point (route handler, exported function, event listener, component render), follow the data through every branch:
    - Where does input come from? (request params, props, database, API call)
    - What transforms it? (validation, mapping, computation)

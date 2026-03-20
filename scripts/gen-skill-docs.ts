@@ -1313,13 +1313,23 @@ find . -name '*.test.*' -o -name '*.spec.*' -o -name '*_test.*' -o -name '*_spec
 Store this number for the PR body.`);
   }
 
-  // ── Codepath tracing methodology (shared) ──
+  // ── Codepath tracing methodology (shared, with mode-specific source) ──
+  const traceSource = mode === 'plan'
+    ? `**Step 1. Trace every codepath in the plan:**
+
+Read the plan document. For each new feature, service, endpoint, or component described, trace how data will flow through the code — don't just list planned functions, actually follow the planned execution:`
+    : `**${mode === 'ship' ? '1' : 'Step 1'}. Trace every codepath changed** using \`git diff origin/<base>...HEAD\`:
+
+Read every changed file. For each one, trace how data flows through the code — don't just list functions, actually follow the execution:`;
+
+  const traceStep1 = mode === 'plan'
+    ? `1. **Read the plan.** For each planned component, understand what it does and how it connects to existing code.`
+    : `1. **Read the diff.** For each changed file, read the full file (not just the diff hunk) to understand context.`;
+
   sections.push(`
-**${mode === 'ship' ? '1' : 'Step 1'}. Trace every codepath changed** using \`git diff origin/<base>...HEAD\`:
+${traceSource}
 
-Read every changed file. For each one, trace how data flows through the code — don't just list functions, actually follow the execution:
-
-1. **Read the diff.** For each changed file, read the full file (not just the diff hunk) to understand context.
+${traceStep1}
 2. **Trace data flow.** Starting from each entry point (route handler, exported function, event listener, component render), follow the data through every branch:
    - Where does input come from? (request params, props, database, API call)
    - What transforms it? (validation, mapping, computation)

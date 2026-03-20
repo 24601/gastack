@@ -425,7 +425,6 @@ describe('TEST_COVERAGE_AUDIT placeholders', () => {
 
   test('all three modes share codepath tracing methodology', () => {
     const sharedPhrases = [
-      'Trace every codepath changed',
       'Trace data flow',
       'Diagram the execution',
       'Quality scoring rubric',
@@ -438,6 +437,12 @@ describe('TEST_COVERAGE_AUDIT placeholders', () => {
       expect(shipSkill).toContain(phrase);
       expect(reviewSkill).toContain(phrase);
     }
+    // Plan mode traces the plan, not a git diff
+    expect(planSkill).toContain('Trace every codepath in the plan');
+    expect(planSkill).not.toContain('git diff origin');
+    // Ship and review modes trace the diff
+    expect(shipSkill).toContain('Trace every codepath changed');
+    expect(reviewSkill).toContain('Trace every codepath changed');
   });
 
   test('all three modes include E2E decision matrix', () => {
