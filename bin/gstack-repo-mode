@@ -4,8 +4,8 @@
 # Or:    gstack-repo-mode           → prints REPO_MODE=... line
 #
 # Detection heuristic (90-day window):
-#   Solo:          top author >= 80% of commits AND <= 2 distinct authors
-#   Collaborative: everything else
+#   Solo:          top author >= 80% of commits
+#   Collaborative: top author < 80%
 #
 # Override: gstack-config set repo_mode solo|collaborative
 # Cache:    ~/.gstack/projects/$SLUG/repo-mode.json (7-day TTL)
@@ -15,10 +15,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval $("$SCRIPT_DIR/gstack-slug" 2>/dev/null) || { echo "REPO_MODE=unknown"; exit 0; }
 [ -z "${SLUG:-}" ] && { echo "REPO_MODE=unknown"; exit 0; }
 
+# Validate: only allow known values (prevent shell injection via source <(...))
+validate_mode() {
+  case "$1" in solo|collaborative|unknown) echo "$1" ;; *) echo "unknown" ;; esac
+}
+
 # Config override takes precedence
 OVERRIDE=$("$SCRIPT_DIR/gstack-config" get repo_mode 2>/dev/null || true)
 if [ -n "$OVERRIDE" ] && [ "$OVERRIDE" != "null" ]; then
-  echo "REPO_MODE=$OVERRIDE"
+  echo "REPO_MODE=$(validate_mode "$OVERRIDE")"
   exit 0
 fi
 
@@ -29,7 +34,7 @@ if [ -f "$CACHE_FILE" ]; then
   CACHE_AGE=$(( $(date +%s) - $(stat -f %m "$CACHE_FILE" 2>/dev/null || stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0) ))
   if [ "$CACHE_AGE" -lt 604800 ]; then  # 7 days in seconds
     MODE=$(grep -o '"mode":"[^"]*"' "$CACHE_FILE" | head -1 | cut -d'"' -f4)
-    [ -n "$MODE" ] && echo "REPO_MODE=$MODE" && exit 0
+    [ -n "$MODE" ] && echo "REPO_MODE=$(validate_mode "$MODE")" && exit 0
   fi
 fi
 
