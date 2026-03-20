@@ -15,13 +15,19 @@ description: |
   - Reviewing a plan (architecture) → suggest /plan-eng-review
   - Reviewing a plan (design) → suggest /plan-design-review
   - Creating a design system → suggest /design-consultation
-  - Debugging errors → suggest /debug
+  - Debugging errors → suggest /investigate
   - Testing the app → suggest /qa
   - Code review before merge → suggest /review
   - Visual design audit → suggest /design-review
   - Ready to deploy / create PR → suggest /ship
   - Post-ship doc updates → suggest /document-release
   - Weekly retrospective → suggest /retro
+  - Wanting a second opinion or adversarial code review → suggest /codex
+  - Working with production or live systems → suggest /careful
+  - Want to scope edits to one module/directory → suggest /freeze
+  - Maximum safety mode (destructive warnings + edit restrictions) → suggest /guard
+  - Removing edit restrictions → suggest /unfreeze
+  - Upgrading gstack to latest version → suggest /gstack-upgrade
 
   If the user pushes back on skill suggestions ("stop suggesting things",
   "I don't need suggestions", "too aggressive"):
@@ -529,7 +535,9 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 ### Server
 | Command | Description |
 |---------|-------------|
+| `handoff [message]` | Open visible Chrome at current page for user takeover |
 | `restart` | Restart server |
+| `resume` | Re-snapshot after user takeover, return control to AI |
 | `status` | Health check |
 | `stop` | Shutdown server |
 
