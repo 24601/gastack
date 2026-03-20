@@ -34,6 +34,7 @@ const SKILL_FILES = [
   'canary/SKILL.md',
   'benchmark/SKILL.md',
   'land-and-deploy/SKILL.md',
+  'setup-deploy/SKILL.md',
 ].filter(f => fs.existsSync(path.join(ROOT, f)));
 
 let hasErrors = false;

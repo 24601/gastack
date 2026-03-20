@@ -185,7 +185,11 @@ Look for workflow names containing "deploy", "release", "production", "staging",
 
 ## Step 6: Wait for deploy (if applicable)
 
-Find the GitHub Actions workflow run triggered by the merge commit:
+The deploy verification strategy depends on the platform detected in Step 5.
+
+### Strategy A: GitHub Actions workflow
+
+If a deploy workflow was detected, find the run triggered by the merge commit:
 
 ```bash
 gh run list --branch <base> --limit 10 --json databaseId,headSha,status,conclusion,name,workflowName
@@ -198,9 +202,40 @@ Poll every 30 seconds:
 gh run view <run-id> --json status,conclusion
 ```
 
+### Strategy B: Platform CLI (Fly.io, Render, Heroku)
+
+If a deploy status command was configured in CLAUDE.md (e.g., `fly status --app myapp`), use it instead of or in addition to GitHub Actions polling.
+
+**Fly.io:** After merge, Fly deploys via GitHub Actions or `fly deploy`. Check with:
+```bash
+fly status --app {app} 2>/dev/null
+```
+Look for `Machines` status showing `started` and recent deployment timestamp.
+
+**Render:** Render auto-deploys on push to the connected branch. Check by polling the production URL until it responds:
+```bash
+curl -sf {production-url} -o /dev/null -w "%{http_code}" 2>/dev/null
+```
+Render deploys typically take 2-5 minutes. Poll every 30 seconds.
+
+**Heroku:** Check latest release:
+```bash
+heroku releases --app {app} -n 1 2>/dev/null
+```
+
+### Strategy C: Auto-deploy platforms (Vercel, Netlify)
+
+Vercel and Netlify deploy automatically on merge. No explicit deploy trigger needed. Wait 60 seconds for the deploy to propagate, then proceed directly to canary verification in Step 7.
+
+### Strategy D: Custom deploy hooks
+
+If CLAUDE.md has a custom deploy status command in the "Custom deploy hooks" section, run that command and check its exit code.
+
+### Common: Timing and failure handling
+
 Record deploy start time. Show progress every 2 minutes: "Deploy in progress... (Xm elapsed)"
 
-If deploy succeeds (`conclusion` is `success`): record deploy duration, continue to Step 7.
+If deploy succeeds (`conclusion` is `success` or health check passes): record deploy duration, continue to Step 7.
 
 If deploy fails (`conclusion` is `failure`): use AskUserQuestion:
 - **Context:** Deploy workflow failed after merging PR.

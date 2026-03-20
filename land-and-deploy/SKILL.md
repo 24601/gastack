@@ -400,18 +400,18 @@ First, run the deploy configuration bootstrap to detect or read persisted deploy
 grep -q "## Deploy Configuration" CLAUDE.md 2>/dev/null && echo "DEPLOY_CONFIG_EXISTS" || echo "NO_DEPLOY_CONFIG"
 ```
 
-**If DEPLOY_CONFIG_EXISTS:** Read the Deploy Configuration section from CLAUDE.md. Use the detected platform, production URL, deploy workflow name, and merge method in subsequent steps. **Skip the rest of bootstrap.**
+**If DEPLOY_CONFIG_EXISTS:** Read the Deploy Configuration section from CLAUDE.md. Use the detected platform, production URL, deploy workflow name, deploy status command, and merge method in subsequent steps. **Skip the rest of bootstrap.**
 
 **If NO_DEPLOY_CONFIG — auto-detect:**
 
 ### D1. Detect deploy platform
 
 ```bash
-# Check for platform config files
-[ -f vercel.json ] || [ -d .vercel ] && echo "PLATFORM:vercel"
-[ -f netlify.toml ] || [ -d netlify ] && echo "PLATFORM:netlify"
+# Check for platform config files (order: most specific first)
 [ -f fly.toml ] && echo "PLATFORM:fly"
 [ -f render.yaml ] && echo "PLATFORM:render"
+[ -f vercel.json ] || [ -d .vercel ] && echo "PLATFORM:vercel"
+[ -f netlify.toml ] || [ -d netlify ] && echo "PLATFORM:netlify"
 [ -f Procfile ] && echo "PLATFORM:heroku"
 [ -f railway.json ] || [ -f railway.toml ] && echo "PLATFORM:railway"
 [ -f Dockerfile ] || [ -f docker-compose.yml ] && echo "PLATFORM:docker"
@@ -426,16 +426,39 @@ done
 ls *.gemspec 2>/dev/null && echo "PROJECT_TYPE:library"
 ```
 
-### D2. Detect production URL
+### D2. Detect production URL (platform-specific)
 
 ```bash
-# Check package.json homepage
+# Fly.io — app name is in fly.toml, URL is {app}.fly.dev
+[ -f fly.toml ] && grep -m1 "^app" fly.toml 2>/dev/null | sed 's/app = "\(.*\)"/FLY_APP:\1/'
+
+# Render — check render.yaml for service name and type
+[ -f render.yaml ] && grep -E "name:|type:" render.yaml 2>/dev/null
+
+# Vercel — check project.json or vercel.json for aliases/domains
+[ -f .vercel/project.json ] && cat .vercel/project.json 2>/dev/null
+[ -f vercel.json ] && grep -i "alias\|domain" vercel.json 2>/dev/null
+
+# Netlify — check netlify.toml for custom domain or site name
+[ -f netlify.toml ] && grep -iE "site_id|domain|url" netlify.toml 2>/dev/null
+
+# Heroku — app name from git remote
+git remote -v 2>/dev/null | grep heroku | head -1 | sed 's/.*heroku.com\/\(.*\)\.git.*/HEROKU_APP:\1/'
+
+# Generic — package.json homepage
 [ -f package.json ] && grep -o '"homepage":\s*"[^"]*"' package.json 2>/dev/null
-# Check for common URL patterns in config
-[ -f vercel.json ] && cat vercel.json 2>/dev/null
-[ -f netlify.toml ] && grep -i "url\|domain" netlify.toml 2>/dev/null
-[ -f fly.toml ] && grep "app" fly.toml 2>/dev/null
 ```
+
+**Platform-specific URL resolution:**
+
+| Platform | URL Pattern | How to detect |
+|----------|-------------|---------------|
+| Fly.io | `https://{app}.fly.dev` | `app` field in fly.toml |
+| Render | `https://{service}.onrender.com` | service name in render.yaml |
+| Vercel | `https://{project}.vercel.app` | .vercel/project.json or custom domain |
+| Netlify | `https://{site}.netlify.app` | site_id in netlify.toml |
+| Heroku | `https://{app}.herokuapp.com` | heroku git remote |
+| Railway | `https://{project}.up.railway.app` | railway.json |
 
 ### D3. Detect merge method
 
@@ -445,23 +468,44 @@ gh api repos/{owner}/{repo} --jq '{squash: .allow_squash_merge, merge: .allow_me
 
 Default preference order: squash (cleanest history) > merge > rebase.
 
-### D4. Classify and present
+### D4. Detect deploy status command
+
+For platforms with CLIs, detect the deploy status check command:
+
+| Platform | Deploy status command | What it does |
+|----------|----------------------|-------------|
+| Fly.io | `fly status --app {app}` | Shows running machines, health checks |
+| Fly.io | `fly deploy --app {app} --strategy rolling` | (if deploy is triggered via CLI) |
+| Render | `curl -s https://api.render.com/v1/services/{id}/deploys?limit=1` | Latest deploy status (needs API key) |
+| Vercel | `vercel ls --prod` | Latest production deployment |
+| Heroku | `heroku releases --app {app} -n 1` | Latest release |
+
+If the platform CLI is installed, use it for deploy verification in Step 6 as a supplement to GitHub Actions workflow polling.
+
+### D5. Classify and present
 
 Based on the detection results, determine the deploy configuration:
 
-1. **If PLATFORM detected:** Note the platform and any associated URL.
+1. **If PLATFORM detected:** Note the platform, inferred URL, and status command.
 2. **If DEPLOY_WORKFLOW detected:** Note the workflow file path and name.
 3. **If PROJECT_TYPE is "cli" or "library":** Note that this project likely doesn't have a web deploy. Post-merge verification is not applicable.
 4. **If no platform, no workflow, and not a CLI/library:** Use AskUserQuestion:
    - **Context:** Setting up deploy configuration for /land-and-deploy.
-   - **Question:** No deploy platform detected. What does your deploy look like?
+   - **Question:** No deploy platform detected. Describe your deploy setup so gstack can verify deployments.
    - **RECOMMENDATION:** Choose the option that matches your setup.
-   - A) We deploy via GitHub Actions (specify workflow name)
-   - B) We deploy via Vercel / Netlify / Fly.io / other platform (specify URL)
-   - C) We deploy manually or via custom scripts
-   - D) This project doesn't deploy (library, CLI tool)
+   - A) We deploy via Fly.io (provide app name)
+   - B) We deploy via Render (provide service URL)
+   - C) We deploy via Vercel / Netlify / other platform (provide production URL)
+   - D) We deploy via GitHub Actions (specify workflow name)
+   - E) We deploy manually or via custom scripts (describe the process)
+   - F) This project doesn't deploy (library, CLI tool)
 
-### D5. Persist to CLAUDE.md
+   For option E (custom scripts), ask the user to describe:
+   - How is a deploy triggered? (e.g., "push to main triggers a webhook", "we run `./deploy.sh`")
+   - How do you check if a deploy succeeded? (e.g., "check https://myapp.com/health", "run `kubectl rollout status`")
+   - What's the production URL?
+
+### D6. Persist to CLAUDE.md
 
 If CLAUDE.md exists, append. If it doesn't exist, create it.
 
@@ -471,11 +515,20 @@ Add a section:
 - Platform: {platform or "none detected"}
 - Production URL: {url or "not detected — provide via /land-and-deploy <url>"}
 - Deploy workflow: {workflow file or "none"}
+- Deploy status command: {command or "none — using HTTP health check only"}
 - Merge method: {squash/merge/rebase}
 - Project type: {web app / CLI / library}
+- Post-deploy health check: {url}/health or {url} (HTTP 200 = healthy)
+
+### Custom deploy hooks (optional)
+If your deploy process doesn't fit the auto-detected pattern, add commands here:
+- Pre-merge: (command to run before merging, e.g., "bun run build")
+- Deploy trigger: (command that triggers deploy, if not automatic)
+- Deploy status: (command to check if deploy finished, e.g., "fly status --app myapp")
+- Health check: (URL or command to verify production, e.g., "curl -f https://myapp.com/health")
 ```
 
-Tell the user: "Deploy configuration saved to CLAUDE.md. Future /land-and-deploy runs will use these settings automatically. Edit the section manually to update."
+Tell the user: "Deploy configuration saved to CLAUDE.md. Future /land-and-deploy runs will use these settings automatically. Edit the section manually to update. Run /setup-deploy to reconfigure."
 
 ---
 
@@ -508,7 +561,11 @@ Look for workflow names containing "deploy", "release", "production", "staging",
 
 ## Step 6: Wait for deploy (if applicable)
 
-Find the GitHub Actions workflow run triggered by the merge commit:
+The deploy verification strategy depends on the platform detected in Step 5.
+
+### Strategy A: GitHub Actions workflow
+
+If a deploy workflow was detected, find the run triggered by the merge commit:
 
 ```bash
 gh run list --branch <base> --limit 10 --json databaseId,headSha,status,conclusion,name,workflowName
@@ -521,9 +578,40 @@ Poll every 30 seconds:
 gh run view <run-id> --json status,conclusion
 ```
 
+### Strategy B: Platform CLI (Fly.io, Render, Heroku)
+
+If a deploy status command was configured in CLAUDE.md (e.g., `fly status --app myapp`), use it instead of or in addition to GitHub Actions polling.
+
+**Fly.io:** After merge, Fly deploys via GitHub Actions or `fly deploy`. Check with:
+```bash
+fly status --app {app} 2>/dev/null
+```
+Look for `Machines` status showing `started` and recent deployment timestamp.
+
+**Render:** Render auto-deploys on push to the connected branch. Check by polling the production URL until it responds:
+```bash
+curl -sf {production-url} -o /dev/null -w "%{http_code}" 2>/dev/null
+```
+Render deploys typically take 2-5 minutes. Poll every 30 seconds.
+
+**Heroku:** Check latest release:
+```bash
+heroku releases --app {app} -n 1 2>/dev/null
+```
+
+### Strategy C: Auto-deploy platforms (Vercel, Netlify)
+
+Vercel and Netlify deploy automatically on merge. No explicit deploy trigger needed. Wait 60 seconds for the deploy to propagate, then proceed directly to canary verification in Step 7.
+
+### Strategy D: Custom deploy hooks
+
+If CLAUDE.md has a custom deploy status command in the "Custom deploy hooks" section, run that command and check its exit code.
+
+### Common: Timing and failure handling
+
 Record deploy start time. Show progress every 2 minutes: "Deploy in progress... (Xm elapsed)"
 
-If deploy succeeds (`conclusion` is `success`): record deploy duration, continue to Step 7.
+If deploy succeeds (`conclusion` is `success` or health check passes): record deploy duration, continue to Step 7.
 
 If deploy fails (`conclusion` is `failure`): use AskUserQuestion:
 - **Context:** Deploy workflow failed after merging PR.

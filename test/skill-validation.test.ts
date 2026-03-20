@@ -226,6 +226,7 @@ describe('Update check preamble', () => {
     'canary/SKILL.md',
     'benchmark/SKILL.md',
     'land-and-deploy/SKILL.md',
+    'setup-deploy/SKILL.md',
   ];
 
   for (const skill of skillsWithUpdateCheck) {
@@ -541,6 +542,7 @@ describe('v0.4.1 preamble features', () => {
     'canary/SKILL.md',
     'benchmark/SKILL.md',
     'land-and-deploy/SKILL.md',
+    'setup-deploy/SKILL.md',
   ];
 
   for (const skill of skillsWithPreamble) {
@@ -677,6 +679,7 @@ describe('Contributor mode preamble structure', () => {
     'canary/SKILL.md',
     'benchmark/SKILL.md',
     'land-and-deploy/SKILL.md',
+    'setup-deploy/SKILL.md',
   ];
 
   for (const skill of skillsWithPreamble) {
