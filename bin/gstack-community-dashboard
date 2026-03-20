@@ -70,7 +70,7 @@ echo "Top skills (last 7 days)"
 echo "────────────────────────"
 
 # Query telemetry_events, group by skill
-EVENTS="$(query "telemetry_events" "select=skill,gstack_version&event_type=eq.skill_run&event_timestamp=gte.${WEEK_AGO}&limit=1000" 2>/dev/null || echo "[]")"
+EVENTS="$(query "telemetry_events" "select=skill,gstack_version,session_id&event_type=eq.skill_run&event_timestamp=gte.${WEEK_AGO}&limit=1000" 2>/dev/null || echo "[]")"
 
 if [ "$EVENTS" != "[]" ] && [ -n "$EVENTS" ]; then
   echo "$EVENTS" | grep -o '"skill":"[^"]*"' | awk -F'"' '{print $4}' | sort | uniq -c | sort -rn | head -10 | while read -r COUNT SKILL; do
@@ -109,5 +109,41 @@ else
   echo "  No data yet"
 fi
 
+# ─── Sessions (distinct session_id, works for all tiers) ────
+echo "Sessions (last 7 days)"
+echo "──────────────────────"
+
+if [ "$EVENTS" != "[]" ] && [ -n "$EVENTS" ]; then
+  SESSION_COUNT="$(echo "$EVENTS" | grep -o '"session_id":"[^"]*"' | sort -u | wc -l | tr -d ' ')"
+  echo "  ${SESSION_COUNT} unique sessions"
+else
+  echo "  No session data"
+fi
 echo ""
+
+# ─── Skill recommendations ─────────────────────────────────
+# Fetch top skills for recommendations
+TOP_SKILLS="$(echo "$EVENTS" | grep -o '"skill":"[^"]*"' | awk -F'"' '{print $4}' | sort | uniq -c | sort -rn | head -3 | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')"
+
+if [ -n "$TOP_SKILLS" ]; then
+  RECS="$(curl -sf --max-time 10 \
+    "${SUPABASE_URL}/functions/v1/community-recommendations?skills=${TOP_SKILLS}" \
+    -H "Authorization: Bearer ${ANON_KEY}" \
+    2>/dev/null || echo '{"recommendations":[]}')"
+
+  REC_LIST="$(echo "$RECS" | grep -o '"skill":"[^"]*"' | awk -F'"' '{print $4}')"
+  REC_REASONS="$(echo "$RECS" | grep -o '"reason":"[^"]*"' | awk -F'"' '{print $4}')"
+
+  if [ -n "$REC_LIST" ]; then
+    echo "Skills you might like"
+    echo "─────────────────────"
+    paste <(echo "$REC_LIST") <(echo "$REC_REASONS") 2>/dev/null | while IFS=$'\t' read -r SKILL REASON; do
+      [ -z "$SKILL" ] && continue
+      printf "  /%-20s %s\n" "$SKILL" "${REASON:-}"
+    done
+    echo ""
+  fi
+fi
+
 echo "For local analytics: gstack-analytics"
+echo "For benchmarks: gstack-community-benchmarks"
