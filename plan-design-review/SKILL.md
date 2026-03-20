@@ -189,7 +189,14 @@ RECOMMENDATION: [what the user should do next]
 After the skill workflow completes (success, error, or abort), log the telemetry event.
 Determine the skill name from the `name:` field in this file's YAML frontmatter.
 Determine the outcome from the workflow result (success if completed normally, error
-if it failed, abort if the user interrupted). Run this bash:
+if it failed, abort if the user interrupted).
+
+**PLAN MODE EXCEPTION — ALWAYS RUN:** This command writes telemetry to
+`~/.gstack/analytics/` (user config directory, not project files). The skill
+preamble already writes to the same directory — this is the same pattern.
+Skipping this command loses session duration and outcome data.
+
+Run this bash:
 
 ```bash
 _TEL_END=$(date +%s)
@@ -468,7 +475,13 @@ If any AskUserQuestion goes unanswered, note it here. Never silently default to 
 
 ## Review Log
 
-After producing the Completion Summary above, persist the review result:
+After producing the Completion Summary above, persist the review result.
+
+**PLAN MODE EXCEPTION — ALWAYS RUN:** This command writes review metadata to
+`~/.gstack/` (user config directory, not project files). The skill preamble
+already writes to `~/.gstack/sessions/` and `~/.gstack/analytics/` — this is
+the same pattern. The review dashboard depends on this data. Skipping this
+command breaks the review readiness dashboard in /ship.
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"plan-design-review","timestamp":"TIMESTAMP","status":"STATUS","overall_score":N,"unresolved":N,"decisions_made":N,"commit":"COMMIT"}'

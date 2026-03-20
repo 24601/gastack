@@ -449,6 +449,7 @@ describe('telemetry', () => {
     expect(content).toContain('_TEL_DUR');
     expect(content).toContain('SKILL_NAME');
     expect(content).toContain('OUTCOME');
+    expect(content).toContain('PLAN MODE EXCEPTION');
   });
 
   test('generated SKILL.md contains pending marker handling', () => {
