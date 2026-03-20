@@ -12,7 +12,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-eval $("$SCRIPT_DIR/gstack-slug" 2>/dev/null) || { echo "REPO_MODE=unknown"; exit 0; }
+# Compute SLUG directly (avoid eval of gstack-slug — branch names can contain shell metacharacters)
+SLUG=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)\.git$|\1|;s|.*[:/]\([^/]*/[^/]*\)$|\1|' | tr '/' '-')
 [ -z "${SLUG:-}" ] && { echo "REPO_MODE=unknown"; exit 0; }
 
 # Validate: only allow known values (prevent shell injection via source <(...))
@@ -39,7 +40,9 @@ if [ -f "$CACHE_FILE" ]; then
 fi
 
 # Compute from git history (90-day window)
-SHORTLOG=$(git shortlog -sn --since="90 days ago" --no-merges HEAD 2>/dev/null | head -20)
+# Use default branch (not HEAD) to avoid feature-branch sampling bias
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/||' || echo "origin/main")
+SHORTLOG=$(git shortlog -sn --since="90 days ago" --no-merges "$DEFAULT_BRANCH" 2>/dev/null | head -20)
 if [ -z "$SHORTLOG" ]; then
   echo "REPO_MODE=unknown"
   exit 0

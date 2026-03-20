@@ -353,10 +353,14 @@ Use AskUserQuestion:
 - Continue with the workflow — treat the pre-existing failure as non-blocking.
 
 **If "Blame + assign GitHub issue" (collaborative only):**
-- Find who last modified the failing area:
+- Find who likely broke it. Check BOTH the test file AND the production code it tests:
   \`\`\`bash
+  # Who last touched the failing test?
   git log --format="%an (%ae)" -1 -- <failing-test-file>
+  # Who last touched the production code the test covers? (often the actual breaker)
+  git log --format="%an (%ae)" -1 -- <source-file-under-test>
   \`\`\`
+  If these are different people, prefer the production code author — they likely introduced the regression.
 - Create a GitHub issue assigned to that person:
   \`\`\`bash
   gh issue create \\
