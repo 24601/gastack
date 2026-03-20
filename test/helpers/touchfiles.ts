@@ -83,8 +83,9 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   // QA bootstrap
   'qa-bootstrap': ['qa/**', 'browse/src/**', 'ship/**'],
 
-  // Ship coverage audit
-  'ship-coverage-audit': ['ship/**'],
+  // Coverage audit (shared fixture)
+  'ship-coverage-audit': ['ship/**', 'test/fixtures/coverage-audit-fixture.ts'],
+  'review-coverage-audit': ['review/**', 'test/fixtures/coverage-audit-fixture.ts'],
 
   // Design
   'design-consultation-core':     ['design-consultation/**'],
