@@ -10,6 +10,12 @@
 - **Regression detection iron rule.** When a code change modifies existing behavior, gstack now always generates a regression test — no asking, no skipping.
 - **Test framework auto-detection.** Reads your CLAUDE.md for test commands first, then auto-detects from project files. Works with any framework.
 
+## [0.9.4.1] - 2026-03-20
+
+### Changed
+
+- **`/retro` no longer nags about PR size.** The retro still reports PR size distribution (Small/Medium/Large/XL) as neutral data, but no longer flags XL PRs as problems or recommends splitting them. AI reviews don't fatigue — the unit of work is the feature, not the diff.
+
 ## [0.9.4.0] - 2026-03-20 — Codex Reviews On By Default
 
 ### Changed
