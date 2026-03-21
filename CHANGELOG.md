@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.9.5.0] - 2026-03-20 — Test Coverage Catalog + See Something, Say Something
+## [0.9.5.0] - 2026-03-21 — Test Coverage Catalog + See Something, Say Something
 
 ### Added
 
@@ -13,6 +13,7 @@
 - **Pre-existing test failures no longer block shipping.** When `/ship` hits a test failure that wasn't caused by your branch, gstack classifies it (in-branch vs pre-existing) and offers options: fix now, add as P0 TODO, assign to the author, or skip. Only in-branch failures block the workflow.
 - **`bin/gstack-repo-mode` detects solo vs collaborative repos.** Uses 90-day git history with an 80% threshold, 7-day cache, and config override (`gstack-config set repo_mode solo`). Every skill's preamble now outputs `REPO_MODE`.
 - **"See Something, Say Something" is now a universal principle.** Every gstack skill notices issues outside your branch — deprecation warnings, dead code, env problems — and flags them. In solo mode, it offers to fix. In collaborative mode, it flags and moves on.
+- **CEO review saves context when handing off to `/office-hours`.** When `/plan-ceo-review` suggests running `/office-hours` first, it now saves a handoff note with your system audit findings and any discussion so far. When you come back and re-invoke `/plan-ceo-review`, it picks up that context automatically — no more starting from scratch.
 
 ### Fixed
 
