@@ -166,25 +166,32 @@ export class BrowserManager {
       launchArgs.push(`--load-extension=${extensionPath}`);
     }
 
-    // Launch real Chrome via Playwright's channel protocol
-    // This uses the system Chrome binary, headed, with real window
-    this.browser = await chromium.launch({
-      channel: 'chrome',
+    // Launch headed Chromium via Playwright's persistent context.
+    // Extensions REQUIRE launchPersistentContext (not launch + newContext).
+    // Real Chrome (executablePath/channel) silently blocks --load-extension,
+    // so we use Playwright's bundled Chromium which reliably loads extensions.
+    const fs = require('fs');
+    const path = require('path');
+    const userDataDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
+    fs.mkdirSync(userDataDir, { recursive: true });
+
+    this.context = await chromium.launchPersistentContext(userDataDir, {
       headless: false,
       args: launchArgs,
+      viewport: null,  // Use browser's default viewport (real window size)
+      // Playwright adds flags that block extension loading
+      ignoreDefaultArgs: [
+        '--disable-extensions',
+        '--disable-component-extensions-with-background-pages',
+      ],
     });
+    this.browser = this.context.browser();
     this.connectionMode = 'cdp';
     this.intentionalDisconnect = false;
 
-    // Create a context (channel:chrome doesn't have pre-existing contexts)
-    const contextOptions: BrowserContextOptions = {
-      viewport: null,  // Use Chrome's default viewport (real window size)
-    };
-    this.context = await this.browser.newContext(contextOptions);
-
     // Inject visual indicator — subtle top-edge gradient + floating pill
     // so the user always knows which Chrome window gstack controls
-    await this.context.addInitScript(() => {
+    const indicatorScript = () => {
       const injectIndicator = () => {
         if (document.getElementById('gstack-ctrl')) return;
 
@@ -193,7 +200,7 @@ export class BrowserManager {
         topLine.id = 'gstack-ctrl';
         topLine.style.cssText = `
           position: fixed; top: 0; left: 0; right: 0; height: 2px;
-          background: linear-gradient(90deg, #4ade80, #22d3ee, #4ade80);
+          background: linear-gradient(90deg, #F59E0B, #FBBF24, #F59E0B);
           background-size: 200% 100%;
           animation: gstack-shimmer 3s linear infinite;
           pointer-events: none; z-index: 2147483647;
@@ -208,17 +215,17 @@ export class BrowserManager {
           z-index: 2147483647; pointer-events: none;
           display: flex; align-items: center; gap: 5px;
           padding: 4px 10px;
-          background: rgba(0, 0, 0, 0.7);
+          background: rgba(12, 12, 12, 0.7);
           backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-          border: 1px solid rgba(74, 222, 128, 0.25);
-          border-radius: 100px;
+          border: 1px solid rgba(245, 158, 11, 0.25);
+          border-radius: 9999px;
           font: 500 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
           color: rgba(255, 255, 255, 0.7);
           letter-spacing: 0.03em;
           transition: opacity 0.5s ease;
           opacity: 1;
         `;
-        pill.innerHTML = '<span style="width:5px;height:5px;border-radius:50%;background:#4ade80;box-shadow:0 0 4px rgba(74,222,128,0.5);flex-shrink:0;"></span>gstack';
+        pill.innerHTML = '<span style="width:5px;height:5px;border-radius:50%;background:#F59E0B;box-shadow:0 0 4px rgba(245,158,11,0.5);flex-shrink:0;"></span>gstack';
 
         // Keyframe for shimmer animation
         const style = document.createElement('style');
@@ -244,17 +251,31 @@ export class BrowserManager {
       } else {
         injectIndicator();
       }
-    });
+    };
+    await this.context.addInitScript(indicatorScript);
 
-    // Create first tab
-    await this.newTab();
+    // Persistent context opens a default page — adopt it instead of creating a new one
+    const existingPages = this.context.pages();
+    if (existingPages.length > 0) {
+      const page = existingPages[0];
+      const id = this.nextTabId++;
+      this.pages.set(id, page);
+      this.activeTabId = id;
+      this.wirePageEvents(page);
+      // Inject indicator on restored page (addInitScript only fires on new navigations)
+      try { await page.evaluate(indicatorScript); } catch {}
+    } else {
+      await this.newTab();
+    }
 
     // Browser disconnect handler
-    this.browser.on('disconnected', () => {
-      if (this.intentionalDisconnect) return;
-      console.error('[browse] Real browser disconnected.');
-      process.exit(1);
-    });
+    if (this.browser) {
+      this.browser.on('disconnected', () => {
+        if (this.intentionalDisconnect) return;
+        console.error('[browse] Real browser disconnected.');
+        process.exit(1);
+      });
+    }
 
     // CDP-specific defaults
     this.dialogAutoAccept = false;  // Don't dismiss user's real dialogs
@@ -293,13 +314,13 @@ export class BrowserManager {
   }
 
   async close() {
-    if (this.browser) {
+    if (this.browser || (this.connectionMode === 'cdp' && this.context)) {
       if (this.connectionMode === 'cdp') {
-        // CDP/channel:chrome mode: close the browser we launched
+        // CDP/persistent context mode: close the context (which closes the browser)
         this.intentionalDisconnect = true;
-        this.browser.removeAllListeners('disconnected');
+        if (this.browser) this.browser.removeAllListeners('disconnected');
         await Promise.race([
-          this.browser.close(),
+          this.context ? this.context.close() : Promise.resolve(),
           new Promise(resolve => setTimeout(resolve, 5000)),
         ]).catch(() => {});
       } else {

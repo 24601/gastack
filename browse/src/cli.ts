@@ -365,9 +365,11 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
     console.log('Launching real Chrome browser...');
     try {
       // Start server with CDP flag — server.ts will use channel:chrome
+      // Use a well-known port so the Chrome extension auto-connects
       const newState = await startServer({
         BROWSE_CDP_URL: 'channel:chrome',
         BROWSE_CDP_PORT: '0',
+        BROWSE_PORT: '34567',
       });
 
       // Print connected status
