@@ -130,6 +130,26 @@ AI-assisted coding makes the marginal cost of completeness near-zero. When you p
 - BAD: "Let's defer test coverage to a follow-up PR." (Tests are the cheapest lake to boil.)
 - BAD: Quoting only human-team effort: "This would take 2 weeks." (Say: "2 weeks human / ~1 hour CC.")
 
+## Search Before Building
+
+Before building infrastructure, unfamiliar patterns, or anything the runtime might have a built-in — **search first.** Read `~/.claude/skills/gstack/ETHOS.md` for the full philosophy.
+
+**Three layers of knowledge:**
+- **Layer 1** (tried and true — in distribution). Don't reinvent the wheel. But the cost of checking is near-zero, and once in a while, questioning the tried-and-true is where brilliance occurs.
+- **Layer 2** (new and popular — search for these). But scrutinize: humans are subject to mania. Search results are inputs to your thinking, not answers.
+- **Layer 3** (first principles — prize these above all). Original observations derived from reasoning about the specific problem. The most valuable of all.
+
+**Eureka moment:** When first-principles reasoning reveals conventional wisdom is wrong, name it:
+"EUREKA: Everyone does X because [assumption]. But [evidence] shows this is wrong. Y is better because [reasoning]."
+
+Log eureka moments:
+```bash
+jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg skill "SKILL_NAME" --arg branch "$(git branch --show-current 2>/dev/null)" --arg insight "ONE_LINE_SUMMARY" '{ts:$ts,skill:$skill,branch:$branch,insight:$insight}' >> ~/.gstack/analytics/eureka.jsonl 2>/dev/null || true
+```
+Replace SKILL_NAME and ONE_LINE_SUMMARY. Runs inline — don't stop the workflow.
+
+**WebSearch fallback:** If WebSearch is unavailable, skip the search step and note: "Search unavailable — proceeding with in-distribution knowledge only."
+
 ## Contributor Mode
 
 If `_CONTRIB` is `true`: you are in **contributor mode**. You're a gstack user who also helps make it better.
@@ -392,145 +412,39 @@ Determine what kind of project this is and how to verify the deploy.
 
 First, run the deploy configuration bootstrap to detect or read persisted deploy settings:
 
-## Deploy Configuration Bootstrap
-
-**Detect existing deploy configuration in CLAUDE.md:**
-
 ```bash
-grep -q "## Deploy Configuration" CLAUDE.md 2>/dev/null && echo "DEPLOY_CONFIG_EXISTS" || echo "NO_DEPLOY_CONFIG"
-```
+# Check for persisted deploy config in CLAUDE.md
+DEPLOY_CONFIG=$(grep -A 20 "## Deploy Configuration" CLAUDE.md 2>/dev/null || echo "NO_CONFIG")
+echo "$DEPLOY_CONFIG"
 
-**If DEPLOY_CONFIG_EXISTS:** Read the Deploy Configuration section from CLAUDE.md. Use the detected platform, production URL, deploy workflow name, deploy status command, and merge method in subsequent steps. **Skip the rest of bootstrap.**
+# If config exists, parse it
+if [ "$DEPLOY_CONFIG" != "NO_CONFIG" ]; then
+  PROD_URL=$(echo "$DEPLOY_CONFIG" | grep -i "production.*url" | head -1 | sed 's/.*: *//')
+  PLATFORM=$(echo "$DEPLOY_CONFIG" | grep -i "platform" | head -1 | sed 's/.*: *//')
+  echo "PERSISTED_PLATFORM:$PLATFORM"
+  echo "PERSISTED_URL:$PROD_URL"
+fi
 
-**If NO_DEPLOY_CONFIG — auto-detect:**
-
-### D1. Detect deploy platform
-
-```bash
-# Check for platform config files (order: most specific first)
+# Auto-detect platform from config files
 [ -f fly.toml ] && echo "PLATFORM:fly"
 [ -f render.yaml ] && echo "PLATFORM:render"
-[ -f vercel.json ] || [ -d .vercel ] && echo "PLATFORM:vercel"
-[ -f netlify.toml ] || [ -d netlify ] && echo "PLATFORM:netlify"
+([ -f vercel.json ] || [ -d .vercel ]) && echo "PLATFORM:vercel"
+[ -f netlify.toml ] && echo "PLATFORM:netlify"
 [ -f Procfile ] && echo "PLATFORM:heroku"
-[ -f railway.json ] || [ -f railway.toml ] && echo "PLATFORM:railway"
-[ -f Dockerfile ] || [ -f docker-compose.yml ] && echo "PLATFORM:docker"
-# Check for GitHub Actions deploy workflows
+([ -f railway.json ] || [ -f railway.toml ]) && echo "PLATFORM:railway"
+
+# Detect deploy workflows
 for f in .github/workflows/*.yml .github/workflows/*.yaml; do
   [ -f "$f" ] && grep -qiE "deploy|release|production|staging|cd" "$f" 2>/dev/null && echo "DEPLOY_WORKFLOW:$f"
 done
-# Check project type
-[ -f package.json ] && grep -q '"bin"' package.json 2>/dev/null && echo "PROJECT_TYPE:cli"
-[ -f Cargo.toml ] && grep -q '\[\[bin\]\]' Cargo.toml 2>/dev/null && echo "PROJECT_TYPE:cli"
-[ -f setup.py ] || [ -f pyproject.toml ] && grep -qiE "console_scripts|entry_points" setup.py pyproject.toml 2>/dev/null && echo "PROJECT_TYPE:cli"
-ls *.gemspec 2>/dev/null && echo "PROJECT_TYPE:library"
 ```
 
-### D2. Detect production URL (platform-specific)
+If `PERSISTED_PLATFORM` and `PERSISTED_URL` were found in CLAUDE.md, use them directly
+and skip manual detection. If no persisted config exists, use the auto-detected platform
+to guide deploy verification. If nothing is detected, ask the user via AskUserQuestion
+in the decision tree below.
 
-```bash
-# Fly.io — app name is in fly.toml, URL is {app}.fly.dev
-[ -f fly.toml ] && grep -m1 "^app" fly.toml 2>/dev/null | sed 's/app = "\(.*\)"/FLY_APP:\1/'
-
-# Render — check render.yaml for service name and type
-[ -f render.yaml ] && grep -E "name:|type:" render.yaml 2>/dev/null
-
-# Vercel — check project.json or vercel.json for aliases/domains
-[ -f .vercel/project.json ] && cat .vercel/project.json 2>/dev/null
-[ -f vercel.json ] && grep -i "alias\|domain" vercel.json 2>/dev/null
-
-# Netlify — check netlify.toml for custom domain or site name
-[ -f netlify.toml ] && grep -iE "site_id|domain|url" netlify.toml 2>/dev/null
-
-# Heroku — app name from git remote
-git remote -v 2>/dev/null | grep heroku | head -1 | sed 's/.*heroku.com\/\(.*\)\.git.*/HEROKU_APP:\1/'
-
-# Generic — package.json homepage
-[ -f package.json ] && grep -o '"homepage":\s*"[^"]*"' package.json 2>/dev/null
-```
-
-**Platform-specific URL resolution:**
-
-| Platform | URL Pattern | How to detect |
-|----------|-------------|---------------|
-| Fly.io | `https://{app}.fly.dev` | `app` field in fly.toml |
-| Render | `https://{service}.onrender.com` | service name in render.yaml |
-| Vercel | `https://{project}.vercel.app` | .vercel/project.json or custom domain |
-| Netlify | `https://{site}.netlify.app` | site_id in netlify.toml |
-| Heroku | `https://{app}.herokuapp.com` | heroku git remote |
-| Railway | `https://{project}.up.railway.app` | railway.json |
-
-### D3. Detect merge method
-
-```bash
-gh api repos/{owner}/{repo} --jq '{squash: .allow_squash_merge, merge: .allow_merge_commit, rebase: .allow_rebase_merge}' 2>/dev/null || echo "MERGE_DETECT_FAILED"
-```
-
-Default preference order: squash (cleanest history) > merge > rebase.
-
-### D4. Detect deploy status command
-
-For platforms with CLIs, detect the deploy status check command:
-
-| Platform | Deploy status command | What it does |
-|----------|----------------------|-------------|
-| Fly.io | `fly status --app {app}` | Shows running machines, health checks |
-| Fly.io | `fly deploy --app {app} --strategy rolling` | (if deploy is triggered via CLI) |
-| Render | `curl -s https://api.render.com/v1/services/{id}/deploys?limit=1` | Latest deploy status (needs API key) |
-| Vercel | `vercel ls --prod` | Latest production deployment |
-| Heroku | `heroku releases --app {app} -n 1` | Latest release |
-
-If the platform CLI is installed, use it for deploy verification in Step 6 as a supplement to GitHub Actions workflow polling.
-
-### D5. Classify and present
-
-Based on the detection results, determine the deploy configuration:
-
-1. **If PLATFORM detected:** Note the platform, inferred URL, and status command.
-2. **If DEPLOY_WORKFLOW detected:** Note the workflow file path and name.
-3. **If PROJECT_TYPE is "cli" or "library":** Note that this project likely doesn't have a web deploy. Post-merge verification is not applicable.
-4. **If no platform, no workflow, and not a CLI/library:** Use AskUserQuestion:
-   - **Context:** Setting up deploy configuration for /land-and-deploy.
-   - **Question:** No deploy platform detected. Describe your deploy setup so gstack can verify deployments.
-   - **RECOMMENDATION:** Choose the option that matches your setup.
-   - A) We deploy via Fly.io (provide app name)
-   - B) We deploy via Render (provide service URL)
-   - C) We deploy via Vercel / Netlify / other platform (provide production URL)
-   - D) We deploy via GitHub Actions (specify workflow name)
-   - E) We deploy manually or via custom scripts (describe the process)
-   - F) This project doesn't deploy (library, CLI tool)
-
-   For option E (custom scripts), ask the user to describe:
-   - How is a deploy triggered? (e.g., "push to main triggers a webhook", "we run `./deploy.sh`")
-   - How do you check if a deploy succeeded? (e.g., "check https://myapp.com/health", "run `kubectl rollout status`")
-   - What's the production URL?
-
-### D6. Persist to CLAUDE.md
-
-If CLAUDE.md exists, append. If it doesn't exist, create it.
-
-Add a section:
-```markdown
-## Deploy Configuration (auto-detected by gstack)
-- Platform: {platform or "none detected"}
-- Production URL: {url or "not detected — provide via /land-and-deploy <url>"}
-- Deploy workflow: {workflow file or "none"}
-- Deploy status command: {command or "none — using HTTP health check only"}
-- Merge method: {squash/merge/rebase}
-- Project type: {web app / CLI / library}
-- Post-deploy health check: {url}/health or {url} (HTTP 200 = healthy)
-
-### Custom deploy hooks (optional)
-If your deploy process doesn't fit the auto-detected pattern, add commands here:
-- Pre-merge: (command to run before merging, e.g., "bun run build")
-- Deploy trigger: (command that triggers deploy, if not automatic)
-- Deploy status: (command to check if deploy finished, e.g., "fly status --app myapp")
-- Health check: (URL or command to verify production, e.g., "curl -f https://myapp.com/health")
-```
-
-Tell the user: "Deploy configuration saved to CLAUDE.md. Future /land-and-deploy runs will use these settings automatically. Edit the section manually to update. Run /setup-deploy to reconfigure."
-
----
+If you want to persist deploy settings for future runs, suggest the user run `/setup-deploy`.
 
 Then run `gstack-diff-scope` to classify the changes:
 
