@@ -57,6 +57,12 @@ function testIfSelected(testName: string, fn: () => Promise<void>, timeout: numb
   (shouldRun ? test : test.skip)(testName, fn, timeout);
 }
 
+/** Concurrent version — runs in parallel with other concurrent tests within the same describe block. */
+function testConcurrentIfSelected(testName: string, fn: () => Promise<void>, timeout: number) {
+  const shouldRun = selectedTests === null || selectedTests.includes(testName);
+  (shouldRun ? test.concurrent : test.skip)(testName, fn, timeout);
+}
+
 // Eval result collector — accumulates test results, writes to ~/.gstack-dev/evals/ on finalize
 const evalCollector = evalsEnabled ? new EvalCollector('e2e') : null;
 
@@ -336,48 +342,22 @@ Report the exact output — either "READY: <path>" or "NEEDS_SETUP".`,
     try { fs.rmSync(nonGitDir, { recursive: true, force: true }); } catch {}
   }, 60_000);
 
-  test.skip('contributor-mode — tests prompt compliance, not skill functionality', async () => {
+  testIfSelected('contributor-mode', async () => {
     const contribDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-contrib-'));
     const logsDir = path.join(contribDir, 'contributor-logs');
     fs.mkdirSync(logsDir, { recursive: true });
 
     const result = await runSkillTest({
-      prompt: `You MUST use tools for every step. Do NOT respond with only text.
+      prompt: `You are in contributor mode (gstack_contributor=true). You just ran this browse command and it failed:
 
-Step 1: Run this bash command:
-/nonexistent/path/browse goto https://example.com
+$ /nonexistent/browse goto https://example.com
+/nonexistent/browse: No such file or directory
 
-Step 2: After the command fails, create a contributor field report. Use the Write tool to write the file ${logsDir}/browse-missing-binary.md with this content:
-
----
-# Browse binary missing
-
-Hey gstack team — ran into this while using /browse:
-
-**What I was trying to do:** Run browse goto to navigate to a URL
-**What happened instead:** Binary not found at /nonexistent/path/browse
-**My rating:** 3/10 — the browse binary path is wrong or missing
-
-## Steps to reproduce
-1. Run /nonexistent/path/browse goto https://example.com
-2. Command fails with "not found"
-
-## Raw output
-\`\`\`
-/nonexistent/path/browse: No such file or directory
-\`\`\`
-
-## What would make this a 10
-gstack should validate the browse binary exists before trying to run it
-
-**Date:** 2026-03-20 | **Version:** 0.9.1 | **Skill:** /browse
----
-
-Step 3: Say "Report filed."`,
+Per the contributor mode instructions, file a field report to ${logsDir}/browse-missing-binary.md using the Write tool. Include all required sections: title, what you tried, what happened, rating, repro steps, raw output, what would make it a 10, and the date/version footer.`,
       workingDirectory: contribDir,
-      maxTurns: 10,
-      timeout: 90_000,
-      // skipped: contributor-mode — removed from touchfiles
+      maxTurns: 5,
+      timeout: 30_000,
+      testName: 'contributor-mode',
       runId,
     });
 
@@ -1928,14 +1908,139 @@ IMPORTANT:
 
 // --- Deferred skill E2E tests (destructive or require interactive UI) ---
 
-// Deferred tests — only test.todo entries, no selection needed
-describeE2E('Deferred skill E2E', () => {
-  // Ship is destructive: pushes to remote, creates PRs, modifies VERSION/CHANGELOG
-  test.todo('/ship completes full workflow');
+// Ship workflow with local bare remote — tests push + commit structure without GitHub
+describeIfSelected('Ship workflow E2E', ['ship-local-workflow'], () => {
+  let shipWorkDir: string;
+  let shipRemoteDir: string;
 
-  // Setup-browser-cookies requires interactive browser picker UI
-  test.todo('/setup-browser-cookies imports cookies');
+  beforeAll(() => {
+    shipRemoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-ship-remote-'));
+    shipWorkDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-ship-work-'));
 
+    // Create bare remote
+    spawnSync('git', ['init', '--bare'], { cwd: shipRemoteDir, stdio: 'pipe' });
+
+    // Clone it as working repo
+    spawnSync('git', ['clone', shipRemoteDir, shipWorkDir], { stdio: 'pipe' });
+
+    const run = (cmd: string, args: string[]) =>
+      spawnSync(cmd, args, { cwd: shipWorkDir, stdio: 'pipe', timeout: 5000 });
+    run('git', ['config', 'user.email', 'test@test.com']);
+    run('git', ['config', 'user.name', 'Test']);
+
+    // Initial commit on main
+    fs.writeFileSync(path.join(shipWorkDir, 'app.ts'), 'console.log("v1");\n');
+    fs.writeFileSync(path.join(shipWorkDir, 'VERSION'), '0.1.0.0\n');
+    fs.writeFileSync(path.join(shipWorkDir, 'CHANGELOG.md'), '# Changelog\n');
+    run('git', ['add', '.']);
+    run('git', ['commit', '-m', 'initial']);
+    run('git', ['push', '-u', 'origin', 'main']);
+
+    // Feature branch
+    run('git', ['checkout', '-b', 'feature/ship-test']);
+    fs.writeFileSync(path.join(shipWorkDir, 'app.ts'), 'console.log("v2");\n');
+    run('git', ['add', 'app.ts']);
+    run('git', ['commit', '-m', 'feat: update to v2']);
+
+    // Copy ship skill
+    fs.copyFileSync(path.join(ROOT, 'ship', 'SKILL.md'), path.join(shipWorkDir, 'ship-SKILL.md'));
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(shipWorkDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(shipRemoteDir, { recursive: true, force: true }); } catch {}
+  });
+
+  testIfSelected('ship-local-workflow', async () => {
+    const result = await runSkillTest({
+      prompt: `Read ship-SKILL.md for the ship workflow.
+Skip the preamble. Skip Steps 2.5, 3, 3.25, 3.4, 3.5, 3.75, 3.8, 5.5, 8, 8.5 (no tests, no review, no greptile, no codex, no TODOS, no PR, no doc-release — this is a test environment).
+
+Run Step 0 (detect base branch — fall back to main).
+Run Step 2 (merge base branch).
+Run Step 4 (version bump — auto-pick MICRO).
+Run Step 5 (CHANGELOG — auto-generate).
+Run Step 6 (commit).
+Run Step 7 (push to origin).
+
+Write ship-summary.md with the version and branch.`,
+      workingDirectory: shipWorkDir,
+      maxTurns: 15,
+      timeout: 120_000,
+      testName: 'ship-local-workflow',
+      runId,
+    });
+
+    logCost('/ship local workflow', result);
+
+    // Check push succeeded
+    const remoteLog = spawnSync('git', ['log', '--oneline'], { cwd: shipRemoteDir, stdio: 'pipe' });
+    const remoteCommits = remoteLog.stdout.toString().trim().split('\n').length;
+
+    // Check VERSION was bumped
+    const versionContent = fs.existsSync(path.join(shipWorkDir, 'VERSION'))
+      ? fs.readFileSync(path.join(shipWorkDir, 'VERSION'), 'utf-8').trim() : '';
+    const versionBumped = versionContent !== '0.1.0.0';
+
+    recordE2E('/ship local workflow', 'Ship workflow E2E', result, {
+      passed: remoteCommits > 1 && ['success', 'error_max_turns'].includes(result.exitReason),
+    });
+
+    expect(['success', 'error_max_turns']).toContain(result.exitReason);
+    expect(remoteCommits).toBeGreaterThan(1);
+    console.log(`Remote commits: ${remoteCommits}, VERSION: ${versionContent}, bumped: ${versionBumped}`);
+  }, 150_000);
+});
+
+// Browser cookie detection smoke test — no interactive UI
+describeIfSelected('Setup Browser Cookies E2E', ['setup-cookies-detect'], () => {
+  let cookieDir: string;
+
+  beforeAll(() => {
+    cookieDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-cookies-'));
+    // Copy skill files
+    fs.mkdirSync(path.join(cookieDir, 'setup-browser-cookies'), { recursive: true });
+    fs.copyFileSync(
+      path.join(ROOT, 'setup-browser-cookies', 'SKILL.md'),
+      path.join(cookieDir, 'setup-browser-cookies', 'SKILL.md'),
+    );
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(cookieDir, { recursive: true, force: true }); } catch {}
+  });
+
+  testIfSelected('setup-cookies-detect', async () => {
+    const result = await runSkillTest({
+      prompt: `Read setup-browser-cookies/SKILL.md for the cookie import workflow.
+
+This is a test environment. List which browsers you can detect on this system by checking for their cookie database files.
+Write the detected browsers to ${cookieDir}/detected-browsers.md.
+Do NOT launch the cookie picker UI — just detect and report.`,
+      workingDirectory: cookieDir,
+      maxTurns: 5,
+      timeout: 45_000,
+      testName: 'setup-cookies-detect',
+      runId,
+    });
+
+    logCost('/setup-browser-cookies detect', result);
+
+    const detectPath = path.join(cookieDir, 'detected-browsers.md');
+    const detectExists = fs.existsSync(detectPath);
+    const detectContent = detectExists ? fs.readFileSync(detectPath, 'utf-8') : '';
+    const hasBrowserName = /chrome|arc|brave|edge|comet|safari|firefox/i.test(detectContent);
+
+    recordE2E('/setup-browser-cookies detect', 'Setup Browser Cookies E2E', result, {
+      passed: detectExists && hasBrowserName && ['success', 'error_max_turns'].includes(result.exitReason),
+    });
+
+    expect(['success', 'error_max_turns']).toContain(result.exitReason);
+    expect(detectExists).toBe(true);
+    if (detectExists) {
+      expect(hasBrowserName).toBe(true);
+    }
+  }, 60_000);
 });
 
 // --- gstack-upgrade E2E ---
@@ -2081,6 +2186,8 @@ Return JSON: { "passed": true/false, "reasoning": "one paragraph explaining your
 describeIfSelected('Design Consultation E2E', [
   'design-consultation-core',
   'design-consultation-existing',
+  'design-consultation-research',
+  'design-consultation-preview',
 ], () => {
   let designDir: string;
 
@@ -2186,37 +2293,34 @@ Write DESIGN.md and CLAUDE.md (or update it) in the working directory.`,
     }
   }, 420_000);
 
-  test.skip('design-consultation-research — WebSearch-dependent, redundant with core test', async () => {
-    // Clean up from previous test
-    try { fs.unlinkSync(path.join(designDir, 'DESIGN.md')); } catch {}
-    try { fs.unlinkSync(path.join(designDir, 'CLAUDE.md')); } catch {}
+  testIfSelected('design-consultation-research', async () => {
+    // Test WebSearch integration — research phase only, no DESIGN.md generation
+    const researchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-research-'));
 
     const result = await runSkillTest({
-      prompt: `Read design-consultation/SKILL.md for the design consultation workflow.
-Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the design workflow.
+      prompt: `You have access to WebSearch. Research civic tech data platform designs.
 
-This is a civic tech data platform called CivicPulse. Read the README.md.
+Do exactly 2 WebSearch queries:
+1. 'civic tech government data platform design 2025'
+2. 'open data portal UX best practices'
 
-DO research what's out there before proposing — search for civic tech and government data platform designs. Limit research to 3 WebSearch queries and 2 site visits, then move on to writing DESIGN.md. Skip the font preview page. Skip any AskUserQuestion calls — this is non-interactive.
-
-Write DESIGN.md to the working directory.`,
-      workingDirectory: designDir,
-      maxTurns: 45,
-      timeout: 480_000,
-      // skipped: design-consultation-research — removed from touchfiles
+Summarize the key design patterns you found to ${researchDir}/research-notes.md.
+Include: color trends, typography patterns, and layout conventions you observed.
+Do NOT generate a full DESIGN.md — just research notes.`,
+      workingDirectory: researchDir,
+      maxTurns: 8,
+      timeout: 90_000,
+      testName: 'design-consultation-research',
       runId,
     });
 
     logCost('/design-consultation research', result);
 
-    const designPath = path.join(designDir, 'DESIGN.md');
-    const designExists = fs.existsSync(designPath);
-    let designContent = '';
-    if (designExists) {
-      designContent = fs.readFileSync(designPath, 'utf-8');
-    }
+    const notesPath = path.join(researchDir, 'research-notes.md');
+    const notesExist = fs.existsSync(notesPath);
+    const notesContent = notesExist ? fs.readFileSync(notesPath, 'utf-8') : '';
 
-    // Check if WebSearch was used (may not be available in all envs)
+    // Check if WebSearch was used
     const webSearchCalls = result.toolCalls.filter(tc => tc.tool === 'WebSearch');
     if (webSearchCalls.length > 0) {
       console.log(`WebSearch used ${webSearchCalls.length} times`);
@@ -2224,25 +2328,18 @@ Write DESIGN.md to the working directory.`,
       console.warn('WebSearch not used — may be unavailable in test env');
     }
 
-    // LLM judge
-    let judgeResult = { passed: false, reasoning: 'judge not run' };
-    if (designExists && designContent.length > 100) {
-      try {
-        judgeResult = await designQualityJudge(designContent);
-        console.log('Design quality judge (research):', JSON.stringify(judgeResult, null, 2));
-      } catch (err) {
-        console.warn('Judge failed:', err);
-        judgeResult = { passed: true, reasoning: 'judge error — defaulting to pass' };
-      }
-    }
-
     recordE2E('/design-consultation research', 'Design Consultation E2E', result, {
-      passed: designExists && ['success', 'error_max_turns'].includes(result.exitReason),
+      passed: notesExist && notesContent.length > 200 && ['success', 'error_max_turns'].includes(result.exitReason),
     });
 
     expect(['success', 'error_max_turns']).toContain(result.exitReason);
-    expect(designExists).toBe(true);
-  }, 540_000);
+    expect(notesExist).toBe(true);
+    if (notesExist) {
+      expect(notesContent.length).toBeGreaterThan(200);
+    }
+
+    try { fs.rmSync(researchDir, { recursive: true, force: true }); } catch {}
+  }, 120_000);
 
   testIfSelected('design-consultation-existing', async () => {
     // Pre-create a minimal DESIGN.md
@@ -2290,31 +2387,34 @@ Skip research. Skip font preview. Skip any AskUserQuestion calls — this is non
     }
   }, 420_000);
 
-  test.skip('design-consultation-preview — redundant with core test', async () => {
-    // Clean up
-    try { fs.unlinkSync(path.join(designDir, 'DESIGN.md')); } catch {}
+  testIfSelected('design-consultation-preview', async () => {
+    // Test preview HTML generation only — no DESIGN.md (covered by core test)
+    const previewDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-preview-'));
 
     const result = await runSkillTest({
-      prompt: `Read design-consultation/SKILL.md for the design consultation workflow.
-Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the design workflow.
+      prompt: `Generate a font and color preview page for a civic tech data platform.
 
-This is CivicPulse, a civic tech data platform. Read the README.md.
+The design system uses:
+- Primary font: Cabinet Grotesk (headings), Source Sans 3 (body)
+- Colors: #1B4D8E (civic blue), #C4501A (alert orange), #2D6A4F (success green)
+- Neutral: #F8F7F6 (warm white), #1A1A1A (near black)
 
-Skip research. Skip any AskUserQuestion calls — this is non-interactive. Generate the font and color preview page but write it to ./design-preview.html instead of /tmp/ (do NOT run the open command). Then write DESIGN.md.`,
-      workingDirectory: designDir,
-      maxTurns: 30,
-      timeout: 480_000,
-      // skipped: design-consultation-preview — removed from touchfiles
+Write a single HTML file to ${previewDir}/design-preview.html that shows:
+- Font specimens for each font at different sizes
+- Color swatches with hex values
+- A light/dark toggle
+Do NOT write DESIGN.md — only the preview HTML.`,
+      workingDirectory: previewDir,
+      maxTurns: 8,
+      timeout: 90_000,
+      testName: 'design-consultation-preview',
       runId,
     });
 
     logCost('/design-consultation preview', result);
 
-    const previewPath = path.join(designDir, 'design-preview.html');
-    const designPath = path.join(designDir, 'DESIGN.md');
+    const previewPath = path.join(previewDir, 'design-preview.html');
     const previewExists = fs.existsSync(previewPath);
-    const designExists = fs.existsSync(designPath);
-
     let previewContent = '';
     if (previewExists) {
       previewContent = fs.readFileSync(previewPath, 'utf-8');
@@ -2322,25 +2422,9 @@ Skip research. Skip any AskUserQuestion calls — this is non-interactive. Gener
 
     const hasHtml = previewContent.includes('<html') || previewContent.includes('<!DOCTYPE');
     const hasFontRef = previewContent.includes('font-family') || previewContent.includes('fonts.googleapis') || previewContent.includes('fonts.bunny');
-    const hasColorRef = previewContent.includes('#') && (previewContent.includes('background') || previewContent.includes('color:'));
-
-    // LLM judge on the DESIGN.md
-    let judgeResult = { passed: false, reasoning: 'judge not run' };
-    if (designExists) {
-      const designContent = fs.readFileSync(designPath, 'utf-8');
-      if (designContent.length > 100) {
-        try {
-          judgeResult = await designQualityJudge(designContent);
-          console.log('Design quality judge (preview):', JSON.stringify(judgeResult, null, 2));
-        } catch (err) {
-          console.warn('Judge failed:', err);
-          judgeResult = { passed: true, reasoning: 'judge error — defaulting to pass' };
-        }
-      }
-    }
 
     recordE2E('/design-consultation preview', 'Design Consultation E2E', result, {
-      passed: previewExists && designExists && hasHtml && ['success', 'error_max_turns'].includes(result.exitReason),
+      passed: previewExists && hasHtml && ['success', 'error_max_turns'].includes(result.exitReason),
     });
 
     expect(['success', 'error_max_turns']).toContain(result.exitReason);
@@ -2349,8 +2433,9 @@ Skip research. Skip any AskUserQuestion calls — this is non-interactive. Gener
       expect(hasHtml).toBe(true);
       expect(hasFontRef).toBe(true);
     }
-    expect(designExists).toBe(true);
-  }, 540_000);
+
+    try { fs.rmSync(previewDir, { recursive: true, force: true }); } catch {}
+  }, 120_000);
 });
 
 // --- Plan Design Review E2E (plan-mode) ---
@@ -2714,69 +2799,65 @@ export function divide(a, b) { return a / b; } // BUG: no zero check
     try { fs.rmSync(bootstrapDir, { recursive: true, force: true }); } catch {}
   });
 
-  test.skip('/qa bootstrap — too ambitious for E2E (65 turns, installs vitest)', async () => {
-    const serverUrl = `http://127.0.0.1:${bootstrapServer!.port}`;
+  testIfSelected('qa-bootstrap', async () => {
+    // Test ONLY the bootstrap phase — install vitest, create config, write one test
+    const bsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-bs-'));
+
+    // Minimal Node.js project with no test framework
+    fs.writeFileSync(path.join(bsDir, 'package.json'), JSON.stringify({
+      name: 'bootstrap-test-app', version: '1.0.0', type: 'module',
+    }, null, 2));
+    fs.writeFileSync(path.join(bsDir, 'app.js'), `
+export function add(a, b) { return a + b; }
+export function subtract(a, b) { return a - b; }
+export function divide(a, b) { return a / b; }
+`);
+
+    // Init git repo
+    const run = (cmd: string, args: string[]) =>
+      spawnSync(cmd, args, { cwd: bsDir, stdio: 'pipe', timeout: 5000 });
+    run('git', ['init', '-b', 'main']);
+    run('git', ['config', 'user.email', 'test@test.com']);
+    run('git', ['config', 'user.name', 'Test']);
+    run('git', ['add', '.']);
+    run('git', ['commit', '-m', 'initial']);
 
     const result = await runSkillTest({
-      prompt: `You have a browse binary at ${browseBin}. Assign it to B variable like: B="${browseBin}"
+      prompt: `This is a Node.js project with no test framework. It has a package.json and app.js with simple functions (add, subtract, divide).
 
-Read the file qa/SKILL.md for the QA workflow instructions.
-Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the QA workflow.
+Set up a test framework:
+1. Install vitest: bun add -d vitest
+2. Create vitest.config.ts with a minimal config
+3. Write one test file (app.test.js) that tests the add() function
+4. Run the test to verify it passes
+5. Create TESTING.md explaining how to run tests
 
-Run a Quick-tier QA test on ${serverUrl}
-The source code for this page is at ${bootstrapDir}/index.html — you can fix bugs there.
-Do NOT use AskUserQuestion — for any AskUserQuestion prompts, choose the RECOMMENDED option automatically.
-Write your report to ${bootstrapDir}/qa-reports/qa-report.md
-
-This project has NO test framework. When the bootstrap asks, pick vitest (option A).
-This is a test+fix loop: find bugs, fix them, write regression tests, commit each fix.`,
-      workingDirectory: bootstrapDir,
-      maxTurns: 65,
-      allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'],
-      timeout: 420_000,
-      // skipped: qa-bootstrap — removed from touchfiles
+Do NOT fix any bugs. Do NOT use AskUserQuestion — just pick vitest.`,
+      workingDirectory: bsDir,
+      maxTurns: 12,
+      allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Glob'],
+      timeout: 90_000,
+      testName: 'qa-bootstrap',
       runId,
     });
 
     logCost('/qa bootstrap', result);
-    recordE2E('/qa bootstrap + regression test', 'Test Bootstrap E2E', result, {
-      passed: ['success', 'error_max_turns'].includes(result.exitReason),
+
+    const hasTestConfig = fs.existsSync(path.join(bsDir, 'vitest.config.ts'))
+      || fs.existsSync(path.join(bsDir, 'vitest.config.js'));
+    const hasTestFile = fs.readdirSync(bsDir).some(f => f.includes('.test.'));
+    const hasTestingMd = fs.existsSync(path.join(bsDir, 'TESTING.md'));
+
+    recordE2E('/qa bootstrap', 'Test Bootstrap E2E', result, {
+      passed: hasTestConfig && ['success', 'error_max_turns'].includes(result.exitReason),
     });
 
     expect(['success', 'error_max_turns']).toContain(result.exitReason);
+    expect(hasTestConfig).toBe(true);
+    console.log(`Test config: ${hasTestConfig}, Test file: ${hasTestFile}, TESTING.md: ${hasTestingMd}`);
 
-    // Verify bootstrap created test infrastructure
-    const hasTestConfig = fs.existsSync(path.join(bootstrapDir, 'vitest.config.ts'))
-      || fs.existsSync(path.join(bootstrapDir, 'vitest.config.js'))
-      || fs.existsSync(path.join(bootstrapDir, 'jest.config.js'))
-      || fs.existsSync(path.join(bootstrapDir, 'jest.config.ts'));
-    console.log(`Test config created: ${hasTestConfig}`);
-
-    const hasTestingMd = fs.existsSync(path.join(bootstrapDir, 'TESTING.md'));
-    console.log(`TESTING.md created: ${hasTestingMd}`);
-
-    // Check for bootstrap commit
-    const gitLog = spawnSync('git', ['log', '--oneline', '--grep=bootstrap'], {
-      cwd: bootstrapDir, stdio: 'pipe',
-    });
-    const bootstrapCommits = gitLog.stdout.toString().trim();
-    console.log(`Bootstrap commits: ${bootstrapCommits || 'none'}`);
-
-    // Check for regression test commits
-    const regressionLog = spawnSync('git', ['log', '--oneline', '--grep=test(qa)'], {
-      cwd: bootstrapDir, stdio: 'pipe',
-    });
-    const regressionCommits = regressionLog.stdout.toString().trim();
-    console.log(`Regression test commits: ${regressionCommits || 'none'}`);
-
-    // Verify at least the bootstrap happened (fix commits are bonus)
-    const allCommits = spawnSync('git', ['log', '--oneline'], {
-      cwd: bootstrapDir, stdio: 'pipe',
-    });
-    const totalCommits = allCommits.stdout.toString().trim().split('\n').length;
-    console.log(`Total commits: ${totalCommits}`);
-    expect(totalCommits).toBeGreaterThan(1); // At least initial + bootstrap
-  }, 420_000);
+    try { fs.rmSync(bsDir, { recursive: true, force: true }); } catch {}
+  }, 120_000);
 });
 
 // --- Test Coverage Audit E2E ---

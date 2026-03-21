@@ -41,6 +41,7 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'skillmd-no-local-binary':  ['SKILL.md', 'SKILL.md.tmpl'],
   'skillmd-outside-git':      ['SKILL.md', 'SKILL.md.tmpl'],
 
+  'contributor-mode':           ['SKILL.md.tmpl', 'scripts/gen-skill-docs.ts'],
   'session-awareness':        ['SKILL.md', 'SKILL.md.tmpl'],
 
   // QA
@@ -50,6 +51,7 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'qa-b8-checkout': ['qa/**', 'browse/src/**', 'browse/test/fixtures/qa-eval-checkout.html', 'test/fixtures/qa-eval-checkout-ground-truth.json'],
   'qa-only-no-fix': ['qa-only/**', 'qa/templates/**'],
   'qa-fix-loop':    ['qa/**', 'browse/src/**'],
+  'qa-bootstrap':   ['qa/**', 'ship/**'],
 
   // Review
   'review-sql-injection':     ['review/**', 'test/fixtures/review-eval-vuln.rb'],
@@ -68,7 +70,11 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'plan-eng-review-artifact':  ['plan-eng-review/**'],
 
   // Ship
-  'ship-base-branch': ['ship/**'],
+  'ship-base-branch':    ['ship/**'],
+  'ship-local-workflow': ['ship/**', 'scripts/gen-skill-docs.ts'],
+
+  // Setup browser cookies
+  'setup-cookies-detect': ['setup-browser-cookies/**'],
 
   // Retro
   'retro':             ['retro/**'],
@@ -88,8 +94,10 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'ship-coverage-audit': ['ship/**'],
 
   // Design
-  'design-consultation-core':     ['design-consultation/**'],
-  'design-consultation-existing': ['design-consultation/**'],
+  'design-consultation-core':       ['design-consultation/**'],
+  'design-consultation-existing':   ['design-consultation/**'],
+  'design-consultation-research':   ['design-consultation/**'],
+  'design-consultation-preview':    ['design-consultation/**'],
   'plan-design-review-plan-mode':   ['plan-design-review/**'],
   'plan-design-review-no-ui-scope': ['plan-design-review/**'],
   'design-review-fix':              ['design-review/**', 'browse/src/**'],
