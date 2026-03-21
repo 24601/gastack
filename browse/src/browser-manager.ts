@@ -61,6 +61,26 @@ export class BrowserManager {
   private isHeaded: boolean = false;
   private consecutiveFailures: number = 0;
 
+  // ─── CDP State ────────────────────────────────────────────
+  private connectionMode: 'launched' | 'cdp' = 'launched';
+  private preExistingTabIds: Set<number> = new Set();
+  private cdpPort: number = 0;
+  private intentionalDisconnect = false;
+  private reconnecting = false;
+
+  getConnectionMode(): 'launched' | 'cdp' { return this.connectionMode; }
+
+  /**
+   * Get the ref map for external consumers (e.g., /refs endpoint).
+   */
+  getRefMap(): Array<{ ref: string; role: string; name: string }> {
+    const refs: Array<{ ref: string; role: string; name: string }> = [];
+    for (const [ref, entry] of this.refMap) {
+      refs.push({ ref, role: entry.role, name: entry.name });
+    }
+    return refs;
+  }
+
   async launch() {
     this.browser = await chromium.launch({ headless: true });
 
@@ -87,15 +107,110 @@ export class BrowserManager {
     await this.newTab();
   }
 
+  // ─── CDP Connect ────────────────────────────────────────────
+  /**
+   * Connect to a running browser via Chrome DevTools Protocol.
+   * All existing commands work unchanged through Playwright's abstraction.
+   *
+   * CDP flow:
+   *   connectOverCDP(wsUrl) → Browser → contexts()[0] → discover pages
+   *   Disconnect handler → attemptReconnect() (not process.exit)
+   *   close() → browser.disconnect() (not browser.close())
+   */
+  async connectCDP(wsUrl: string, port: number): Promise<void> {
+    // Clear old state before repopulating (safe for reconnect)
+    this.pages.clear();
+    this.preExistingTabIds.clear();
+    this.refMap.clear();
+    this.nextTabId = 1;
+
+    this.browser = await chromium.connectOverCDP(wsUrl);
+    this.connectionMode = 'cdp';
+    this.cdpPort = port;
+    this.intentionalDisconnect = false;
+
+    // Use the user's existing default context (has their cookies, sessions)
+    const contexts = this.browser.contexts();
+    if (contexts.length === 0) {
+      throw new Error('No browser context found. Chrome may have no windows open.');
+    }
+    this.context = contexts[0];
+
+    // Discover existing tabs
+    for (const page of this.context.pages()) {
+      const id = this.nextTabId++;
+      this.pages.set(id, page);
+      this.preExistingTabIds.add(id);
+      this.wirePageEvents(page);
+    }
+    this.activeTabId = [...this.pages.keys()].pop() || 0;
+
+    // Listen for new tabs created by the user
+    this.context.on('page', (page: Page) => {
+      const id = this.nextTabId++;
+      this.pages.set(id, page);
+      this.wirePageEvents(page);
+      this.activeTabId = id;
+    });
+
+    // CDP disconnect ≠ crash — reconnect unless intentional
+    this.browser.on('disconnected', () => {
+      if (this.intentionalDisconnect) return;
+      console.log('[browse] Real browser disconnected — reconnecting...');
+      this.attemptReconnect();
+    });
+
+    // CDP-specific defaults
+    this.dialogAutoAccept = false;  // Don't dismiss user's real dialogs
+    this.isHeaded = true;
+    this.consecutiveFailures = 0;
+  }
+
+  /**
+   * Auto-reconnect after unexpected CDP disconnect (e.g., browser restart).
+   * Non-blocking recursive setTimeout — never overlaps or blocks commands.
+   */
+  private async attemptReconnect(remaining = 60): Promise<void> {
+    if (remaining <= 0 || this.reconnecting || this.intentionalDisconnect) {
+      if (remaining <= 0) {
+        console.log('[browse] CDP reconnect failed after 5 minutes. Run `$B connect` to reconnect.');
+      }
+      return;
+    }
+
+    this.reconnecting = true;
+    try {
+      const { isCdpAvailable } = await import('./chrome-launcher');
+      const result = await isCdpAvailable(this.cdpPort);
+      if (result.available && result.wsUrl) {
+        await this.connectCDP(result.wsUrl, this.cdpPort);
+        console.log('[browse] Reconnected to real browser');
+        return;
+      }
+    } catch {
+      // Probe failed — try again
+    } finally {
+      this.reconnecting = false;
+    }
+
+    setTimeout(() => this.attemptReconnect(remaining - 1), 5000);
+  }
+
   async close() {
     if (this.browser) {
-      // Remove disconnect handler to avoid exit during intentional close
-      this.browser.removeAllListeners('disconnected');
-      // Timeout: headed browser.close() can hang on macOS
-      await Promise.race([
-        this.browser.close(),
-        new Promise(resolve => setTimeout(resolve, 5000)),
-      ]).catch(() => {});
+      if (this.connectionMode === 'cdp') {
+        // CDP mode: disconnect (don't kill user's browser)
+        this.intentionalDisconnect = true;
+        this.browser.removeAllListeners('disconnected');
+        await this.browser.disconnect().catch(() => {});
+      } else {
+        // Launched mode: close the browser we spawned
+        this.browser.removeAllListeners('disconnected');
+        await Promise.race([
+          this.browser.close(),
+          new Promise(resolve => setTimeout(resolve, 5000)),
+        ]).catch(() => {});
+      }
       this.browser = null;
     }
   }
@@ -144,6 +259,11 @@ export class BrowserManager {
     const tabId = id ?? this.activeTabId;
     const page = this.pages.get(tabId);
     if (!page) throw new Error(`Tab ${tabId} not found`);
+
+    // CDP mode: block closing pre-existing user tabs
+    if (this.connectionMode === 'cdp' && this.preExistingTabIds.has(tabId)) {
+      throw new Error("Cannot close user's pre-existing tab in real-browser mode. Only tabs created by gstack can be closed.");
+    }
 
     await page.close();
     this.pages.delete(tabId);
@@ -384,6 +504,9 @@ export class BrowserManager {
    * Falls back to a clean slate on any failure.
    */
   async recreateContext(): Promise<string | null> {
+    if (this.connectionMode === 'cdp') {
+      throw new Error('Cannot recreate context in real-browser mode. The browser context belongs to the user.');
+    }
     if (!this.browser || !this.context) {
       throw new Error('Browser not launched');
     }
@@ -450,6 +573,9 @@ export class BrowserManager {
    *   If step 2 fails → return error, headless browser untouched
    */
   async handoff(message: string): Promise<string> {
+    if (this.connectionMode === 'cdp') {
+      return 'Already controlling real browser via CDP. No handoff needed.';
+    }
     if (this.isHeaded) {
       return `HANDOFF: Already in headed mode at ${this.getCurrentUrl()}`;
     }

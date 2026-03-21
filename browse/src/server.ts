@@ -21,6 +21,7 @@ import { handleCookiePickerRoute } from './cookie-picker-routes';
 import { COMMAND_DESCRIPTIONS } from './commands';
 import { SNAPSHOT_FLAGS } from './snapshot';
 import { resolveConfig, ensureStateDir, readVersionHash } from './config';
+import { emitActivity, subscribe, getActivityAfter, getActivityHistory, getSubscriberCount } from './activity';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -224,6 +225,17 @@ async function handleCommand(body: any): Promise<Response> {
     });
   }
 
+  // Activity: emit command_start
+  const startTime = Date.now();
+  emitActivity({
+    type: 'command_start',
+    command,
+    args,
+    url: browserManager.getCurrentUrl(),
+    tabs: browserManager.getTabCount(),
+    mode: browserManager.getConnectionMode(),
+  });
+
   try {
     let result: string;
 
@@ -249,12 +261,38 @@ async function handleCommand(body: any): Promise<Response> {
       });
     }
 
+    // Activity: emit command_end (success)
+    emitActivity({
+      type: 'command_end',
+      command,
+      args,
+      url: browserManager.getCurrentUrl(),
+      duration: Date.now() - startTime,
+      status: 'ok',
+      result: result,
+      tabs: browserManager.getTabCount(),
+      mode: browserManager.getConnectionMode(),
+    });
+
     browserManager.resetFailures();
     return new Response(result, {
       status: 200,
       headers: { 'Content-Type': 'text/plain' },
     });
   } catch (err: any) {
+    // Activity: emit command_end (error)
+    emitActivity({
+      type: 'command_end',
+      command,
+      args,
+      url: browserManager.getCurrentUrl(),
+      duration: Date.now() - startTime,
+      status: 'error',
+      error: err.message,
+      tabs: browserManager.getTabCount(),
+      mode: browserManager.getConnectionMode(),
+    });
+
     browserManager.incrementFailures();
     let errorMsg = wrapError(err);
     const hint = browserManager.getFailureHint();
@@ -296,16 +334,21 @@ async function start() {
 
   const port = await findPort();
 
-  // Launch browser
-  await browserManager.launch();
+  // Launch browser (or connect to existing via CDP)
+  const cdpUrl = process.env.BROWSE_CDP_URL;
+  const cdpPort = parseInt(process.env.BROWSE_CDP_PORT || '0', 10);
+  if (cdpUrl) {
+    await browserManager.connectCDP(cdpUrl, cdpPort);
+    console.log(`[browse] Connected to real browser via CDP (port ${cdpPort})`);
+  } else {
+    await browserManager.launch();
+  }
 
   const startTime = Date.now();
   const server = Bun.serve({
     port,
     hostname: '127.0.0.1',
     fetch: async (req) => {
-      resetIdleTimer();
-
       const url = new URL(req.url);
 
       // Cookie picker routes — no auth required (localhost-only)
@@ -313,17 +356,101 @@ async function start() {
         return handleCookiePickerRoute(url, req, browserManager);
       }
 
-      // Health check — no auth required (now async)
+      // Health check — no auth required, does NOT reset idle timer
       if (url.pathname === '/health') {
         const healthy = await browserManager.isHealthy();
         return new Response(JSON.stringify({
           status: healthy ? 'healthy' : 'unhealthy',
+          mode: browserManager.getConnectionMode(),
           uptime: Math.floor((Date.now() - startTime) / 1000),
           tabs: browserManager.getTabCount(),
           currentUrl: browserManager.getCurrentUrl(),
         }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Refs endpoint — no auth required (localhost-only), does NOT reset idle timer
+      if (url.pathname === '/refs') {
+        const refs = browserManager.getRefMap();
+        return new Response(JSON.stringify({
+          refs,
+          url: browserManager.getCurrentUrl(),
+          mode: browserManager.getConnectionMode(),
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        });
+      }
+
+      // Activity stream — SSE, no auth (localhost-only), does NOT reset idle timer
+      if (url.pathname === '/activity/stream') {
+        const afterId = parseInt(url.searchParams.get('after') || '0', 10);
+        const encoder = new TextEncoder();
+
+        const stream = new ReadableStream({
+          start(controller) {
+            // 1. Gap detection + replay
+            const { entries, gap, gapFrom, availableFrom } = getActivityAfter(afterId);
+            if (gap) {
+              controller.enqueue(encoder.encode(`event: gap\ndata: ${JSON.stringify({ gapFrom, availableFrom })}\n\n`));
+            }
+            for (const entry of entries) {
+              controller.enqueue(encoder.encode(`event: activity\ndata: ${JSON.stringify(entry)}\n\n`));
+            }
+
+            // 2. Subscribe for live events
+            const unsubscribe = subscribe((entry) => {
+              try {
+                controller.enqueue(encoder.encode(`event: activity\ndata: ${JSON.stringify(entry)}\n\n`));
+              } catch {
+                unsubscribe();
+              }
+            });
+
+            // 3. Heartbeat every 15s
+            const heartbeat = setInterval(() => {
+              try {
+                controller.enqueue(encoder.encode(`: heartbeat\n\n`));
+              } catch {
+                clearInterval(heartbeat);
+                unsubscribe();
+              }
+            }, 15000);
+
+            // 4. Cleanup on disconnect
+            req.signal.addEventListener('abort', () => {
+              clearInterval(heartbeat);
+              unsubscribe();
+              try { controller.close(); } catch {}
+            });
+          },
+        });
+
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+          },
+        });
+      }
+
+      // Activity history — REST, no auth (localhost-only), does NOT reset idle timer
+      if (url.pathname === '/activity/history') {
+        const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+        const { entries, totalAdded } = getActivityHistory(limit);
+        return new Response(JSON.stringify({ entries, totalAdded, subscribers: getSubscriberCount() }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
         });
       }
 
@@ -336,6 +463,7 @@ async function start() {
       }
 
       if (url.pathname === '/command' && req.method === 'POST') {
+        resetIdleTimer();  // Only commands reset idle timer
         const body = await req.json();
         return handleCommand(body);
       }
@@ -345,13 +473,15 @@ async function start() {
   });
 
   // Write state file (atomic: write .tmp then rename)
-  const state = {
+  const state: Record<string, unknown> = {
     pid: process.pid,
     port,
     token: AUTH_TOKEN,
     startedAt: new Date().toISOString(),
     serverPath: path.resolve(import.meta.dir, 'server.ts'),
     binaryVersion: readVersionHash() || undefined,
+    mode: browserManager.getConnectionMode(),
+    ...(cdpPort ? { cdpPort } : {}),
   };
   const tmpFile = config.stateFile + '.tmp';
   fs.writeFileSync(tmpFile, JSON.stringify(state, null, 2), { mode: 0o600 });
