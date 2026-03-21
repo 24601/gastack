@@ -1,7 +1,9 @@
-/* gstack browse — ref overlay + status pill styles */
+/* gstack browse — ref overlay + status pill styles
+ * Design system: DESIGN.md (amber accent, zinc neutrals)
+ */
 
 #gstack-ref-overlays {
-  font-family: 'SF Mono', 'Fira Code', monospace !important;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace !important;
 }
 
 /* Connection status pill — bottom-right corner */
@@ -14,13 +16,13 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(10, 10, 10, 0.85);
+  background: rgba(12, 12, 12, 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(74, 222, 128, 0.3);
-  border-radius: 20px;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 9999px;
   color: #e0e0e0;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -38,8 +40,8 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+  background: #F59E0B;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
   flex-shrink: 0;
 }
 
@@ -56,7 +58,7 @@
   font-size: 10px;
   font-weight: 700;
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: 4px;
   line-height: 14px;
   pointer-events: none;
   z-index: 2147483647;
@@ -69,9 +71,9 @@
   right: 12px;
   width: 220px;
   max-height: 300px;
-  background: rgba(10, 10, 10, 0.95);
-  border: 1px solid #333;
-  border-radius: 6px;
+  background: rgba(12, 12, 12, 0.95);
+  border: 1px solid #262626;
+  border-radius: 8px;
   overflow: hidden;
   pointer-events: auto;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
@@ -80,9 +82,9 @@
 
 .gstack-ref-panel-header {
   padding: 6px 10px;
-  background: #0f0f0f;
-  border-bottom: 1px solid #222;
-  color: #fff;
+  background: #141414;
+  border-bottom: 1px solid #262626;
+  color: #FAFAFA;
   font-weight: 600;
   font-size: 11px;
 }
@@ -94,20 +96,20 @@
 
 .gstack-ref-panel-row {
   padding: 3px 10px;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid #1f1f1f;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .gstack-ref-panel-id {
-  color: #4ade80;
+  color: #FBBF24;
   font-weight: 600;
   margin-right: 4px;
 }
 
 .gstack-ref-panel-role {
-  color: #888;
+  color: #A1A1AA;
   margin-right: 4px;
 }
 
@@ -117,6 +119,6 @@
 
 .gstack-ref-panel-more {
   padding: 4px 10px;
-  color: #666;
+  color: #52525B;
   font-style: italic;
 }
