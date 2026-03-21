@@ -46,7 +46,17 @@ fi
 
 # Compute from git history (90-day window)
 # Use default branch (not HEAD) to avoid feature-branch sampling bias
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/||' || echo "origin/main")
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/||' || true)
+# Fallback: try origin/main, then origin/master, then HEAD
+if [ -z "$DEFAULT_BRANCH" ]; then
+  if git rev-parse --verify origin/main &>/dev/null; then
+    DEFAULT_BRANCH="origin/main"
+  elif git rev-parse --verify origin/master &>/dev/null; then
+    DEFAULT_BRANCH="origin/master"
+  else
+    DEFAULT_BRANCH="HEAD"
+  fi
+fi
 SHORTLOG=$(git shortlog -sn --since="90 days ago" --no-merges "$DEFAULT_BRANCH" 2>/dev/null | head -20)
 if [ -z "$SHORTLOG" ]; then
   echo "REPO_MODE=unknown"
