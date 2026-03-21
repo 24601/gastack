@@ -2982,10 +2982,19 @@ try {
 }
 `);
 
-    // Test runner
+    // Test runner — each test in a subprocess so one failure doesn't kill the other
     fs.writeFileSync(path.join(triageDir, 'test', 'run.js'), `
-require('./math.test.js');
-require('./string.test.js');
+const { execSync } = require('child_process');
+const path = require('path');
+let failures = 0;
+for (const f of ['math.test.js', 'string.test.js']) {
+  try {
+    execSync('node ' + path.join(__dirname, f), { stdio: 'inherit' });
+  } catch (e) {
+    failures++;
+  }
+}
+if (failures > 0) process.exit(1);
 `);
 
     // Commit on main with the pre-existing bug
