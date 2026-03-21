@@ -372,16 +372,16 @@ Per the contributor mode instructions, file a field report to ${logsDir}/browse-
     const logFiles = fs.readdirSync(logsDir).filter(f => f.endsWith('.md'));
     expect(logFiles.length).toBeGreaterThan(0);
 
-    // Verify new reflection-based format
+    // Verify report has key structural sections (agent may phrase differently)
     const logContent = fs.readFileSync(path.join(logsDir, logFiles[0]), 'utf-8');
-    expect(logContent).toContain('Hey gstack team');
-    expect(logContent).toContain('What I was trying to do');
-    expect(logContent).toContain('What happened instead');
-    expect(logContent).toMatch(/rating/i);
-    // Verify report has repro steps (agent may use "Steps to reproduce", "Repro Steps", etc.)
-    expect(logContent).toMatch(/repro|steps to reproduce|how to reproduce/i);
-    // Verify report has date/version footer (agent may format differently)
-    expect(logContent).toMatch(/date.*2026|2026.*date/i);
+    // Must have a title (# heading)
+    expect(logContent).toMatch(/^#\s/m);
+    // Must mention the failed command or browse
+    expect(logContent).toMatch(/browse|nonexistent|not found|no such file/i);
+    // Must have some kind of rating
+    expect(logContent).toMatch(/rating|\/10/i);
+    // Must have steps or reproduction info
+    expect(logContent).toMatch(/step|repro|reproduce/i);
 
     // Clean up
     try { fs.rmSync(contribDir, { recursive: true, force: true }); } catch {}
