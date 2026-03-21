@@ -483,6 +483,12 @@ Read ETHOS.md for the full Search Before Building framework (three layers, eurek
 
 After understanding the problem through questioning, search for what the world thinks. This is NOT competitive research (that's /design-consultation's job). This is understanding conventional wisdom so you can evaluate where it's wrong.
 
+**Privacy gate:** Before searching, use AskUserQuestion: "I'd like to search for what the world thinks about this space to inform our discussion. This sends generalized category terms (not your specific idea) to a search provider. OK to proceed?"
+Options: A) Yes, search away  B) Skip — keep this session private
+If B: skip this phase entirely and proceed to Phase 3. Use only in-distribution knowledge.
+
+When searching, use **generalized category terms** — never the user's specific product name, proprietary concept, or stealth idea. For example, search "task management app landscape" not "SuperTodo AI-powered task killer."
+
 If WebSearch is unavailable, skip this phase and note: "Search unavailable — proceeding with in-distribution knowledge only."
 
 **Startup mode:** WebSearch for:
