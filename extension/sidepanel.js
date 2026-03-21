@@ -29,25 +29,152 @@ function formatChatTime(ts) {
   return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
 }
 
-function addChatBubble(entry) {
+// Current streaming state
+let agentContainer = null; // The container for the current agent response
+let agentTextEl = null;    // The text accumulator element
+let agentText = '';        // Accumulated text
+
+function addChatEntry(entry) {
   // Remove welcome message on first real message
   const welcome = chatMessages.querySelector('.chat-welcome');
   if (welcome) welcome.remove();
 
-  const bubble = document.createElement('div');
-  bubble.className = `chat-bubble ${entry.role}`;
+  // User messages → chat bubble
+  if (entry.role === 'user') {
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble user';
+    bubble.innerHTML = `${escapeHtml(entry.message)}<span class="chat-time">${formatChatTime(entry.ts)}</span>`;
+    chatMessages.appendChild(bubble);
+    bubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return;
+  }
 
-  let content = escapeHtml(entry.message);
-  // Simple markdown-ish: wrap ```...``` in <pre>
-  content = content.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
-  // Bold **text**
-  content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  // Line breaks
-  content = content.replace(/\n/g, '<br>');
+  // Legacy assistant messages (from /sidebar-response)
+  if (entry.role === 'assistant') {
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble assistant';
+    let content = escapeHtml(entry.message);
+    content = content.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+    content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    content = content.replace(/\n/g, '<br>');
+    bubble.innerHTML = `${content}<span class="chat-time">${formatChatTime(entry.ts)}</span>`;
+    chatMessages.appendChild(bubble);
+    bubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return;
+  }
 
-  bubble.innerHTML = `${content}<span class="chat-time">${formatChatTime(entry.ts)}</span>`;
-  chatMessages.appendChild(bubble);
-  bubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  // Agent streaming events
+  if (entry.role === 'agent') {
+    handleAgentEvent(entry);
+    return;
+  }
+}
+
+function handleAgentEvent(entry) {
+  if (entry.type === 'agent_start') {
+    // Create a new agent response container
+    agentText = '';
+    agentContainer = document.createElement('div');
+    agentContainer.className = 'agent-response';
+    agentTextEl = null;
+    chatMessages.appendChild(agentContainer);
+
+    // Add thinking indicator
+    const thinking = document.createElement('div');
+    thinking.className = 'agent-thinking';
+    thinking.id = 'agent-thinking';
+    thinking.innerHTML = '<span class="thinking-dot"></span><span class="thinking-dot"></span><span class="thinking-dot"></span>';
+    agentContainer.appendChild(thinking);
+    agentContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return;
+  }
+
+  if (entry.type === 'agent_done') {
+    // Remove thinking indicator
+    const thinking = document.getElementById('agent-thinking');
+    if (thinking) thinking.remove();
+    // Add timestamp
+    if (agentContainer) {
+      const ts = document.createElement('span');
+      ts.className = 'chat-time';
+      ts.textContent = formatChatTime(entry.ts);
+      agentContainer.appendChild(ts);
+    }
+    agentContainer = null;
+    agentTextEl = null;
+    return;
+  }
+
+  if (entry.type === 'agent_error') {
+    const thinking = document.getElementById('agent-thinking');
+    if (thinking) thinking.remove();
+    if (!agentContainer) {
+      agentContainer = document.createElement('div');
+      agentContainer.className = 'agent-response';
+      chatMessages.appendChild(agentContainer);
+    }
+    const err = document.createElement('div');
+    err.className = 'agent-error';
+    err.textContent = entry.error || 'Unknown error';
+    agentContainer.appendChild(err);
+    agentContainer = null;
+    return;
+  }
+
+  if (!agentContainer) {
+    agentContainer = document.createElement('div');
+    agentContainer.className = 'agent-response';
+    chatMessages.appendChild(agentContainer);
+  }
+
+  // Remove thinking indicator on first real content
+  const thinking = document.getElementById('agent-thinking');
+  if (thinking) thinking.remove();
+
+  if (entry.type === 'tool_use') {
+    const toolEl = document.createElement('div');
+    toolEl.className = 'agent-tool';
+    const toolName = entry.tool || 'Tool';
+    const toolInput = entry.input || '';
+    toolEl.innerHTML = `<span class="tool-name">${escapeHtml(toolName)}</span> <span class="tool-input">${escapeHtml(toolInput)}</span>`;
+    agentContainer.appendChild(toolEl);
+    agentContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return;
+  }
+
+  if (entry.type === 'text' || entry.type === 'result') {
+    // Full text replacement
+    agentText = entry.text || '';
+    if (!agentTextEl) {
+      agentTextEl = document.createElement('div');
+      agentTextEl.className = 'agent-text';
+      agentContainer.appendChild(agentTextEl);
+    }
+    let content = escapeHtml(agentText);
+    content = content.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+    content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    content = content.replace(/\n/g, '<br>');
+    agentTextEl.innerHTML = content;
+    agentContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return;
+  }
+
+  if (entry.type === 'text_delta') {
+    // Incremental text append
+    agentText += entry.text || '';
+    if (!agentTextEl) {
+      agentTextEl = document.createElement('div');
+      agentTextEl.className = 'agent-text';
+      agentContainer.appendChild(agentTextEl);
+    }
+    let content = escapeHtml(agentText);
+    content = content.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+    content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    content = content.replace(/\n/g, '<br>');
+    agentTextEl.innerHTML = content;
+    agentContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return;
+  }
 }
 
 async function sendMessage() {
@@ -107,12 +234,32 @@ async function pollChat() {
     const data = await resp.json();
     if (data.entries && data.entries.length > 0) {
       for (const entry of data.entries) {
-        addChatBubble(entry);
+        addChatEntry(entry);
       }
       chatLineCount = data.total;
     }
   } catch {}
 }
+
+// ─── Clear Chat ─────────────────────────────────────────────────
+
+document.getElementById('clear-chat').addEventListener('click', async () => {
+  if (!serverUrl) return;
+  try {
+    await fetch(`${serverUrl}/sidebar-chat/clear`, { method: 'POST' });
+  } catch {}
+  // Reset local state
+  chatLineCount = 0;
+  agentContainer = null;
+  agentTextEl = null;
+  agentText = '';
+  chatMessages.innerHTML = `
+    <div class="chat-welcome">
+      <div class="chat-welcome-icon">G</div>
+      <p>Send a message to Claude Code.</p>
+      <p class="muted">Your agent will see it and act on it.</p>
+    </div>`;
+});
 
 // ─── Debug Tabs ─────────────────────────────────────────────────
 
@@ -341,9 +488,18 @@ portInput.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { portInput.style.display = 'none'; portLabel.style.display = ''; }
 });
 
-chrome.runtime.sendMessage({ type: 'getServerUrl' }, (resp) => {
-  if (resp && resp.url) updateConnection(resp.url);
-});
+// Try to connect immediately, retry every 2s until connected
+function tryConnect() {
+  chrome.runtime.sendMessage({ type: 'getServerUrl' }, (resp) => {
+    if (resp && resp.url) {
+      updateConnection(resp.url);
+    } else {
+      // Retry in 2s
+      setTimeout(tryConnect, 2000);
+    }
+  });
+}
+tryConnect();
 
 // ─── Message Listener ───────────────────────────────────────────
 
