@@ -44,6 +44,11 @@ export interface EvalTestEntry {
   timeout_at_turn?: number;   // which turn was active when timeout hit
   last_tool_call?: string;    // e.g. "Write(review-output.md)"
 
+  // Model + timing diagnostics (added for Sonnet/Opus split)
+  model?: string;                // e.g. 'claude-sonnet-4-6' or 'claude-opus-4-6'
+  first_response_ms?: number;    // time from spawn to first NDJSON line
+  max_inter_turn_ms?: number;    // peak latency between consecutive tool calls
+
   // Outcome eval
   detection_rate?: number;
   false_positives?: number;
@@ -70,6 +75,7 @@ export interface EvalResult {
   failed: number;
   total_cost_usd: number;
   total_duration_ms: number;
+  wall_clock_ms?: number;     // wall-clock from collector creation to finalization (shows parallelism)
   tests: EvalTestEntry[];
   costs?: CostEntry[];  // aggregate per-model cost breakdown
   _partial?: boolean;  // true for incremental saves, absent in final
@@ -537,6 +543,7 @@ export class EvalCollector {
   private tests: EvalTestEntry[] = [];
   private finalized = false;
   private evalDir: string;
+  private createdAt = Date.now();
 
   constructor(tier: 'e2e' | 'llm-judge', evalDir?: string) {
     this.tier = tier;
@@ -625,6 +632,7 @@ export class EvalCollector {
       failed: this.tests.length - passed,
       total_cost_usd: Math.round(totalCost * 100) / 100,
       total_duration_ms: totalDuration,
+      wall_clock_ms: Date.now() - this.createdAt,
       tests: this.tests,
       costs,
     };
