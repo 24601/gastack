@@ -127,16 +127,13 @@ export type RuntimeEnv = 'conductor' | 'claude-code' | 'codex' | 'terminal';
  * due to macOS App Management security restrictions.
  */
 export function detectRuntime(): RuntimeEnv {
-  // Conductor sets these env vars for workspace subprocesses
-  if (process.env.CONDUCTOR_WORKSPACE_ID || process.env.CONDUCTOR_APP) return 'conductor';
-  // Check if parent process is Conductor (Electron app)
-  try {
-    const ppid = process.ppid;
-    if (ppid) {
-      const parentInfo = execSync(`ps -p ${ppid} -o comm= 2>/dev/null`, { stdio: 'pipe' }).toString().trim();
-      if (parentInfo.includes('Conductor') || parentInfo.includes('Electron')) return 'conductor';
-    }
-  } catch {}
+  // Conductor detection — check FIRST because Conductor also has ANTHROPIC_API_KEY
+  if (
+    process.env.CONDUCTOR_WORKSPACE_NAME ||
+    process.env.CONDUCTOR_BIN_DIR ||
+    process.env.CONDUCTOR_PORT ||
+    process.env.__CFBundleIdentifier === 'com.conductor.app'
+  ) return 'conductor';
   // Claude Code terminal detection
   if (process.env.CLAUDE_CODE || process.env.ANTHROPIC_API_KEY) return 'claude-code';
   // Codex CLI detection
