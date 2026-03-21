@@ -365,6 +365,7 @@ async function start() {
           uptime: Math.floor((Date.now() - startTime) / 1000),
           tabs: browserManager.getTabCount(),
           currentUrl: browserManager.getCurrentUrl(),
+          token: AUTH_TOKEN,  // Extension uses this to POST /command
         }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -466,6 +467,65 @@ async function start() {
         resetIdleTimer();  // Only commands reset idle timer
         const body = await req.json();
         return handleCommand(body);
+      }
+
+      // Sidebar → Claude Code command queue (file-based message passing)
+      if (url.pathname === '/sidebar-command' && req.method === 'POST') {
+        const body = await req.json();
+        const msg = body.message?.trim();
+        if (!msg) {
+          return new Response(JSON.stringify({ error: 'Empty message' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
+        fs.mkdirSync(gstackDir, { recursive: true });
+        const entry = JSON.stringify({ ts: new Date().toISOString(), role: 'user', message: msg }) + '\n';
+        fs.appendFileSync(path.join(gstackDir, 'sidebar-commands.jsonl'), entry);
+        fs.appendFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), entry);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Claude Code → Sidebar response (also file-based)
+      if (url.pathname === '/sidebar-response' && req.method === 'POST') {
+        const body = await req.json();
+        const msg = body.message?.trim();
+        if (!msg) {
+          return new Response(JSON.stringify({ error: 'Empty message' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
+        fs.mkdirSync(gstackDir, { recursive: true });
+        const entry = JSON.stringify({ ts: new Date().toISOString(), role: 'assistant', message: msg }) + '\n';
+        fs.appendFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), entry);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Sidebar chat history + polling
+      if (url.pathname === '/sidebar-chat') {
+        const afterParam = url.searchParams.get('after') || '0';
+        const afterLine = parseInt(afterParam, 10);
+        const chatFile = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-chat.jsonl');
+        let lines: string[] = [];
+        try {
+          lines = fs.readFileSync(chatFile, 'utf-8').split('\n').filter(Boolean);
+        } catch {}
+        const entries = lines.slice(afterLine).map((line: string, i: number) => {
+          try { return { ...JSON.parse(line), id: afterLine + i }; } catch { return null; }
+        }).filter(Boolean);
+        return new Response(JSON.stringify({ entries, total: lines.length }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
       }
 
       return new Response('Not found', { status: 404 });
