@@ -597,6 +597,9 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 ### Server
 | Command | Description |
 |---------|-------------|
+| `connect [browser] [--port N]` | Connect to real Chrome/Comet browser via CDP |
+| `disconnect` | Disconnect from real browser, return to headless mode |
+| `focus [@ref]` | Bring connected browser window to foreground (macOS) |
 | `handoff [message]` | Open visible Chrome at current page for user takeover |
 | `restart` | Restart server |
 | `resume` | Re-snapshot after user takeover, return control to AI |
