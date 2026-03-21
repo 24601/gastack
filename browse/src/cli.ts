@@ -348,7 +348,7 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
   // connect must be handled BEFORE ensureServer() because it needs
   // to restart the server with CDP env vars.
   if (command === 'connect') {
-    const { discoverAndConnect } = await import('./chrome-launcher');
+    const { discoverAndConnect, isManualRestart, detectRuntime, isCdpAvailable } = await import('./chrome-launcher');
 
     // Parse args: connect [browser] [--port N]
     let preferredBrowser: string | undefined;
@@ -378,9 +378,54 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
     }
 
     // Discover and connect to browser
-    console.log(`Discovering browser${preferredBrowser ? ` (${preferredBrowser})` : ''}...`);
+    const runtime = detectRuntime();
+    console.log(`Discovering browser${preferredBrowser ? ` (${preferredBrowser})` : ''} (runtime: ${runtime})...`);
     try {
       const result = await discoverAndConnect(preferredBrowser, port);
+
+      // Handle manual restart needed (Conductor / sandboxed apps)
+      if (isManualRestart(result)) {
+        console.log(`\n${result.reason}\n`);
+        console.log(`To connect, quit ${result.browser.name} and restart it with CDP enabled:\n`);
+        console.log(`  1. Quit ${result.browser.name} (Cmd+Q)`);
+        console.log(`  2. Open Terminal and run:`);
+        console.log(`     "${result.command}"`);
+        console.log(`  3. Then run: $B connect ${result.browser.name.toLowerCase()}\n`);
+        console.log(`Or add this to your shell profile to always launch with CDP:`);
+        console.log(`  alias chrome-cdp='"${result.command}"'\n`);
+
+        // Wait and poll — user might restart Chrome while we're printing
+        console.log(`Waiting for CDP on port ${result.port}...`);
+        const pollStart = Date.now();
+        while (Date.now() - pollStart < 60000) {
+          const probe = await isCdpAvailable(result.port);
+          if (probe.available && probe.wsUrl) {
+            console.log(`CDP available! Connecting...`);
+            // Start server with CDP env vars
+            const newState = await startServer({
+              BROWSE_CDP_URL: probe.wsUrl,
+              BROWSE_CDP_PORT: String(result.port),
+            });
+            const resp = await fetch(`http://127.0.0.1:${newState.port}/command`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${newState.token}`,
+              },
+              body: JSON.stringify({ command: 'tabs', args: [] }),
+              signal: AbortSignal.timeout(5000),
+            });
+            const tabList = await resp.text();
+            console.log(`Connected to ${result.browser.name} via CDP\n${tabList}`);
+            process.exit(0);
+          }
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          process.stdout.write('.');
+        }
+        console.log(`\nTimed out waiting for CDP. Run $B connect again after restarting ${result.browser.name}.`);
+        process.exit(1);
+      }
+
       console.log(`Found ${result.browser} CDP at port ${result.port}`);
 
       // Start server with CDP env vars

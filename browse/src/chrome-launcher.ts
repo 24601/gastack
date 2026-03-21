@@ -117,41 +117,125 @@ export function isBrowserRunning(browser: BrowserBinary): boolean {
   }
 }
 
-// ─── Browser Launch with CDP ───────────────────────────────────
+// ─── Runtime Detection ─────────────────────────────────────────
+
+export type RuntimeEnv = 'conductor' | 'claude-code' | 'codex' | 'terminal';
 
 /**
- * Quit a browser gracefully via osascript and relaunch with --remote-debugging-port.
- * Returns the CDP WebSocket URL on success.
+ * Detect the parent runtime environment.
+ * Conductor and other Electron apps can't use osascript to quit other apps
+ * due to macOS App Management security restrictions.
+ */
+export function detectRuntime(): RuntimeEnv {
+  // Conductor sets these env vars for workspace subprocesses
+  if (process.env.CONDUCTOR_WORKSPACE_ID || process.env.CONDUCTOR_APP) return 'conductor';
+  // Check if parent process is Conductor (Electron app)
+  try {
+    const ppid = process.ppid;
+    if (ppid) {
+      const parentInfo = execSync(`ps -p ${ppid} -o comm= 2>/dev/null`, { stdio: 'pipe' }).toString().trim();
+      if (parentInfo.includes('Conductor') || parentInfo.includes('Electron')) return 'conductor';
+    }
+  } catch {}
+  // Claude Code terminal detection
+  if (process.env.CLAUDE_CODE || process.env.ANTHROPIC_API_KEY) return 'claude-code';
+  // Codex CLI detection
+  if (process.env.CODEX_SESSION || process.env.OPENAI_API_KEY) return 'codex';
+  return 'terminal';
+}
+
+/**
+ * Whether the current runtime can safely quit/relaunch other macOS apps.
+ * Electron apps (Conductor) trigger macOS App Management dialogs.
+ * Terminal apps (iTerm, Terminal, Claude Code CLI) can do it freely.
+ */
+export function canManageApps(): boolean {
+  const runtime = detectRuntime();
+  // Terminal-based runtimes can use osascript freely
+  // Electron-based runtimes (Conductor) trigger App Management dialogs
+  return runtime === 'terminal' || runtime === 'claude-code' || runtime === 'codex';
+}
+
+// ─── Browser Launch with CDP ───────────────────────────────────
+
+export interface LaunchResult {
+  wsUrl: string;
+  port: number;
+}
+
+export interface ManualRestartNeeded {
+  needsManualRestart: true;
+  browser: BrowserBinary;
+  port: number;
+  reason: string;
+  command: string;  // The command the user needs to run
+}
+
+export type LaunchOutcome = LaunchResult | ManualRestartNeeded;
+
+function isManualRestart(outcome: LaunchOutcome): outcome is ManualRestartNeeded {
+  return 'needsManualRestart' in outcome;
+}
+
+/**
+ * Launch or connect to a browser with CDP enabled.
  *
- * If the user's browser is running, this will:
- * 1. Quit it gracefully (tabs restored on relaunch)
- * 2. Wait 2s for clean shutdown
- * 3. Relaunch with --remote-debugging-port
- * 4. Poll for CDP availability (up to 15s)
- *
- * On failure: attempt to relaunch WITHOUT debug flag (rollback).
+ * Three paths:
+ * 1. Browser not running → launch with --remote-debugging-port (works everywhere)
+ * 2. Browser running + runtime CAN manage apps → quit and relaunch (terminal/CLI)
+ * 3. Browser running + runtime CANNOT manage apps → return ManualRestartNeeded
+ *    with instructions for the user (Conductor/Electron)
  */
 export async function launchWithCdp(
   browser: BrowserBinary,
   port: number = 9222,
-): Promise<{ wsUrl: string; port: number }> {
+): Promise<LaunchOutcome> {
   const wasRunning = isBrowserRunning(browser);
 
   if (wasRunning) {
-    // Quit gracefully via osascript
+    if (!canManageApps()) {
+      // Can't quit Chrome from Conductor — macOS App Management blocks it
+      const runtime = detectRuntime();
+      return {
+        needsManualRestart: true,
+        browser,
+        port,
+        reason: runtime === 'conductor'
+          ? `Conductor can't restart ${browser.name} due to macOS App Management security. You need to restart it manually.`
+          : `This runtime can't restart ${browser.name}. You need to restart it manually.`,
+        command: `${browser.binary} --remote-debugging-port=${port} --restore-last-session`,
+      };
+    }
+
+    // Terminal/CLI runtime — can quit and relaunch
     try {
       execSync(`osascript -e 'tell application "${browser.appName}" to quit'`, {
         stdio: 'pipe',
         timeout: 10000,
       });
     } catch {
-      throw new Error(`Failed to quit ${browser.name}. Close it manually and try again.`);
+      // osascript failed even from terminal — fall back to manual
+      return {
+        needsManualRestart: true,
+        browser,
+        port,
+        reason: `Failed to quit ${browser.name} via osascript. You need to restart it manually.`,
+        command: `${browser.binary} --remote-debugging-port=${port} --restore-last-session`,
+      };
     }
-    // Wait for clean shutdown
-    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Wait for clean shutdown (Chrome with many tabs can take a while)
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Verify it actually quit — wait up to 10s for processes to exit
+    const quitStart = Date.now();
+    while (Date.now() - quitStart < 10000) {
+      if (!isBrowserRunning(browser)) break;
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   }
 
-  // Relaunch with CDP flag
+  // Launch with CDP flag
   const child = spawn(browser.binary, [
     `--remote-debugging-port=${port}`,
     '--restore-last-session',
@@ -161,9 +245,9 @@ export async function launchWithCdp(
   });
   child.unref();
 
-  // Poll for CDP availability (up to 15s)
+  // Poll for CDP availability (up to 30s — Chrome with many tabs takes time)
   const startTime = Date.now();
-  while (Date.now() - startTime < 15000) {
+  while (Date.now() - startTime < 30000) {
     const result = await isCdpAvailable(port);
     if (result.available && result.wsUrl) {
       return { wsUrl: result.wsUrl, port };
@@ -183,7 +267,7 @@ export async function launchWithCdp(
   }
 
   throw new Error(
-    `CDP endpoint not available after 15s. ${browser.name} may not support --remote-debugging-port, ` +
+    `CDP endpoint not available after 30s. ${browser.name} may not support --remote-debugging-port, ` +
     `or port ${port} is blocked. Browser has been relaunched without debug flag.`
   );
 }
@@ -197,10 +281,13 @@ export async function launchWithCdp(
  * @param preferredBrowser - Optional browser name (e.g., 'chrome', 'comet')
  * @param port - CDP port (default 9222)
  */
+export { isManualRestart };
+export type { ManualRestartNeeded };
+
 export async function discoverAndConnect(
   preferredBrowser?: string,
   port: number = 9222,
-): Promise<{ wsUrl: string; port: number; browser: string }> {
+): Promise<{ wsUrl: string; port: number; browser: string } | ManualRestartNeeded> {
   // Step 1: Check for existing CDP
   const existing = await findCdpPort();
   if (existing) {
@@ -232,7 +319,10 @@ export async function discoverAndConnect(
     browser = installed[0];
   }
 
-  // Step 3: Launch with CDP
+  // Step 3: Launch with CDP (may return ManualRestartNeeded)
   const result = await launchWithCdp(browser, port);
+  if (isManualRestart(result)) {
+    return result;  // Caller must handle manual restart flow
+  }
   return { ...result, browser: browser.name };
 }
