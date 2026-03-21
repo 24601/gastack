@@ -35,11 +35,14 @@ When the user types `/land-and-deploy`, run this skill.
 - `/land-and-deploy #123` — specific PR number
 - `/land-and-deploy #123 <url>` — specific PR + verification URL
 
-## Non-interactive philosophy (like /ship)
+## Non-interactive philosophy (like /ship) — with one critical gate
 
-This is a **non-interactive, fully automated** workflow. Do NOT ask for confirmation at any step except the ones listed below. The user said `/land-and-deploy` which means DO IT.
+This is a **mostly automated** workflow. Do NOT ask for confirmation at any step except
+the ones listed below. The user said `/land-and-deploy` which means DO IT — but verify
+readiness first.
 
-**Only stop for:**
+**Always stop for:**
+- **Pre-merge readiness gate (Step 3.5)** — this is the ONE confirmation before merge
 - GitHub CLI not authenticated
 - No PR found for this branch
 - CI failures or merge conflicts
@@ -49,7 +52,6 @@ This is a **non-interactive, fully automated** workflow. Do NOT ask for confirma
 
 **Never stop for:**
 - Choosing merge method (auto-detect from repo settings)
-- Confirming the merge
 - Timeout warnings (warn and continue gracefully)
 
 ---
@@ -111,6 +113,85 @@ Record the CI wait time for the deploy report.
 If CI passes within the timeout: continue to Step 4.
 If CI fails: **STOP.** Show failures.
 If timeout (15 min): **STOP.** "CI has been running for 15 minutes. Investigate manually."
+
+---
+
+## Step 3.5: Pre-merge readiness gate
+
+**This is the critical safety check before an irreversible merge.** Gather ALL evidence,
+present it to the user, and get explicit confirmation before merging.
+
+### 3.5a: Review Readiness Dashboard
+
+```bash
+~/.claude/skills/gstack/bin/gstack-review-read 2>/dev/null
+```
+
+Parse the output. Find the most recent entry for each review skill within the last 7 days.
+Check staleness: compare each review's commit hash against the current HEAD.
+
+Display the dashboard:
+
+```
+PRE-MERGE READINESS CHECK
+══════════════════════════
+Review          | Status    | Last Run            | Stale?
+----------------|-----------|---------------------|--------
+Eng Review      | CLEAR/—   | 2026-03-21 15:00    | N commits behind
+CEO Review      | CLEAR/—   | —                   | —
+Design Review   | CLEAR/—   | —                   | —
+Codex Review    | CLEAR/—   | —                   | —
+```
+
+### 3.5b: Test results
+
+Check for recent E2E eval results:
+
+```bash
+ls -t ~/.gstack-dev/evals/*-e2e-*-$(date +%Y-%m-%d)*.json 2>/dev/null | head -20
+```
+
+For each eval file found from today, parse pass/fail counts and show a summary:
+
+```
+E2E Tests       | 52/52 pass | 25 min ago | $8.50
+Free Tests      | (run bun test to check)
+```
+
+If no E2E results from today exist, note: "No E2E tests run today."
+
+Also run free tests inline:
+
+```bash
+bun test 2>&1 | tail -5
+```
+
+### 3.5c: Document-release check
+
+Check if `/document-release` has been run on this branch:
+
+```bash
+git log --oneline --grep="docs: update project documentation" HEAD~5..HEAD
+```
+
+If no doc update commit found: flag "WARNING: /document-release has not been run."
+
+### 3.5d: Merge confirmation
+
+Present all evidence in a single AskUserQuestion:
+
+- **Re-ground:** "About to merge PR #NNN on branch X to base branch Y."
+- Show the review dashboard, test results, and doc-release status from above.
+- If ANY of these are red flags (eng review missing/stale, E2E failures, no doc update),
+  list them explicitly as warnings.
+- **RECOMMENDATION:** Choose A if everything is green. Choose B if there are warnings
+  to address first. Choose C to skip checks and merge anyway.
+- A) Merge — all checks look good
+- B) Don't merge yet — fix the flagged issues first
+- C) Merge anyway — I accept the risks
+
+If the user chooses B: **STOP** with a summary of what needs to be done.
+If the user chooses A or C: continue to Step 4.
 
 ---
 
