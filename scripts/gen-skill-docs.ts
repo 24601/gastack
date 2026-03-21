@@ -1461,6 +1461,8 @@ echo "OLD_CFG: \${OLD_CFG:-not_set}"
 
 If \`OLD_CFG\` is \`disabled\`: skip this step silently. Continue to the next step.
 
+**User override:** If the user explicitly requested a specific tier (e.g., "run all passes", "paranoid review", "full adversarial", "do all 4 passes", "thorough review"), honor that request regardless of diff size. Jump to the matching tier section.
+
 **Auto-select tier based on diff size:**
 - **Small (< 50 lines changed):** Skip adversarial review entirely. Print: "Small diff ($DIFF_TOTAL lines) — adversarial review skipped." Continue to the next step.
 - **Medium (50–199 lines changed):** Run Codex adversarial challenge (or Claude adversarial subagent if Codex unavailable). Jump to the "Medium tier" section.
