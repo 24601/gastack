@@ -201,7 +201,7 @@ describeIfSelected('Skill E2E tests', [
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   });
 
-  testIfSelected('browse-basic', async () => {
+  testConcurrentIfSelected('browse-basic', async () => {
     const result = await runSkillTest({
       prompt: `You have a browse binary at ${browseBin}. Assign it to B variable and run these commands in sequence:
 1. $B goto ${testServer.url}
@@ -222,7 +222,7 @@ Report the results of each command.`,
     expect(result.exitReason).toBe('success');
   }, 90_000);
 
-  testIfSelected('browse-snapshot', async () => {
+  testConcurrentIfSelected('browse-snapshot', async () => {
     const result = await runSkillTest({
       prompt: `You have a browse binary at ${browseBin}. Assign it to B variable and run:
 1. $B goto ${testServer.url}
@@ -247,7 +247,7 @@ Report what each command returned.`,
     expect(result.exitReason).toBe('success');
   }, 90_000);
 
-  testIfSelected('skillmd-setup-discovery', async () => {
+  testConcurrentIfSelected('skillmd-setup-discovery', async () => {
     const skillMd = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
     const setupStart = skillMd.indexOf('## SETUP');
     const setupEnd = skillMd.indexOf('## IMPORTANT');
@@ -276,7 +276,7 @@ Report whether it worked.`,
     expect(result.exitReason).toBe('success');
   }, 90_000);
 
-  testIfSelected('skillmd-no-local-binary', async () => {
+  testConcurrentIfSelected('skillmd-no-local-binary', async () => {
     // Create a tmpdir with no browse binary — no local .claude/skills/gstack/browse/dist/browse
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-empty-'));
 
@@ -311,7 +311,7 @@ Report the exact output. Do NOT try to fix or install anything — just report w
     try { fs.rmSync(emptyDir, { recursive: true, force: true }); } catch {}
   }, 60_000);
 
-  testIfSelected('skillmd-outside-git', async () => {
+  testConcurrentIfSelected('skillmd-outside-git', async () => {
     // Create a tmpdir outside any git repo
     const nonGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-nogit-'));
 
@@ -342,7 +342,7 @@ Report the exact output — either "READY: <path>" or "NEEDS_SETUP".`,
     try { fs.rmSync(nonGitDir, { recursive: true, force: true }); } catch {}
   }, 60_000);
 
-  testIfSelected('contributor-mode', async () => {
+  testConcurrentIfSelected('contributor-mode', async () => {
     const contribDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-contrib-'));
     const logsDir = path.join(contribDir, 'contributor-logs');
     fs.mkdirSync(logsDir, { recursive: true });
@@ -387,7 +387,7 @@ Per the contributor mode instructions, file a field report to ${logsDir}/browse-
     try { fs.rmSync(contribDir, { recursive: true, force: true }); } catch {}
   }, 90_000);
 
-  testIfSelected('session-awareness', async () => {
+  testConcurrentIfSelected('session-awareness', async () => {
     const sessionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-session-'));
 
     // Set up a git repo so there's project/branch context to reference
@@ -1626,7 +1626,7 @@ describeIfSelected('Base branch detection', ['review-base-branch', 'ship-base-br
     try { fs.rmSync(baseBranchDir, { recursive: true, force: true }); } catch {}
   });
 
-  testIfSelected('review-base-branch', async () => {
+  testConcurrentIfSelected('review-base-branch', async () => {
     const dir = path.join(baseBranchDir, 'review-base');
     fs.mkdirSync(dir, { recursive: true });
 
@@ -1681,7 +1681,7 @@ Write your findings to ${dir}/review-output.md`,
     expect(usedGitDiff).toBe(true);
   }, 120_000);
 
-  testIfSelected('ship-base-branch', async () => {
+  testConcurrentIfSelected('ship-base-branch', async () => {
     const dir = path.join(baseBranchDir, 'ship-base');
     fs.mkdirSync(dir, { recursive: true });
 
@@ -1745,7 +1745,7 @@ Write a summary of what you detected to ${dir}/ship-preflight.md including:
     expect(destructiveTools).toHaveLength(0);
   }, 180_000);
 
-  testIfSelected('retro-base-branch', async () => {
+  testConcurrentIfSelected('retro-base-branch', async () => {
     const dir = path.join(baseBranchDir, 'retro-base');
     fs.mkdirSync(dir, { recursive: true });
 
@@ -1951,7 +1951,7 @@ describeIfSelected('Ship workflow E2E', ['ship-local-workflow'], () => {
     try { fs.rmSync(shipRemoteDir, { recursive: true, force: true }); } catch {}
   });
 
-  testIfSelected('ship-local-workflow', async () => {
+  testConcurrentIfSelected('ship-local-workflow', async () => {
     const result = await runSkillTest({
       prompt: `Read ship-SKILL.md for the ship workflow.
 Skip the preamble. Skip Steps 2.5, 3, 3.25, 3.4, 3.5, 3.75, 3.8, 5.5, 8, 8.5 (no tests, no review, no greptile, no codex, no TODOS, no PR, no doc-release — this is a test environment).
@@ -2010,7 +2010,7 @@ describeIfSelected('Setup Browser Cookies E2E', ['setup-cookies-detect'], () => 
     try { fs.rmSync(cookieDir, { recursive: true, force: true }); } catch {}
   });
 
-  testIfSelected('setup-cookies-detect', async () => {
+  testConcurrentIfSelected('setup-cookies-detect', async () => {
     const result = await runSkillTest({
       prompt: `Read setup-browser-cookies/SKILL.md for the cookie import workflow.
 
@@ -2114,7 +2114,7 @@ describeIfSelected('gstack-upgrade E2E', ['gstack-upgrade-happy-path'], () => {
     try { fs.rmSync(remoteDir, { recursive: true, force: true }); } catch {}
   });
 
-  testIfSelected('gstack-upgrade-happy-path', async () => {
+  testConcurrentIfSelected('gstack-upgrade-happy-path', async () => {
     const mockGstack = path.join(upgradeDir, '.claude', 'skills', 'gstack');
     const result = await runSkillTest({
       prompt: `Read gstack-upgrade/SKILL.md for the upgrade workflow.
@@ -2489,7 +2489,7 @@ Build a user dashboard that shows account stats, recent activity, and settings.
     try { fs.rmSync(reviewDir, { recursive: true, force: true }); } catch {}
   });
 
-  testIfSelected('plan-design-review-plan-mode', async () => {
+  testConcurrentIfSelected('plan-design-review-plan-mode', async () => {
     const result = await runSkillTest({
       prompt: `Read plan-design-review/SKILL.md for the design review workflow.
 
@@ -2538,7 +2538,7 @@ IMPORTANT: Do NOT try to browse any URLs or use a browse binary. This is a plan 
     expect(planHasDesignAdditions).toBe(true);
   }, 360_000);
 
-  testIfSelected('plan-design-review-no-ui-scope', async () => {
+  testConcurrentIfSelected('plan-design-review-no-ui-scope', async () => {
     // Write a backend-only plan
     fs.writeFileSync(path.join(reviewDir, 'backend-plan.md'), `# Plan: Database Migration
 
@@ -2799,7 +2799,7 @@ export function divide(a, b) { return a / b; } // BUG: no zero check
     try { fs.rmSync(bootstrapDir, { recursive: true, force: true }); } catch {}
   });
 
-  testIfSelected('qa-bootstrap', async () => {
+  testConcurrentIfSelected('qa-bootstrap', async () => {
     // Test ONLY the bootstrap phase — install vitest, create config, write one test
     const bsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-bs-'));
 
