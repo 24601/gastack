@@ -389,10 +389,10 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
         console.log(`To connect, quit ${result.browser.name} and restart it with CDP enabled:\n`);
         console.log(`  1. Quit ${result.browser.name} (Cmd+Q)`);
         console.log(`  2. Open Terminal and run:`);
-        console.log(`     "${result.command}"`);
+        console.log(`     ${result.command}`);
         console.log(`  3. Then run: $B connect ${result.browser.name.toLowerCase()}\n`);
         console.log(`Or add this to your shell profile to always launch with CDP:`);
-        console.log(`  alias chrome-cdp='"${result.command}"'\n`);
+        console.log(`  alias chrome-cdp='${result.command}'\n`);
 
         // Wait and poll — user might restart Chrome while we're printing
         console.log(`Waiting for CDP on port ${result.port}...`);
