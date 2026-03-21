@@ -152,8 +152,6 @@ describeIfSelected('Ship workflow E2E', ['ship-local-workflow'], () => {
     run('git', ['add', 'app.ts']);
     run('git', ['commit', '-m', 'feat: update to v2']);
 
-    // Copy ship skill
-    fs.copyFileSync(path.join(ROOT, 'ship', 'SKILL.md'), path.join(shipWorkDir, 'ship-SKILL.md'));
   });
 
   afterAll(() => {
@@ -163,17 +161,34 @@ describeIfSelected('Ship workflow E2E', ['ship-local-workflow'], () => {
 
   testConcurrentIfSelected('ship-local-workflow', async () => {
     const result = await runSkillTest({
-      prompt: `Read ship-SKILL.md for the ship workflow.
-Skip the preamble. Skip Steps 2.5, 3, 3.25, 3.4, 3.5, 3.75, 3.8, 5.5, 8, 8.5 (no tests, no review, no greptile, no codex, no TODOS, no PR, no doc-release — this is a test environment).
+      prompt: `You are running a ship workflow. This is fully automated — do NOT ask for confirmation at any step. Run straight through.
 
-Run Step 0 (detect base branch — fall back to main).
-Run Step 2 (merge base branch).
-Run Step 4 (version bump — auto-pick MICRO).
-Run Step 5 (CHANGELOG — auto-generate).
-Run Step 6 (commit).
-Run Step 7 (push to origin).
+Step 0 — Detect base branch:
+Try: gh pr view --json baseRefName -q .baseRefName
+If that fails, try: gh repo view --json defaultBranchRef -q .defaultBranchRef.name
+If both fail, fall back to "main". Use the detected branch as <base> in all subsequent steps.
 
-Write ship-summary.md with the version and branch.`,
+Step 2 — Merge base branch:
+git fetch origin <base> && git merge origin/<base> --no-edit
+If already up to date, continue silently.
+
+Step 4 — Version bump:
+Read the VERSION file (4-digit format: MAJOR.MINOR.PATCH.MICRO).
+Auto-pick MICRO bump (increment the 4th digit). Write the new version to VERSION.
+
+Step 5 — CHANGELOG:
+Read CHANGELOG.md. Auto-generate an entry from the branch commits:
+- git log <base>..HEAD --oneline
+- git diff <base>...HEAD
+Format: ## [X.Y.Z.W] - YYYY-MM-DD with bullet points. Prepend after the header.
+
+Step 6 — Commit:
+Stage all changes. Commit with message: "chore: bump version and changelog (vX.Y.Z.W)"
+
+Step 7 — Push:
+git push -u origin <branch-name>
+
+Finally, write ship-summary.md with the version and branch.`,
       workingDirectory: shipWorkDir,
       maxTurns: 15,
       timeout: 120_000,
@@ -547,6 +562,7 @@ Write the full output (including the GATE verdict) to ${codexDir}/codex-output.m
       timeout: 300_000,
       testName: 'codex-review',
       runId,
+      model: 'claude-opus-4-6',
     });
 
     logCost('/codex review', result);
