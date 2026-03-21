@@ -234,7 +234,10 @@ async function ensureServer(): Promise<ServerState> {
     }
   }
 
-  // Need to (re)start
+  // Need to (re)start — kill the old server first to avoid orphaned chromium processes
+  if (state && state.pid) {
+    await killServer(state.pid);
+  }
   console.error('[browse] Starting server...');
   return startServer();
 }
@@ -289,6 +292,11 @@ async function sendCommand(state: ServerState, command: string, args: string[], 
     if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.message?.includes('fetch failed')) {
       if (retries >= 1) throw new Error('[browse] Server crashed twice in a row — aborting');
       console.error('[browse] Server connection lost. Restarting...');
+      // Kill the old server to avoid orphaned chromium processes
+      const oldState = readState();
+      if (oldState && oldState.pid) {
+        await killServer(oldState.pid);
+      }
       const newState = await startServer();
       return sendCommand(newState, command, args, retries + 1);
     }
