@@ -236,7 +236,16 @@ async function ensureServer(): Promise<ServerState> {
     }
   }
 
-  // Need to (re)start
+  // Guard: never silently replace a CDP server with a headless one.
+  // CDP mode means a user-visible Chrome window is (or was) controlled.
+  // Silently replacing it would be confusing — tell the user to reconnect.
+  if (state && state.mode === 'cdp' && isProcessAlive(state.pid)) {
+    console.error(`[browse] CDP server running (PID ${state.pid}) but not responding.`);
+    console.error(`[browse] Run '$B connect' to restart.`);
+    process.exit(1);
+  }
+
+  // Need to (re)start (headless only — safe to auto-start)
   console.error('[browse] Starting server...');
   return startServer();
 }
@@ -348,19 +357,40 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
   // connect must be handled BEFORE ensureServer() because it needs
   // to restart the server with real Chrome via Playwright channel:chrome.
   if (command === 'connect') {
-    // Check if already in CDP mode
+    // Check if already in CDP mode and healthy
     const existingState = readState();
-    if (existingState && existingState.mode === 'cdp') {
-      console.log('Already connected to real browser.');
-      process.exit(0);
+    if (existingState && existingState.mode === 'cdp' && isProcessAlive(existingState.pid)) {
+      try {
+        const resp = await fetch(`http://127.0.0.1:${existingState.port}/health`, {
+          signal: AbortSignal.timeout(2000),
+        });
+        if (resp.ok) {
+          console.log('Already connected to real browser.');
+          process.exit(0);
+        }
+      } catch {
+        // CDP server alive but not responding — kill and restart
+      }
     }
 
-    // Kill existing headless server if running
-    if (existingState) {
+    // Kill ANY existing server (SIGTERM → wait 2s → SIGKILL)
+    if (existingState && isProcessAlive(existingState.pid)) {
       try { process.kill(existingState.pid, 'SIGTERM'); } catch {}
-      try { fs.unlinkSync(config.stateFile); } catch {}
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (isProcessAlive(existingState.pid)) {
+        try { process.kill(existingState.pid, 'SIGKILL'); } catch {}
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
+
+    // Clean up Chromium profile locks (can persist after crashes)
+    const profileDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
+    for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+      try { fs.unlinkSync(path.join(profileDir, lockFile)); } catch {}
+    }
+
+    // Delete stale state file
+    try { fs.unlinkSync(config.stateFile); } catch {}
 
     console.log('Launching real Chrome browser...');
     try {

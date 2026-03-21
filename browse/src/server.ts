@@ -315,6 +315,12 @@ async function shutdown() {
 
   await browserManager.close();
 
+  // Clean up Chromium profile locks (prevent SingletonLock on next launch)
+  const profileDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
+  for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+    try { fs.unlinkSync(path.join(profileDir, lockFile)); } catch {}
+  }
+
   // Clean up state file
   try { fs.unlinkSync(config.stateFile); } catch {}
 
@@ -324,6 +330,27 @@ async function shutdown() {
 // Handle signals
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// Emergency cleanup for crashes (OOM, uncaught exceptions)
+function emergencyCleanup() {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  const profileDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
+  for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+    try { fs.unlinkSync(path.join(profileDir, lockFile)); } catch {}
+  }
+  try { fs.unlinkSync(config.stateFile); } catch {}
+}
+process.on('uncaughtException', (err) => {
+  console.error('[browse] FATAL uncaught exception:', err.message);
+  emergencyCleanup();
+  process.exit(1);
+});
+process.on('unhandledRejection', (err: any) => {
+  console.error('[browse] FATAL unhandled rejection:', err?.message || err);
+  emergencyCleanup();
+  process.exit(1);
+});
 
 // ─── Start ─────────────────────────────────────────────────────
 async function start() {
@@ -455,21 +482,9 @@ async function start() {
         });
       }
 
-      // All other endpoints require auth
-      if (!validateAuth(req)) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
+      // ─── Sidebar endpoints (no auth — localhost only) ─────────────
 
-      if (url.pathname === '/command' && req.method === 'POST') {
-        resetIdleTimer();  // Only commands reset idle timer
-        const body = await req.json();
-        return handleCommand(body);
-      }
-
-      // Sidebar → Claude Code command queue (file-based message passing)
+      // Sidebar → Claude Code command queue
       if (url.pathname === '/sidebar-command' && req.method === 'POST') {
         const body = await req.json();
         const msg = body.message?.trim();
@@ -490,7 +505,7 @@ async function start() {
         });
       }
 
-      // Claude Code → Sidebar response (also file-based)
+      // Claude Code → Sidebar response
       if (url.pathname === '/sidebar-response' && req.method === 'POST') {
         const body = await req.json();
         const msg = body.message?.trim();
@@ -504,6 +519,31 @@ async function start() {
         fs.mkdirSync(gstackDir, { recursive: true });
         const entry = JSON.stringify({ ts: new Date().toISOString(), role: 'assistant', message: msg }) + '\n';
         fs.appendFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), entry);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Streaming events from sidebar agent
+      if (url.pathname === '/sidebar-event' && req.method === 'POST') {
+        const body = await req.json();
+        const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
+        fs.mkdirSync(gstackDir, { recursive: true });
+        const entry = JSON.stringify({ ts: new Date().toISOString(), role: 'agent', ...body }) + '\n';
+        fs.appendFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), entry);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Clear sidebar chat
+      if (url.pathname === '/sidebar-chat/clear' && req.method === 'POST') {
+        const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
+        try {
+          fs.writeFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), '');
+        } catch {}
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -526,6 +566,21 @@ async function start() {
           status: 200,
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
         });
+      }
+
+      // ─── Auth-required endpoints ──────────────────────────────────
+
+      if (!validateAuth(req)) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (url.pathname === '/command' && req.method === 'POST') {
+        resetIdleTimer();  // Only commands reset idle timer
+        const body = await req.json();
+        return handleCommand(body);
       }
 
       return new Response('Not found', { status: 404 });
