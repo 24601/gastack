@@ -19,15 +19,20 @@ export interface BrowserBinary {
   binary: string;
   appName: string;  // for osascript 'tell application "X"'
   aliases: string[];
-  userDataDir: string;  // required for --remote-debugging-port
+  realDataDir: string;   // user's actual profile location
+  cdpDataDir: string;    // separate dir for --remote-debugging-port (symlinks to real profile)
 }
 
+const HOME = process.env.HOME || '/tmp';
+const APP_SUPPORT = `${HOME}/Library/Application Support`;
+const CDP_BASE = `${HOME}/.gstack/cdp-profile`;
+
 export const BROWSER_BINARIES: BrowserBinary[] = [
-  { name: 'Comet',  binary: '/Applications/Comet.app/Contents/MacOS/Comet',                      appName: 'Comet',            aliases: ['comet', 'perplexity'],     userDataDir: '' },
-  { name: 'Chrome', binary: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',       appName: 'Google Chrome',    aliases: ['chrome', 'google-chrome'], userDataDir: '' },
-  { name: 'Arc',    binary: '/Applications/Arc.app/Contents/MacOS/Arc',                           appName: 'Arc',              aliases: ['arc'],                    userDataDir: '' },
-  { name: 'Brave',  binary: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',      appName: 'Brave Browser',    aliases: ['brave'],                  userDataDir: '' },
-  { name: 'Edge',   binary: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',    appName: 'Microsoft Edge',   aliases: ['edge'],                   userDataDir: '' },
+  { name: 'Comet',  binary: '/Applications/Comet.app/Contents/MacOS/Comet',                      appName: 'Comet',            aliases: ['comet', 'perplexity'],     realDataDir: `${APP_SUPPORT}/Comet`,                       cdpDataDir: `${CDP_BASE}/comet` },
+  { name: 'Chrome', binary: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',       appName: 'Google Chrome',    aliases: ['chrome', 'google-chrome'], realDataDir: `${APP_SUPPORT}/Google/Chrome`,                cdpDataDir: `${CDP_BASE}/chrome` },
+  { name: 'Arc',    binary: '/Applications/Arc.app/Contents/MacOS/Arc',                           appName: 'Arc',              aliases: ['arc'],                    realDataDir: `${APP_SUPPORT}/Arc/User Data`,               cdpDataDir: `${CDP_BASE}/arc` },
+  { name: 'Brave',  binary: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',      appName: 'Brave Browser',    aliases: ['brave'],                  realDataDir: `${APP_SUPPORT}/BraveSoftware/Brave-Browser`, cdpDataDir: `${CDP_BASE}/brave` },
+  { name: 'Edge',   binary: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',    appName: 'Microsoft Edge',   aliases: ['edge'],                   realDataDir: `${APP_SUPPORT}/Microsoft Edge`,              cdpDataDir: `${CDP_BASE}/edge` },
 ];
 
 // ─── CDP Probe ─────────────────────────────────────────────────
@@ -118,6 +123,30 @@ export function isBrowserRunning(browser: BrowserBinary): boolean {
   }
 }
 
+/**
+ * Set up a CDP data directory with symlinks to the user's real profile.
+ * Chrome refuses --remote-debugging-port on the default data dir,
+ * but we can symlink the real profile so cookies/extensions carry over.
+ */
+function setupCdpDataDir(browser: BrowserBinary): void {
+  const { mkdirSync, symlinkSync, existsSync } = fs;
+  mkdirSync(browser.cdpDataDir, { recursive: true });
+
+  // Symlink the Default profile (cookies, extensions, history)
+  const realDefault = `${browser.realDataDir}/Default`;
+  const cdpDefault = `${browser.cdpDataDir}/Default`;
+  if (existsSync(realDefault) && !existsSync(cdpDefault)) {
+    symlinkSync(realDefault, cdpDefault);
+  }
+
+  // Symlink Local State (crypto keys for cookie decryption, etc.)
+  const realState = `${browser.realDataDir}/Local State`;
+  const cdpState = `${browser.cdpDataDir}/Local State`;
+  if (existsSync(realState) && !existsSync(cdpState)) {
+    symlinkSync(realState, cdpState);
+  }
+}
+
 // ─── Runtime Detection ─────────────────────────────────────────
 
 export type RuntimeEnv = 'conductor' | 'claude-code' | 'codex' | 'terminal';
@@ -201,7 +230,7 @@ export async function launchWithCdp(
         reason: runtime === 'conductor'
           ? `Conductor can't restart ${browser.name} due to macOS App Management security. You need to restart it manually.`
           : `This runtime can't restart ${browser.name}. You need to restart it manually.`,
-        command: `"${browser.binary}" --remote-debugging-port=${port} --restore-last-session`,
+        command: `"${browser.binary}" --remote-debugging-port=${port} --user-data-dir="${browser.cdpDataDir}" --restore-last-session`,
       };
     }
 
@@ -218,7 +247,7 @@ export async function launchWithCdp(
         browser,
         port,
         reason: `Failed to quit ${browser.name} via osascript. You need to restart it manually.`,
-        command: `"${browser.binary}" --remote-debugging-port=${port} --restore-last-session`,
+        command: `"${browser.binary}" --remote-debugging-port=${port} --user-data-dir="${browser.cdpDataDir}" --restore-last-session`,
       };
     }
 
@@ -233,9 +262,15 @@ export async function launchWithCdp(
     }
   }
 
-  // Launch with CDP flag — Chrome must NOT already be running (same profile can't have two instances)
+  // Set up CDP data dir with symlinked profile
+  // Chrome refuses --remote-debugging-port on its default data dir.
+  // We create a separate dir and symlink the real profile into it.
+  setupCdpDataDir(browser);
+
+  // Launch with CDP flag + non-default data dir
   const child = spawn(browser.binary, [
     `--remote-debugging-port=${port}`,
+    `--user-data-dir=${browser.cdpDataDir}`,
     '--restore-last-session',
   ], {
     detached: true,

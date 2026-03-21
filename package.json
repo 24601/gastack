@@ -32,8 +32,9 @@
     "analytics": "bun run scripts/analytics.ts"
   },
   "dependencies": {
+    "diff": "^7.0.0",
     "playwright": "^1.58.2",
-    "diff": "^7.0.0"
+    "puppeteer-core": "^24.40.0"
   },
   "engines": {
     "bun": ">=1.0.0"
