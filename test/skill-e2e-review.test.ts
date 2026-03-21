@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { runSkillTest } from './helpers/session-runner';
 import {
   ROOT, browseBin, runId, evalsEnabled, selectedTests,
-  describeIfSelected, describeE2E, testConcurrentIfSelected,
+  describeIfSelected, testConcurrentIfSelected,
   copyDirSync, setupBrowseShims, logCost, recordE2E,
   createEvalCollector, finalizeEvalCollector,
 } from './helpers/e2e-helpers';
@@ -161,7 +161,7 @@ The diff adds a new "returned" status to the Order model. Your job is to check i
 
 // --- Review: Design review lite E2E ---
 
-describeE2E('Review design lite E2E', () => {
+describeIfSelected('Review design lite E2E', ['review-design-lite'], () => {
   let designDir: string;
 
   beforeAll(() => {

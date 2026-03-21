@@ -161,8 +161,10 @@ export async function runSkillTest(options: {
     '--allowed-tools', ...allowedTools,
   ];
 
-  // Write prompt to a temp file and pipe it via shell to avoid stdin buffering issues
-  const promptFile = path.join(workingDirectory, '.prompt-tmp');
+  // Write prompt to a temp file OUTSIDE workingDirectory to avoid race conditions
+  // where afterAll cleanup deletes the dir before cat reads the file (especially
+  // with --concurrent --retry). Using os.tmpdir() + unique suffix keeps it stable.
+  const promptFile = path.join(os.tmpdir(), `.prompt-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fs.writeFileSync(promptFile, prompt);
 
   const proc = Bun.spawn(['sh', '-c', `cat "${promptFile}" | claude ${args.map(a => `"${a}"`).join(' ')}`], {
