@@ -61,8 +61,10 @@ export async function handleMetaCommand(
     case 'status': {
       const page = bm.getPage();
       const tabs = bm.getTabCount();
+      const mode = bm.getConnectionMode();
       return [
         `Status: healthy`,
+        `Mode: ${mode}`,
         `URL: ${page.url()}`,
         `Tabs: ${tabs}`,
         `PID: ${process.pid}`,
@@ -261,6 +263,69 @@ export async function handleMetaCommand(
       // Re-snapshot to capture current page state after human interaction
       const snapshot = await handleSnapshot(['-i'], bm);
       return `RESUMED\n${snapshot}`;
+    }
+
+    // ─── CDP Connect ────────────────────────────────────
+    case 'connect': {
+      // connect is handled as a pre-server command in cli.ts
+      // If we get here, server is already running — tell the user
+      if (bm.getConnectionMode() === 'cdp') {
+        return 'Already connected to real browser via CDP.';
+      }
+      return 'The connect command must be run from the CLI (not sent to a running server). Run: $B connect [browser]';
+    }
+
+    case 'disconnect': {
+      if (bm.getConnectionMode() !== 'cdp') {
+        return 'Not in CDP mode — nothing to disconnect.';
+      }
+      // Signal that we want a restart in headless mode
+      console.log('[browse] Disconnecting from real browser. Restarting in headless mode.');
+      await shutdown();
+      return 'Disconnected from real browser. Server will restart in headless mode on next command.';
+    }
+
+    case 'focus': {
+      if (bm.getConnectionMode() !== 'cdp') {
+        return 'focus requires CDP mode. Run `$B connect` first.';
+      }
+      try {
+        const { execSync } = await import('child_process');
+        // Detect which browser we're connected to from the CDP info
+        // For now, try common app names
+        const appNames = ['Comet', 'Google Chrome', 'Arc', 'Brave Browser', 'Microsoft Edge'];
+        let activated = false;
+        for (const appName of appNames) {
+          try {
+            execSync(`osascript -e 'tell application "${appName}" to activate'`, { stdio: 'pipe', timeout: 3000 });
+            activated = true;
+            break;
+          } catch {
+            // Try next browser
+          }
+        }
+
+        if (!activated) {
+          return 'Could not bring browser to foreground. macOS only.';
+        }
+
+        // If a ref was passed, scroll it into view
+        if (args.length > 0 && args[0].startsWith('@')) {
+          try {
+            const resolved = await bm.resolveRef(args[0]);
+            if ('locator' in resolved) {
+              await resolved.locator.scrollIntoViewIfNeeded({ timeout: 5000 });
+              return `Browser activated. Scrolled ${args[0]} into view.`;
+            }
+          } catch {
+            // Ref not found — still activated the browser
+          }
+        }
+
+        return 'Browser window activated.';
+      } catch (err: any) {
+        return `focus failed: ${err.message}. macOS only.`;
+      }
     }
 
     default:

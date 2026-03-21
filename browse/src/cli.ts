@@ -83,6 +83,8 @@ interface ServerState {
   startedAt: string;
   serverPath: string;
   binaryVersion?: string;
+  mode?: 'launched' | 'cdp';
+  cdpPort?: number;
 }
 
 // ─── State File ────────────────────────────────────────────────
@@ -161,7 +163,7 @@ function cleanupLegacyState(): void {
 }
 
 // ─── Server Lifecycle ──────────────────────────────────────────
-async function startServer(): Promise<ServerState> {
+async function startServer(extraEnv?: Record<string, string>): Promise<ServerState> {
   ensureStateDir(config);
 
   // Clean up stale state file
@@ -176,7 +178,7 @@ async function startServer(): Promise<ServerState> {
     : ['bun', 'run', SERVER_SCRIPT];
   const proc = Bun.spawn(serverCmd, {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, BROWSE_STATE_FILE: config.stateFile },
+    env: { ...process.env, BROWSE_STATE_FILE: config.stateFile, ...extraEnv },
   });
 
   // Don't hold the CLI open
@@ -341,6 +343,70 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
 
   const command = args[0];
   const commandArgs = args.slice(1);
+
+  // ─── CDP Connect (pre-server command) ───────────────────────
+  // connect must be handled BEFORE ensureServer() because it needs
+  // to restart the server with CDP env vars.
+  if (command === 'connect') {
+    const { discoverAndConnect } = await import('./chrome-launcher');
+
+    // Parse args: connect [browser] [--port N]
+    let preferredBrowser: string | undefined;
+    let port = 9222;
+    for (let i = 0; i < commandArgs.length; i++) {
+      if (commandArgs[i] === '--port' && commandArgs[i + 1]) {
+        port = parseInt(commandArgs[i + 1], 10);
+        i++;
+      } else if (!commandArgs[i].startsWith('-')) {
+        preferredBrowser = commandArgs[i];
+      }
+    }
+
+    // Check if already in CDP mode
+    const existingState = readState();
+    if (existingState && existingState.mode === 'cdp') {
+      console.log('Already connected to real browser via CDP.');
+      process.exit(0);
+    }
+
+    // Kill existing server if running
+    if (existingState) {
+      try { process.kill(existingState.pid, 'SIGTERM'); } catch {}
+      try { fs.unlinkSync(config.stateFile); } catch {}
+      // Wait for clean shutdown
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // Discover and connect to browser
+    console.log(`Discovering browser${preferredBrowser ? ` (${preferredBrowser})` : ''}...`);
+    try {
+      const result = await discoverAndConnect(preferredBrowser, port);
+      console.log(`Found ${result.browser} CDP at port ${result.port}`);
+
+      // Start server with CDP env vars
+      const newState = await startServer({
+        BROWSE_CDP_URL: result.wsUrl,
+        BROWSE_CDP_PORT: String(result.port),
+      });
+
+      // Print connected status
+      const resp = await fetch(`http://127.0.0.1:${newState.port}/command`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${newState.token}`,
+        },
+        body: JSON.stringify({ command: 'tabs', args: [] }),
+        signal: AbortSignal.timeout(5000),
+      });
+      const tabList = await resp.text();
+      console.log(`Connected to ${result.browser} via CDP\n${tabList}`);
+    } catch (err: any) {
+      console.error(`[browse] Connect failed: ${err.message}`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
 
   // Special case: chain reads from stdin
   if (command === 'chain' && commandArgs.length === 0) {

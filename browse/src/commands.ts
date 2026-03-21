@@ -31,6 +31,7 @@ export const META_COMMANDS = new Set([
   'chain', 'diff',
   'url', 'snapshot',
   'handoff', 'resume',
+  'connect', 'disconnect', 'focus',
 ]);
 
 export const ALL_COMMANDS = new Set([...READ_COMMANDS, ...WRITE_COMMANDS, ...META_COMMANDS]);
@@ -98,6 +99,10 @@ export const COMMAND_DESCRIPTIONS: Record<string, { category: string; descriptio
   // Handoff
   'handoff': { category: 'Server', description: 'Open visible Chrome at current page for user takeover', usage: 'handoff [message]' },
   'resume':  { category: 'Server', description: 'Re-snapshot after user takeover, return control to AI', usage: 'resume' },
+  // CDP
+  'connect': { category: 'Server', description: 'Connect to real Chrome/Comet browser via CDP', usage: 'connect [browser] [--port N]' },
+  'disconnect': { category: 'Server', description: 'Disconnect from real browser, return to headless mode' },
+  'focus':   { category: 'Server', description: 'Bring connected browser window to foreground (macOS)', usage: 'focus [@ref]' },
 };
 
 // Load-time validation: descriptions must cover exactly the command sets
