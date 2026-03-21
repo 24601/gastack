@@ -141,32 +141,62 @@ export class BrowserManager {
     };
     this.context = await this.browser.newContext(contextOptions);
 
-    // Inject visual indicator on every page — thin green border so user
-    // knows this window is controlled by gstack
+    // Inject visual indicator — subtle top-edge gradient + floating pill
+    // so the user always knows which Chrome window gstack controls
     await this.context.addInitScript(() => {
       const injectIndicator = () => {
-        if (document.getElementById('gstack-controlled-indicator')) return;
-        // Green border around viewport
-        const border = document.createElement('div');
-        border.id = 'gstack-controlled-indicator';
-        border.style.cssText = `
-          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-          border: 2px solid rgba(74, 222, 128, 0.6);
+        if (document.getElementById('gstack-ctrl')) return;
+
+        // Thin gradient line at the very top of the viewport
+        const topLine = document.createElement('div');
+        topLine.id = 'gstack-ctrl';
+        topLine.style.cssText = `
+          position: fixed; top: 0; left: 0; right: 0; height: 2px;
+          background: linear-gradient(90deg, #4ade80, #22d3ee, #4ade80);
+          background-size: 200% 100%;
+          animation: gstack-shimmer 3s linear infinite;
           pointer-events: none; z-index: 2147483647;
+          opacity: 0.8;
         `;
-        // Small label in top-left
-        const label = document.createElement('div');
-        label.style.cssText = `
-          position: fixed; top: 0; left: 0; z-index: 2147483647;
-          background: rgba(74, 222, 128, 0.9); color: #000;
-          font: 600 10px -apple-system, sans-serif;
-          padding: 2px 8px; pointer-events: none;
-          border-bottom-right-radius: 4px;
-          letter-spacing: 0.05em;
+
+        // Floating pill — bottom-right, fades to subtle
+        const pill = document.createElement('div');
+        pill.id = 'gstack-pill';
+        pill.style.cssText = `
+          position: fixed; bottom: 12px; right: 12px;
+          z-index: 2147483647; pointer-events: none;
+          display: flex; align-items: center; gap: 5px;
+          padding: 4px 10px;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(74, 222, 128, 0.25);
+          border-radius: 100px;
+          font: 500 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+          color: rgba(255, 255, 255, 0.7);
+          letter-spacing: 0.03em;
+          transition: opacity 0.5s ease;
+          opacity: 1;
         `;
-        label.textContent = 'gstack';
-        document.documentElement.appendChild(border);
-        document.documentElement.appendChild(label);
+        pill.innerHTML = '<span style="width:5px;height:5px;border-radius:50%;background:#4ade80;box-shadow:0 0 4px rgba(74,222,128,0.5);flex-shrink:0;"></span>gstack';
+
+        // Keyframe for shimmer animation
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes gstack-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            #gstack-ctrl { animation: none !important; }
+          }
+        `;
+
+        document.documentElement.appendChild(style);
+        document.documentElement.appendChild(topLine);
+        document.documentElement.appendChild(pill);
+
+        // Fade pill to subtle after 4s
+        setTimeout(() => { pill.style.opacity = '0.25'; }, 4000);
       };
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', injectIndicator);
