@@ -71,6 +71,39 @@ export class BrowserManager {
   getConnectionMode(): 'launched' | 'cdp' { return this.connectionMode; }
 
   /**
+   * Find the gstack Chrome extension directory.
+   * Checks: repo root /extension, global install, dev install.
+   */
+  private findExtensionPath(): string | null {
+    const fs = require('fs');
+    const path = require('path');
+    const candidates = [
+      // Relative to this source file (dev mode: browse/src/ -> ../../extension)
+      path.resolve(__dirname, '..', '..', 'extension'),
+      // Global gstack install
+      path.join(process.env.HOME || '', '.claude', 'skills', 'gstack', 'extension'),
+      // Git repo root (detected via BROWSE_STATE_FILE location)
+      (() => {
+        const stateFile = process.env.BROWSE_STATE_FILE || '';
+        if (stateFile) {
+          const repoRoot = path.resolve(path.dirname(stateFile), '..');
+          return path.join(repoRoot, '.claude', 'skills', 'gstack', 'extension');
+        }
+        return '';
+      })(),
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(path.join(candidate, 'manifest.json'))) {
+          return candidate;
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  /**
    * Get the ref map for external consumers (e.g., /refs endpoint).
    */
   getRefMap(): Array<{ ref: string; role: string; name: string }> {
@@ -125,12 +158,20 @@ export class BrowserManager {
     this.refMap.clear();
     this.nextTabId = 1;
 
+    // Find the gstack extension directory for auto-loading
+    const extensionPath = this.findExtensionPath();
+    const launchArgs = ['--restore-last-session'];
+    if (extensionPath) {
+      launchArgs.push(`--disable-extensions-except=${extensionPath}`);
+      launchArgs.push(`--load-extension=${extensionPath}`);
+    }
+
     // Launch real Chrome via Playwright's channel protocol
     // This uses the system Chrome binary, headed, with real window
     this.browser = await chromium.launch({
       channel: 'chrome',
       headless: false,
-      args: ['--restore-last-session'],
+      args: launchArgs,
     });
     this.connectionMode = 'cdp';
     this.intentionalDisconnect = false;

@@ -164,54 +164,43 @@ The window has a subtle green shimmer line at the top edge and a floating "gstac
 
 ### Chrome extension (Side Panel)
 
-A Chrome extension that shows a live activity feed of browse commands in a Side Panel, plus @ref overlays on the page. Works in any Chrome-based browser (Chrome, Comet, Edge).
+A Chrome extension that shows a live activity feed of browse commands in a Side Panel, plus @ref overlays on the page.
 
-#### Step-by-step install
+#### Automatic install (recommended)
 
-**1. Open the extensions page**
+When you run `$B connect`, the extension **auto-loads** into the Playwright-controlled Chrome window. No manual steps needed — the Side Panel is immediately available.
 
-Type `chrome://extensions` in Chrome's address bar and press Enter.
-
-**2. Enable Developer mode**
-
-In the top-right corner of the extensions page, toggle the **Developer mode** switch ON. You'll see new buttons appear: "Load unpacked", "Pack extension", and "Update".
-
-**3. Load the extension**
-
-Click **Load unpacked**. A file picker dialog opens.
-
-A file picker opens. You need to navigate to the `extension/` folder inside gstack, but macOS hides folders starting with `.` by default. The easiest way: press **Cmd+Shift+G** in the file picker to open "Go to folder", then paste one of these paths:
-
-- Global install: `~/.claude/skills/gstack/extension`
-- Project install: `<your-repo>/.claude/skills/gstack/extension`
-- Dev/source: `<gstack-repo>/extension`
-
-Press Enter, then click **Select** (select the `extension/` folder itself, not a file inside it).
-
-Alternatively, press **Cmd+Shift+.** (period) in the file picker to reveal hidden files, then navigate to `.claude/skills/gstack/extension` manually.
-
-**4. Pin the extension**
-
-Click the puzzle piece icon (Extensions) in Chrome's toolbar. Find "gstack browse" and click the pin icon so it's always visible.
-
-**5. Configure the port**
-
-Click the gstack icon in the toolbar. A popup appears with a port input field.
-
-Find your browse server port — run `$B status` or check `.gstack/browse.json` in your project root:
 ```bash
-cat .gstack/browse.json | grep port
-# or
-$B status   # shows the port in the output
+$B connect              # launches Chrome with extension pre-loaded
+# Click the gstack icon in toolbar → Open Side Panel
 ```
 
-Enter the port number and press Enter. The popup saves it and starts polling.
+The port is auto-configured. You're done.
 
-**6. Open the Side Panel**
+#### Manual install (for your regular Chrome)
 
-Click the gstack icon again, then click **Open Side Panel**. The Side Panel slides open on the right side of Chrome showing a live activity feed.
+If you want the extension in your everyday Chrome (not the Playwright-controlled one), run:
 
-Alternatively, right-click the gstack icon and choose "Open side panel."
+```bash
+bin/gstack-extension    # opens chrome://extensions, copies path to clipboard
+```
+
+Or do it manually:
+
+1. **Go to `chrome://extensions`** in Chrome's address bar
+2. **Toggle "Developer mode" ON** (top-right corner)
+3. **Click "Load unpacked"** — a file picker opens
+4. **Navigate to the extension folder:** Press **Cmd+Shift+G** in the file picker to open "Go to folder", then paste one of these paths:
+   - Global install: `~/.claude/skills/gstack/extension`
+   - Dev/source: `<gstack-repo>/extension`
+
+   Press Enter, then click **Select**.
+
+   (Tip: macOS hides folders starting with `.` — press **Cmd+Shift+.** in the file picker to reveal them if you prefer to navigate manually.)
+
+5. **Pin it:** Click the puzzle piece icon (Extensions) in the toolbar → pin "gstack browse"
+6. **Set the port:** Click the gstack icon → enter the port from `$B status` or `.gstack/browse.json`
+7. **Open Side Panel:** Click the gstack icon → "Open Side Panel"
 
 #### What you get
 
