@@ -57,12 +57,13 @@ if [ -z "$DEFAULT_BRANCH" ]; then
     DEFAULT_BRANCH="HEAD"
   fi
 fi
-SHORTLOG=$(git shortlog -sn --since="90 days ago" --no-merges "$DEFAULT_BRANCH" 2>/dev/null | head -20)
+SHORTLOG=$(git shortlog -sn --since="90 days ago" --no-merges "$DEFAULT_BRANCH" 2>/dev/null)
 if [ -z "$SHORTLOG" ]; then
   echo "REPO_MODE=unknown"
   exit 0
 fi
 
+# Compute TOTAL from ALL authors (not truncated) to avoid solo bias
 TOTAL=$(echo "$SHORTLOG" | awk '{s+=$1} END {print s}')
 TOP=$(echo "$SHORTLOG" | head -1 | awk '{print $1}')
 AUTHORS=$(echo "$SHORTLOG" | wc -l | tr -d ' ')
@@ -82,8 +83,11 @@ else
   MODE=collaborative
 fi
 
-# Cache result (fail silently if ~/.gstack is unwritable)
+# Cache result atomically (fail silently if ~/.gstack is unwritable)
 mkdir -p "$CACHE_DIR" 2>/dev/null || true
-echo "{\"mode\":\"$MODE\",\"top_pct\":$TOP_PCT,\"authors\":$AUTHORS,\"total\":$TOTAL,\"computed\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > "$CACHE_FILE" 2>/dev/null || true
+CACHE_TMP=$(mktemp "$CACHE_DIR/.repo-mode-XXXXXX" 2>/dev/null || true)
+if [ -n "$CACHE_TMP" ]; then
+  echo "{\"mode\":\"$MODE\",\"top_pct\":$TOP_PCT,\"authors\":$AUTHORS,\"total\":$TOTAL,\"computed\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > "$CACHE_TMP" 2>/dev/null && mv "$CACHE_TMP" "$CACHE_FILE" 2>/dev/null || rm -f "$CACHE_TMP" 2>/dev/null
+fi
 
 echo "REPO_MODE=$MODE"
