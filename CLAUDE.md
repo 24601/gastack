@@ -93,6 +93,12 @@ SKILL.md files are **generated** from `.tmpl` templates. To update docs:
 To add a new browse command: add it to `browse/src/commands.ts` and rebuild.
 To add a snapshot flag: add it to `SNAPSHOT_FLAGS` in `browse/src/snapshot.ts` and rebuild.
 
+**Merge conflicts on SKILL.md files:** NEVER resolve conflicts on generated SKILL.md
+files by accepting either side. Instead: (1) resolve conflicts on the `.tmpl` templates
+and `scripts/gen-skill-docs.ts` (the sources of truth), (2) run `bun run gen:skill-docs`
+to regenerate all SKILL.md files, (3) stage the regenerated files. Accepting one side's
+generated output silently drops the other side's template changes.
+
 ## Platform-agnostic design
 
 Skills must NEVER hardcode framework-specific commands, file patterns, or directory
