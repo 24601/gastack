@@ -81,6 +81,7 @@ Focus on reviewing the plan content: architecture, error handling, security, and
       timeout: 360_000,
       testName: 'plan-ceo-review',
       runId,
+      model: 'claude-opus-4-6',
     });
 
     logCost('/plan-ceo-review', result);
@@ -165,6 +166,7 @@ Focus on reviewing the plan content: architecture, error handling, security, and
       timeout: 360_000,
       testName: 'plan-ceo-review-selective',
       runId,
+      model: 'claude-opus-4-6',
     });
 
     logCost('/plan-ceo-review (SELECTIVE)', result);
@@ -257,6 +259,7 @@ Focus on architecture, code quality, tests, and performance sections.`,
       timeout: 360_000,
       testName: 'plan-eng-review',
       runId,
+      model: 'claude-opus-4-6',
     });
 
     logCost('/plan-eng-review', result);
@@ -382,6 +385,7 @@ Write your review to ${planDir}/review-output.md`,
       timeout: 360_000,
       testName: 'plan-eng-review-artifact',
       runId,
+      model: 'claude-opus-4-6',
     });
 
     logCost('/plan-eng-review artifact', result);

@@ -100,6 +100,7 @@ CRITICAL RULES:
       timeout: 300_000,
       testName: `qa-${label}`,
       runId,
+      model: 'claude-opus-4-6',
     });
 
     logCost(`/qa ${label}`, result);

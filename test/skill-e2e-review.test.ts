@@ -510,6 +510,7 @@ Analyze the git history and produce the narrative report as described in the SKI
       timeout: 300_000,
       testName: 'retro',
       runId,
+      model: 'claude-opus-4-6',
     });
 
     logCost('/retro', result);
