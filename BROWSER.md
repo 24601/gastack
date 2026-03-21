@@ -164,26 +164,69 @@ The window has a subtle green shimmer line at the top edge and a floating "gstac
 
 ### Chrome extension (Side Panel)
 
-A Manifest V3 Chrome extension shows live browse activity in a Side Panel:
+A Chrome extension that shows a live activity feed of browse commands in a Side Panel, plus @ref overlays on the page. Works in any Chrome-based browser (Chrome, Comet, Edge).
 
+#### Step-by-step install
+
+**1. Open the extensions page**
+
+Type `chrome://extensions` in Chrome's address bar and press Enter.
+
+**2. Enable Developer mode**
+
+In the top-right corner of the extensions page, toggle the **Developer mode** switch ON. You'll see new buttons appear: "Load unpacked", "Pack extension", and "Update".
+
+**3. Load the extension**
+
+Click **Load unpacked**. A file picker dialog opens.
+
+Navigate to the `extension/` folder inside gstack. The exact path depends on your install:
+- Global install: `~/.claude/skills/gstack/extension`
+- Project install: `<your-repo>/.claude/skills/gstack/extension`
+- Dev/source: `<gstack-repo>/extension`
+
+**Tip:** In the macOS file picker, press **Cmd+Shift+G** to type a path directly. Paste the path and press Enter.
+
+Select the `extension/` folder (not a file inside it) and click **Select**.
+
+**4. Pin the extension**
+
+Click the puzzle piece icon (Extensions) in Chrome's toolbar. Find "gstack browse" and click the pin icon so it's always visible.
+
+**5. Configure the port**
+
+Click the gstack icon in the toolbar. A popup appears with a port input field.
+
+Find your browse server port — run `$B status` or check `.gstack/browse.json` in your project root:
+```bash
+cat .gstack/browse.json | grep port
+# or
+$B status   # shows the port in the output
 ```
-extension/
-  manifest.json       — Manifest V3, sidePanel permission
-  background.js       — polls /health, relays refs, badge status
-  sidepanel.html/js   — live activity feed, dark theme
-  popup.html/js       — port config, connection status
-  content.js/css      — @ref overlays + connection pill
-```
 
-**Install:** `chrome://extensions` → Developer mode → Load unpacked → select `extension/`
+Enter the port number and press Enter. The popup saves it and starts polling.
 
-**Setup:** Click the gstack icon → enter the browse server port (shown by `$B status` or in `.gstack/browse.json`).
+**6. Open the Side Panel**
 
-**Features:**
-- Toolbar badge: green when connected, gray when not
-- Side Panel: live feed of every browse command and result
-- @ref overlays: floating panel showing current refs on the page
-- Connection pill: subtle indicator on every page when connected
+Click the gstack icon again, then click **Open Side Panel**. The Side Panel slides open on the right side of Chrome showing a live activity feed.
+
+Alternatively, right-click the gstack icon and choose "Open side panel."
+
+#### What you get
+
+| Feature | What it does |
+|---------|-------------|
+| **Toolbar badge** | Green dot when the browse server is reachable, gray when not |
+| **Side Panel** | Live scrolling feed of every browse command — shows command name, args, duration, status (success/error) |
+| **Refs tab** | After `$B snapshot`, shows the current @ref list (role + name) |
+| **@ref overlays** | Floating panel on the page showing current refs |
+| **Connection pill** | Small "gstack" pill in the bottom-right corner of every page when connected |
+
+#### Troubleshooting
+
+- **Badge stays gray:** Check that the port is correct. The browse server may have restarted on a different port — re-run `$B status` and update the port in the popup.
+- **Side Panel is empty:** The feed only shows activity after the extension connects. Run a browse command (`$B snapshot`) to see it appear.
+- **Extension disappeared after Chrome update:** Sideloaded extensions persist across updates. If it's gone, reload it from Step 3.
 
 ### User handoff
 
