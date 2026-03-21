@@ -132,7 +132,7 @@ describe('selectTests', () => {
     const result = selectTests(['SKILL.md.tmpl'], E2E_TOUCHFILES);
     // Should select the 7 tests that depend on root SKILL.md
     expect(result.selected).toContain('skillmd-setup-discovery');
-    expect(result.selected).toContain('contributor-mode');
+    // contributor-mode is now skipped — not in E2E_TOUCHFILES
     expect(result.selected).toContain('session-awareness');
     // Also selects journey routing tests (SKILL.md.tmpl in their touchfiles)
     expect(result.selected).toContain('journey-ideation');

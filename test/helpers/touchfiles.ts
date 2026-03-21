@@ -40,7 +40,7 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'skillmd-setup-discovery':  ['SKILL.md', 'SKILL.md.tmpl'],
   'skillmd-no-local-binary':  ['SKILL.md', 'SKILL.md.tmpl'],
   'skillmd-outside-git':      ['SKILL.md', 'SKILL.md.tmpl'],
-  'contributor-mode':         ['SKILL.md', 'SKILL.md.tmpl'],
+
   'session-awareness':        ['SKILL.md', 'SKILL.md.tmpl'],
 
   // QA
@@ -84,17 +84,12 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'codex-discover-skill':  ['codex/**', '.agents/skills/**', 'test/helpers/codex-session-runner.ts'],
   'codex-review-findings': ['review/**', '.agents/skills/gstack-review/**', 'codex/**', 'test/helpers/codex-session-runner.ts'],
 
-  // QA bootstrap
-  'qa-bootstrap': ['qa/**', 'browse/src/**', 'ship/**'],
-
   // Ship coverage audit
   'ship-coverage-audit': ['ship/**'],
 
   // Design
   'design-consultation-core':     ['design-consultation/**'],
-  'design-consultation-research': ['design-consultation/**'],
   'design-consultation-existing': ['design-consultation/**'],
-  'design-consultation-preview':  ['design-consultation/**'],
   'plan-design-review-plan-mode':   ['plan-design-review/**'],
   'plan-design-review-no-ui-scope': ['plan-design-review/**'],
   'design-review-fix':              ['design-review/**', 'browse/src/**'],

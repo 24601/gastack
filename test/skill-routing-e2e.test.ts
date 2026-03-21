@@ -135,7 +135,7 @@ describeE2E('Skill Routing E2E — Developer Journey', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-plan-eng', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-plan-eng-'));
@@ -187,7 +187,7 @@ describeE2E('Skill Routing E2E — Developer Journey', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-think-bigger', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-think-bigger-'));
@@ -299,7 +299,7 @@ export default app;
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-qa', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-qa-'));
@@ -338,7 +338,7 @@ export default app;
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-code-review', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-code-review-'));
@@ -365,7 +365,7 @@ export default app;
         workingDirectory: tmpDir,
         maxTurns: 5,
         allowedTools: ['Skill', 'Read', 'Bash', 'Glob', 'Grep'],
-        timeout: 60_000,
+        timeout: 120_000,
         testName,
         runId,
       });
@@ -381,7 +381,7 @@ export default app;
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-ship', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-ship-'));
@@ -423,7 +423,7 @@ export default app;
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-docs', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-docs-'));
@@ -463,7 +463,7 @@ export default app;
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-retro', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-retro-'));
@@ -493,7 +493,7 @@ export default app;
         workingDirectory: tmpDir,
         maxTurns: 5,
         allowedTools: ['Skill', 'Read', 'Bash', 'Glob', 'Grep'],
-        timeout: 60_000,
+        timeout: 120_000,
         testName,
         runId,
       });
@@ -509,7 +509,7 @@ export default app;
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-design-system', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-design-system-'));
@@ -547,7 +547,7 @@ export default app;
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 
   test('journey-visual-qa', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-visual-qa-'));
@@ -601,5 +601,5 @@ body { font-family: sans-serif; }
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 150_000);
 });

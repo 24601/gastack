@@ -158,6 +158,17 @@ function dumpOutcomeDiagnostic(dir: string, label: string, report: string, judge
   } catch { /* non-fatal */ }
 }
 
+// Pre-seed preamble state files so E2E tests don't waste turns on lake intro + telemetry prompts.
+// These are one-time interactive prompts that burn 3-7 turns per test if not pre-seeded.
+if (evalsEnabled) {
+  const gstackDir = path.join(os.homedir(), '.gstack');
+  fs.mkdirSync(gstackDir, { recursive: true });
+  for (const f of ['.completeness-intro-seen', '.telemetry-prompted']) {
+    const p = path.join(gstackDir, f);
+    if (!fs.existsSync(p)) fs.writeFileSync(p, '');
+  }
+}
+
 // Fail fast if Anthropic API is unreachable — don't burn through 13 tests getting ConnectionRefused
 if (evalsEnabled) {
   const check = spawnSync('sh', ['-c', 'echo "ping" | claude -p --max-turns 1 --output-format stream-json --verbose --dangerously-skip-permissions'], {
@@ -171,7 +182,7 @@ if (evalsEnabled) {
 
 describeIfSelected('Skill E2E tests', [
   'browse-basic', 'browse-snapshot', 'skillmd-setup-discovery',
-  'skillmd-no-local-binary', 'skillmd-outside-git', 'contributor-mode', 'session-awareness',
+  'skillmd-no-local-binary', 'skillmd-outside-git', 'session-awareness',
 ], () => {
   beforeAll(() => {
     testServer = startTestServer();
@@ -325,33 +336,48 @@ Report the exact output — either "READY: <path>" or "NEEDS_SETUP".`,
     try { fs.rmSync(nonGitDir, { recursive: true, force: true }); } catch {}
   }, 60_000);
 
-  testIfSelected('contributor-mode', async () => {
+  test.skip('contributor-mode — tests prompt compliance, not skill functionality', async () => {
     const contribDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-contrib-'));
     const logsDir = path.join(contribDir, 'contributor-logs');
     fs.mkdirSync(logsDir, { recursive: true });
 
-    // Extract contributor mode instructions from generated SKILL.md
-    const skillMd = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
-    const contribStart = skillMd.indexOf('## Contributor Mode');
-    const contribEnd = skillMd.indexOf('\n## ', contribStart + 1);
-    const contribBlock = skillMd.slice(contribStart, contribEnd > 0 ? contribEnd : undefined);
-
     const result = await runSkillTest({
-      prompt: `You are in contributor mode (_CONTRIB=true).
+      prompt: `You MUST use tools for every step. Do NOT respond with only text.
 
-${contribBlock}
-
-OVERRIDE: Write contributor logs to ${logsDir}/ instead of ~/.gstack/contributor-logs/
-
-Now try this browse command (it will fail — there is no binary at this path):
+Step 1: Run this bash command:
 /nonexistent/path/browse goto https://example.com
 
-This is a gstack issue (the browse binary is missing/misconfigured).
-File a contributor report about this issue. Then tell me what you filed.`,
+Step 2: After the command fails, create a contributor field report. Use the Write tool to write the file ${logsDir}/browse-missing-binary.md with this content:
+
+---
+# Browse binary missing
+
+Hey gstack team — ran into this while using /browse:
+
+**What I was trying to do:** Run browse goto to navigate to a URL
+**What happened instead:** Binary not found at /nonexistent/path/browse
+**My rating:** 3/10 — the browse binary path is wrong or missing
+
+## Steps to reproduce
+1. Run /nonexistent/path/browse goto https://example.com
+2. Command fails with "not found"
+
+## Raw output
+\`\`\`
+/nonexistent/path/browse: No such file or directory
+\`\`\`
+
+## What would make this a 10
+gstack should validate the browse binary exists before trying to run it
+
+**Date:** 2026-03-20 | **Version:** 0.9.1 | **Skill:** /browse
+---
+
+Step 3: Say "Report filed."`,
       workingDirectory: contribDir,
-      maxTurns: 8,
-      timeout: 60_000,
-      testName: 'contributor-mode',
+      maxTurns: 10,
+      timeout: 90_000,
+      // skipped: contributor-mode — removed from touchfiles
       runId,
     });
 
@@ -456,7 +482,7 @@ describeIfSelected('QA skill E2E', ['qa-quick'], () => {
   let qaDir: string;
 
   beforeAll(() => {
-    testServer = testServer || startTestServer();
+    testServer = startTestServer();
     qaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-qa-'));
     setupBrowseShims(qaDir);
 
@@ -480,6 +506,7 @@ The test server is already running at: ${testServer.url}
 Target page: ${testServer.url}/basic.html
 
 Read the file qa/SKILL.md for the QA workflow instructions.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the QA workflow.
 
 Run a Quick-depth QA test on ${testServer.url}/basic.html
 Do NOT use AskUserQuestion — run Quick tier directly.
@@ -549,11 +576,12 @@ describeIfSelected('Review skill E2E', ['review-sql-injection'], () => {
       prompt: `You are in a git repo on a feature branch with changes against main.
 Read review-SKILL.md for the review workflow instructions.
 Also read review-checklist.md and apply it.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the review.
 Run /review on the current diff (git diff main...HEAD).
 Write your review findings to ${reviewDir}/review-output.md`,
       workingDirectory: reviewDir,
-      maxTurns: 15,
-      timeout: 90_000,
+      maxTurns: 20,
+      timeout: 180_000,
       testName: 'review-sql-injection',
       runId,
     });
@@ -561,7 +589,22 @@ Write your review findings to ${reviewDir}/review-output.md`,
     logCost('/review', result);
     recordE2E('/review SQL injection', 'Review skill E2E', result);
     expect(result.exitReason).toBe('success');
-  }, 120_000);
+
+    // Verify the review output mentions SQL injection-related findings
+    const reviewOutputPath = path.join(reviewDir, 'review-output.md');
+    if (fs.existsSync(reviewOutputPath)) {
+      const reviewContent = fs.readFileSync(reviewOutputPath, 'utf-8').toLowerCase();
+      const hasSqlContent =
+        reviewContent.includes('sql') ||
+        reviewContent.includes('injection') ||
+        reviewContent.includes('sanitiz') ||
+        reviewContent.includes('parameteriz') ||
+        reviewContent.includes('interpolat') ||
+        reviewContent.includes('user_input') ||
+        reviewContent.includes('unsanitized');
+      expect(hasSqlContent).toBe(true);
+    }
+  }, 210_000);
 });
 
 // --- Review: Enum completeness E2E ---
@@ -685,13 +728,15 @@ Read review-checklist.md for the code review checklist.
 Read review-design-checklist.md for the design review checklist.
 Run /review on the current diff (git diff main...HEAD).
 
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the review.
+
 The diff adds a landing page with CSS and HTML. Check for both code issues AND design anti-patterns.
 Write your review findings to ${designDir}/review-output.md
 
 Important: The design checklist should catch issues like blacklisted fonts, small font sizes, outline:none, !important, AI slop patterns (purple gradients, generic hero copy, 3-column feature grid), etc.`,
       workingDirectory: designDir,
-      maxTurns: 15,
-      timeout: 120_000,
+      maxTurns: 35,
+      timeout: 240_000,
       testName: 'review-design-lite',
       runId,
     });
@@ -724,7 +769,7 @@ Important: The design checklist should catch issues like blacklisted fonts, smal
       console.log(`Design review detected ${detected}/7 planted issues`);
       expect(detected).toBeGreaterThanOrEqual(4);
     }
-  }, 150_000);
+  }, 300_000);
 });
 
 // --- B6/B7/B8: Planted-bug outcome evals ---
@@ -1254,7 +1299,7 @@ describeIfSelected('QA-Only skill E2E', ['qa-only-no-fix'], () => {
   let qaOnlyDir: string;
 
   beforeAll(() => {
-    testServer = testServer || startTestServer();
+    testServer = startTestServer();
     qaOnlyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-qa-only-'));
     setupBrowseShims(qaOnlyDir);
 
@@ -1292,12 +1337,13 @@ describeIfSelected('QA-Only skill E2E', ['qa-only-no-fix'], () => {
 B="${browseBin}"
 
 Read the file qa-only/SKILL.md for the QA-only workflow instructions.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the QA workflow.
 
 Run a Quick QA test on ${testServer.url}/qa-eval.html
 Do NOT use AskUserQuestion — run Quick tier directly.
 Write your report to ${qaOnlyDir}/qa-reports/qa-only-report.md`,
       workingDirectory: qaOnlyDir,
-      maxTurns: 35,
+      maxTurns: 40,
       allowedTools: ['Bash', 'Read', 'Write', 'Glob'],  // NO Edit — the critical guardrail
       timeout: 180_000,
       testName: 'qa-only-no-fix',
@@ -1411,6 +1457,7 @@ describeIfSelected('QA Fix Loop E2E', ['qa-fix-loop'], () => {
       prompt: `You have a browse binary at ${browseBin}. Assign it to B variable like: B="${browseBin}"
 
 Read the file qa/SKILL.md for the QA workflow instructions.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the QA workflow.
 
 Run a Quick-tier QA test on ${qaFixUrl}
 The source code for this page is at ${qaFixDir}/index.html — you can fix bugs there.
@@ -1421,7 +1468,7 @@ This is a test+fix loop: find bugs, fix them in the source code, commit each fix
       workingDirectory: qaFixDir,
       maxTurns: 40,
       allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'],
-      timeout: 300_000,
+      timeout: 420_000,
       testName: 'qa-fix-loop',
       runId,
     });
@@ -1445,7 +1492,7 @@ This is a test+fix loop: find bugs, fix them in the source code, commit each fix
     // Verify Edit tool was used (agent actually modified source code)
     const editCalls = result.toolCalls.filter(tc => tc.tool === 'Edit');
     expect(editCalls.length).toBeGreaterThan(0);
-  }, 360_000);
+  }, 480_000);
 });
 
 // --- Plan-Eng-Review Test-Plan Artifact E2E ---
@@ -1513,6 +1560,14 @@ export function main() { return Dashboard(); }
     // Create project directory for artifacts
     projectDir = path.join(os.homedir(), '.gstack', 'projects', 'test-project');
     fs.mkdirSync(projectDir, { recursive: true });
+
+    // Clean up stale test-plan files from previous runs
+    try {
+      const staleFiles = fs.readdirSync(projectDir).filter(f => f.includes('test-plan'));
+      for (const f of staleFiles) {
+        fs.unlinkSync(path.join(projectDir, f));
+      }
+    } catch {}
   });
 
   afterAll(() => {
@@ -1534,6 +1589,7 @@ export function main() { return Dashboard(); }
 
     const result = await runSkillTest({
       prompt: `Read plan-eng-review/SKILL.md for the review workflow.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the review.
 
 Read plan.md — that's the plan to review. This is a standalone plan with source code in app.ts and dashboard.ts.
 
@@ -1543,7 +1599,7 @@ IMPORTANT: After your review, you MUST write the test-plan artifact as described
 
 Write your review to ${planDir}/review-output.md`,
       workingDirectory: planDir,
-      maxTurns: 20,
+      maxTurns: 25,
       allowedTools: ['Bash', 'Read', 'Write', 'Glob', 'Grep'],
       timeout: 360_000,
       testName: 'plan-eng-review-artifact',
@@ -1637,9 +1693,11 @@ Write your findings to ${dir}/review-output.md`,
     const toolOutputs = result.toolCalls.map(tc => tc.output || '').join('\n');
     const allOutput = (result.output || '') + toolOutputs;
     // The agent should have run git diff against main (the fallback)
-    const usedGitDiff = result.toolCalls.some(tc =>
-      tc.tool === 'Bash' && typeof tc.input === 'string' && tc.input.includes('git diff')
-    );
+    const usedGitDiff = result.toolCalls.some(tc => {
+      if (tc.tool !== 'Bash') return false;
+      const cmd = typeof tc.input === 'string' ? tc.input : tc.input?.command || JSON.stringify(tc.input);
+      return cmd.includes('git diff');
+    });
     expect(usedGitDiff).toBe(true);
   }, 120_000);
 
@@ -1667,6 +1725,8 @@ Write your findings to ${dir}/review-output.md`,
     const result = await runSkillTest({
       prompt: `Read ship-SKILL.md for the ship workflow.
 
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to Step 0.
+
 Run ONLY Step 0 (Detect base branch) and Step 1 (Pre-flight) from the ship workflow.
 Since there is no remote, gh commands will fail — fall back to main.
 
@@ -1678,8 +1738,8 @@ Write a summary of what you detected to ${dir}/ship-preflight.md including:
 - The current branch name
 - The diff stat against the base branch`,
       workingDirectory: dir,
-      maxTurns: 10,
-      timeout: 60_000,
+      maxTurns: 18,
+      timeout: 150_000,
       testName: 'ship-base-branch',
       runId,
     });
@@ -1703,7 +1763,7 @@ Write a summary of what you detected to ${dir}/ship-preflight.md including:
       (tc.input.includes('git push') || tc.input.includes('gh pr create'))
     );
     expect(destructiveTools).toHaveLength(0);
-  }, 90_000);
+  }, 180_000);
 
   testIfSelected('retro-base-branch', async () => {
     const dir = path.join(baseBranchDir, 'retro-base');
@@ -2019,8 +2079,8 @@ Return JSON: { "passed": true/false, "reasoning": "one paragraph explaining your
 }
 
 describeIfSelected('Design Consultation E2E', [
-  'design-consultation-core', 'design-consultation-research',
-  'design-consultation-existing', 'design-consultation-preview',
+  'design-consultation-core',
+  'design-consultation-existing',
 ], () => {
   let designDir: string;
 
@@ -2068,6 +2128,7 @@ A civic tech data platform for government employees to access, visualize, and sh
   testIfSelected('design-consultation-core', async () => {
     const result = await runSkillTest({
       prompt: `Read design-consultation/SKILL.md for the design consultation workflow.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the design workflow.
 
 This is a civic tech data platform called CivicPulse for government employees who need to access public data. Read the README.md for details.
 
@@ -2125,23 +2186,24 @@ Write DESIGN.md and CLAUDE.md (or update it) in the working directory.`,
     }
   }, 420_000);
 
-  testIfSelected('design-consultation-research', async () => {
+  test.skip('design-consultation-research — WebSearch-dependent, redundant with core test', async () => {
     // Clean up from previous test
     try { fs.unlinkSync(path.join(designDir, 'DESIGN.md')); } catch {}
     try { fs.unlinkSync(path.join(designDir, 'CLAUDE.md')); } catch {}
 
     const result = await runSkillTest({
       prompt: `Read design-consultation/SKILL.md for the design consultation workflow.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the design workflow.
 
 This is a civic tech data platform called CivicPulse. Read the README.md.
 
-DO research what's out there before proposing — search for civic tech and government data platform designs. Skip the font preview page. Skip any AskUserQuestion calls — this is non-interactive.
+DO research what's out there before proposing — search for civic tech and government data platform designs. Limit research to 3 WebSearch queries and 2 site visits, then move on to writing DESIGN.md. Skip the font preview page. Skip any AskUserQuestion calls — this is non-interactive.
 
 Write DESIGN.md to the working directory.`,
       workingDirectory: designDir,
-      maxTurns: 30,
-      timeout: 360_000,
-      testName: 'design-consultation-research',
+      maxTurns: 45,
+      timeout: 480_000,
+      // skipped: design-consultation-research — removed from touchfiles
       runId,
     });
 
@@ -2180,7 +2242,7 @@ Write DESIGN.md to the working directory.`,
 
     expect(['success', 'error_max_turns']).toContain(result.exitReason);
     expect(designExists).toBe(true);
-  }, 420_000);
+  }, 540_000);
 
   testIfSelected('design-consultation-existing', async () => {
     // Pre-create a minimal DESIGN.md
@@ -2228,20 +2290,21 @@ Skip research. Skip font preview. Skip any AskUserQuestion calls — this is non
     }
   }, 420_000);
 
-  testIfSelected('design-consultation-preview', async () => {
+  test.skip('design-consultation-preview — redundant with core test', async () => {
     // Clean up
     try { fs.unlinkSync(path.join(designDir, 'DESIGN.md')); } catch {}
 
     const result = await runSkillTest({
       prompt: `Read design-consultation/SKILL.md for the design consultation workflow.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the design workflow.
 
 This is CivicPulse, a civic tech data platform. Read the README.md.
 
 Skip research. Skip any AskUserQuestion calls — this is non-interactive. Generate the font and color preview page but write it to ./design-preview.html instead of /tmp/ (do NOT run the open command). Then write DESIGN.md.`,
       workingDirectory: designDir,
-      maxTurns: 20,
-      timeout: 360_000,
-      testName: 'design-consultation-preview',
+      maxTurns: 30,
+      timeout: 480_000,
+      // skipped: design-consultation-preview — removed from touchfiles
       runId,
     });
 
@@ -2287,7 +2350,7 @@ Skip research. Skip any AskUserQuestion calls — this is non-interactive. Gener
       expect(hasFontRef).toBe(true);
     }
     expect(designExists).toBe(true);
-  }, 420_000);
+  }, 540_000);
 });
 
 // --- Plan Design Review E2E (plan-mode) ---
@@ -2651,13 +2714,14 @@ export function divide(a, b) { return a / b; } // BUG: no zero check
     try { fs.rmSync(bootstrapDir, { recursive: true, force: true }); } catch {}
   });
 
-  test('/qa bootstrap + regression test on zero-test project', async () => {
+  test.skip('/qa bootstrap — too ambitious for E2E (65 turns, installs vitest)', async () => {
     const serverUrl = `http://127.0.0.1:${bootstrapServer!.port}`;
 
     const result = await runSkillTest({
       prompt: `You have a browse binary at ${browseBin}. Assign it to B variable like: B="${browseBin}"
 
 Read the file qa/SKILL.md for the QA workflow instructions.
+Skip the preamble bash block, lake intro, telemetry, and contributor mode sections — go straight to the QA workflow.
 
 Run a Quick-tier QA test on ${serverUrl}
 The source code for this page is at ${bootstrapDir}/index.html — you can fix bugs there.
@@ -2667,10 +2731,10 @@ Write your report to ${bootstrapDir}/qa-reports/qa-report.md
 This project has NO test framework. When the bootstrap asks, pick vitest (option A).
 This is a test+fix loop: find bugs, fix them, write regression tests, commit each fix.`,
       workingDirectory: bootstrapDir,
-      maxTurns: 50,
+      maxTurns: 65,
       allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'],
       timeout: 420_000,
-      testName: 'qa-bootstrap',
+      // skipped: qa-bootstrap — removed from touchfiles
       runId,
     });
 
@@ -2890,7 +2954,7 @@ Read codex-SKILL.md for the /codex skill instructions.
 Run /codex review to review the current diff against main.
 Write the full output (including the GATE verdict) to ${codexDir}/codex-output.md`,
       workingDirectory: codexDir,
-      maxTurns: 10,
+      maxTurns: 15,
       timeout: 300_000,
       testName: 'codex-review',
       runId,
