@@ -520,6 +520,46 @@ describe('TEST_COVERAGE_AUDIT placeholders', () => {
   });
 });
 
+// --- {{TEST_FAILURE_TRIAGE}} resolver tests ---
+
+describe('TEST_FAILURE_TRIAGE resolver', () => {
+  const shipSkill = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+
+  test('contains all 4 triage steps', () => {
+    expect(shipSkill).toContain('Step T1: Classify each failure');
+    expect(shipSkill).toContain('Step T2: Handle in-branch failures');
+    expect(shipSkill).toContain('Step T3: Handle pre-existing failures');
+    expect(shipSkill).toContain('Step T4: Execute the chosen action');
+  });
+
+  test('T1 includes classification criteria (in-branch vs pre-existing)', () => {
+    expect(shipSkill).toContain('In-branch');
+    expect(shipSkill).toContain('Likely pre-existing');
+    expect(shipSkill).toContain('git diff origin/');
+  });
+
+  test('T3 branches on REPO_MODE (solo vs collaborative)', () => {
+    expect(shipSkill).toContain('REPO_MODE');
+    expect(shipSkill).toContain('solo');
+    expect(shipSkill).toContain('collaborative');
+  });
+
+  test('solo mode offers fix-now, TODO, and skip options', () => {
+    expect(shipSkill).toContain('Investigate and fix now');
+    expect(shipSkill).toContain('Add as P0 TODO');
+    expect(shipSkill).toContain('Skip');
+  });
+
+  test('collaborative mode offers blame + assign option', () => {
+    expect(shipSkill).toContain('Blame + assign GitHub issue');
+    expect(shipSkill).toContain('gh issue create');
+  });
+
+  test('defaults ambiguous failures to in-branch (safety)', () => {
+    expect(shipSkill).toContain('When ambiguous, default to in-branch');
+  });
+});
+
 // --- {{SPEC_REVIEW_LOOP}} resolver tests ---
 
 describe('SPEC_REVIEW_LOOP resolver', () => {
@@ -691,11 +731,11 @@ describe('Codex generation (--host codex)', () => {
   test('Codex review step stripped from Codex-host ship and review', () => {
     const shipContent = fs.readFileSync(path.join(AGENTS_DIR, 'gstack-ship', 'SKILL.md'), 'utf-8');
     expect(shipContent).not.toContain('codex review --base');
-    expect(shipContent).not.toContain('Investigate and fix');
+    expect(shipContent).not.toContain('CODEX_REVIEWS');
 
     const reviewContent = fs.readFileSync(path.join(AGENTS_DIR, 'gstack-review', 'SKILL.md'), 'utf-8');
     expect(reviewContent).not.toContain('codex review --base');
-    expect(reviewContent).not.toContain('Investigate and fix');
+    expect(reviewContent).not.toContain('CODEX_REVIEWS');
   });
 
   test('--host codex --dry-run freshness', () => {

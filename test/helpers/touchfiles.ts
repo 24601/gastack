@@ -68,7 +68,7 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'plan-eng-review-artifact':  ['plan-eng-review/**'],
 
   // Ship
-  'ship-base-branch': ['ship/**'],
+  'ship-base-branch': ['ship/**', 'bin/gstack-repo-mode'],
 
   // Retro
   'retro':             ['retro/**'],
@@ -91,9 +91,11 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   // QA bootstrap
   'qa-bootstrap': ['qa/**', 'browse/src/**', 'ship/**'],
 
-  // Coverage audit (shared fixture)
-  'ship-coverage-audit': ['ship/**', 'test/fixtures/coverage-audit-fixture.ts'],
+  // Coverage audit (shared fixture) + triage
+  'ship-coverage-audit': ['ship/**', 'test/fixtures/coverage-audit-fixture.ts', 'bin/gstack-repo-mode'],
   'review-coverage-audit': ['review/**', 'test/fixtures/coverage-audit-fixture.ts'],
+  'plan-eng-coverage-audit': ['plan-eng-review/**', 'test/fixtures/coverage-audit-fixture.ts'],
+  'ship-triage': ['ship/**', 'bin/gstack-repo-mode'],
 
   // Design
   'design-consultation-core':     ['design-consultation/**'],
