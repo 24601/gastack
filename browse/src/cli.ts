@@ -346,96 +346,28 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
 
   // ─── CDP Connect (pre-server command) ───────────────────────
   // connect must be handled BEFORE ensureServer() because it needs
-  // to restart the server with CDP env vars.
+  // to restart the server with real Chrome via Playwright channel:chrome.
   if (command === 'connect') {
-    const { discoverAndConnect, isManualRestart, detectRuntime, isCdpAvailable } = await import('./chrome-launcher');
-
-    // Parse args: connect [browser] [--port N]
-    let preferredBrowser: string | undefined;
-    let port = 9222;
-    for (let i = 0; i < commandArgs.length; i++) {
-      if (commandArgs[i] === '--port' && commandArgs[i + 1]) {
-        port = parseInt(commandArgs[i + 1], 10);
-        i++;
-      } else if (!commandArgs[i].startsWith('-')) {
-        preferredBrowser = commandArgs[i];
-      }
-    }
-
     // Check if already in CDP mode
     const existingState = readState();
     if (existingState && existingState.mode === 'cdp') {
-      console.log('Already connected to real browser via CDP.');
+      console.log('Already connected to real browser.');
       process.exit(0);
     }
 
-    // Kill existing server if running
+    // Kill existing headless server if running
     if (existingState) {
       try { process.kill(existingState.pid, 'SIGTERM'); } catch {}
       try { fs.unlinkSync(config.stateFile); } catch {}
-      // Wait for clean shutdown
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    // Discover and connect to browser
-    const runtime = detectRuntime();
-    console.log(`Discovering browser${preferredBrowser ? ` (${preferredBrowser})` : ''} (runtime: ${runtime})...`);
+    console.log('Launching real Chrome browser...');
     try {
-      const result = await discoverAndConnect(preferredBrowser, port);
-
-      // Handle manual restart needed (Conductor / sandboxed apps)
-      if (isManualRestart(result)) {
-        console.log(`\n${result.reason}\n`);
-        console.log(`To connect, FULLY QUIT ${result.browser.name} first (no processes running), then relaunch with CDP:\n`);
-        console.log(`  1. Quit ${result.browser.name} (Cmd+Q)`);
-        console.log(`  2. Wait 3 seconds for all processes to exit`);
-        console.log(`  3. Verify: pgrep -f "${result.browser.appName}" should return nothing`);
-        console.log(`  4. Open Terminal and run:`);
-        console.log(`     ${result.command}`);
-        console.log(`  5. Then run: $B connect ${result.browser.name.toLowerCase()}\n`);
-        console.log(`IMPORTANT: Chrome must be fully quit before step 4. If Chrome is already`);
-        console.log(`running, it ignores --remote-debugging-port and opens in the existing session.\n`);
-        console.log(`Pro tip — add to your shell profile to always launch with CDP:`);
-        console.log(`  alias chrome-cdp='${result.command}'\n`);
-
-        // Wait and poll — user might restart Chrome while we're printing
-        console.log(`Waiting for CDP on port ${result.port}...`);
-        const pollStart = Date.now();
-        while (Date.now() - pollStart < 60000) {
-          const probe = await isCdpAvailable(result.port);
-          if (probe.available && probe.wsUrl) {
-            console.log(`CDP available! Connecting...`);
-            // Start server with CDP env vars
-            const newState = await startServer({
-              BROWSE_CDP_URL: probe.wsUrl,
-              BROWSE_CDP_PORT: String(result.port),
-            });
-            const resp = await fetch(`http://127.0.0.1:${newState.port}/command`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${newState.token}`,
-              },
-              body: JSON.stringify({ command: 'tabs', args: [] }),
-              signal: AbortSignal.timeout(5000),
-            });
-            const tabList = await resp.text();
-            console.log(`Connected to ${result.browser.name} via CDP\n${tabList}`);
-            process.exit(0);
-          }
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          process.stdout.write('.');
-        }
-        console.log(`\nTimed out waiting for CDP. Run $B connect again after restarting ${result.browser.name}.`);
-        process.exit(1);
-      }
-
-      console.log(`Found ${result.browser} CDP at port ${result.port}`);
-
-      // Start server with CDP env vars
+      // Start server with CDP flag — server.ts will use channel:chrome
       const newState = await startServer({
-        BROWSE_CDP_URL: result.wsUrl,
-        BROWSE_CDP_PORT: String(result.port),
+        BROWSE_CDP_URL: 'channel:chrome',
+        BROWSE_CDP_PORT: '0',
       });
 
       // Print connected status
@@ -445,11 +377,11 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${newState.token}`,
         },
-        body: JSON.stringify({ command: 'tabs', args: [] }),
+        body: JSON.stringify({ command: 'status', args: [] }),
         signal: AbortSignal.timeout(5000),
       });
-      const tabList = await resp.text();
-      console.log(`Connected to ${result.browser} via CDP\n${tabList}`);
+      const status = await resp.text();
+      console.log(`Connected to real Chrome\n${status}`);
     } catch (err: any) {
       console.error(`[browse] Connect failed: ${err.message}`);
       process.exit(1);

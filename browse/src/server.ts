@@ -334,12 +334,12 @@ async function start() {
 
   const port = await findPort();
 
-  // Launch browser (or connect to existing via CDP)
+  // Launch browser (headless or real Chrome)
   const cdpUrl = process.env.BROWSE_CDP_URL;
   const cdpPort = parseInt(process.env.BROWSE_CDP_PORT || '0', 10);
   if (cdpUrl) {
     await browserManager.connectCDP(cdpUrl, cdpPort);
-    console.log(`[browse] Connected to real browser via CDP (port ${cdpPort})`);
+    console.log(`[browse] Launched real Chrome browser (headed)`);
   } else {
     await browserManager.launch();
   }

@@ -109,55 +109,46 @@ export class BrowserManager {
 
   // ─── CDP Connect ────────────────────────────────────────────
   /**
-   * Connect to a running browser via Chrome DevTools Protocol.
-   * All existing commands work unchanged through Playwright's abstraction.
+   * Launch the user's real Chrome browser via Playwright's channel: 'chrome'.
    *
-   * CDP flow:
-   *   connectOverCDP(wsUrl) → Browser → contexts()[0] → discover pages
-   *   Disconnect handler → attemptReconnect() (not process.exit)
-   *   close() → browser.disconnect() (not browser.close())
+   * Uses Playwright's native pipe protocol (not CDP WebSocket) to control
+   * the system Chrome binary. This avoids CDP protocol version mismatches
+   * between Playwright and recent Chrome versions.
+   *
+   * The browser launches headed with a visible window — the user sees
+   * every action Claude takes in real time.
    */
-  async connectCDP(wsUrl: string, port: number): Promise<void> {
+  async connectCDP(_wsUrl: string, _port: number): Promise<void> {
     // Clear old state before repopulating (safe for reconnect)
     this.pages.clear();
     this.preExistingTabIds.clear();
     this.refMap.clear();
     this.nextTabId = 1;
 
-    this.browser = await chromium.connectOverCDP(wsUrl);
+    // Launch real Chrome via Playwright's channel protocol
+    // This uses the system Chrome binary, headed, with real window
+    this.browser = await chromium.launch({
+      channel: 'chrome',
+      headless: false,
+      args: ['--restore-last-session'],
+    });
     this.connectionMode = 'cdp';
-    this.cdpPort = port;
     this.intentionalDisconnect = false;
 
-    // Use the user's existing default context (has their cookies, sessions)
-    const contexts = this.browser.contexts();
-    if (contexts.length === 0) {
-      throw new Error('No browser context found. Chrome may have no windows open.');
-    }
-    this.context = contexts[0];
+    // Create a context (channel:chrome doesn't have pre-existing contexts)
+    const contextOptions: BrowserContextOptions = {
+      viewport: null,  // Use Chrome's default viewport (real window size)
+    };
+    this.context = await this.browser.newContext(contextOptions);
 
-    // Discover existing tabs
-    for (const page of this.context.pages()) {
-      const id = this.nextTabId++;
-      this.pages.set(id, page);
-      this.preExistingTabIds.add(id);
-      this.wirePageEvents(page);
-    }
-    this.activeTabId = [...this.pages.keys()].pop() || 0;
+    // Create first tab
+    await this.newTab();
 
-    // Listen for new tabs created by the user
-    this.context.on('page', (page: Page) => {
-      const id = this.nextTabId++;
-      this.pages.set(id, page);
-      this.wirePageEvents(page);
-      this.activeTabId = id;
-    });
-
-    // CDP disconnect ≠ crash — reconnect unless intentional
+    // Browser disconnect handler
     this.browser.on('disconnected', () => {
       if (this.intentionalDisconnect) return;
-      console.log('[browse] Real browser disconnected — reconnecting...');
-      this.attemptReconnect();
+      console.error('[browse] Real browser disconnected.');
+      process.exit(1);
     });
 
     // CDP-specific defaults

@@ -2,11 +2,14 @@
 # Launch Chrome with CDP (remote debugging) enabled.
 # Usage: chrome-cdp [port]
 #
-# Chrome MUST be fully quit before running this — if it's already running,
-# it ignores --remote-debugging-port and opens in the existing session.
+# Chrome refuses --remote-debugging-port on its default data directory.
+# We create a separate data dir with a symlink to the user's real profile,
+# so Chrome thinks it's non-default but uses the same cookies/extensions.
 
 PORT="${1:-9222}"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+REAL_PROFILE="$HOME/Library/Application Support/Google/Chrome"
+CDP_DATA_DIR="$HOME/.gstack/cdp-profile/chrome"
 
 if ! [ -f "$CHROME" ]; then
   echo "Chrome not found at $CHROME" >&2
@@ -31,8 +34,24 @@ if pgrep -f "Google Chrome" >/dev/null 2>&1; then
   fi
 fi
 
+# Set up CDP data dir with symlinked profile
+# Chrome requires a "non-default" data dir for --remote-debugging-port.
+# We symlink the real Default profile so cookies/extensions carry over.
+mkdir -p "$CDP_DATA_DIR"
+if [ -d "$REAL_PROFILE/Default" ] && ! [ -e "$CDP_DATA_DIR/Default" ]; then
+  ln -s "$REAL_PROFILE/Default" "$CDP_DATA_DIR/Default"
+  echo "Linked real Chrome profile into CDP data dir"
+fi
+# Also link Local State (contains crypto keys for cookie decryption, etc.)
+if [ -f "$REAL_PROFILE/Local State" ] && ! [ -e "$CDP_DATA_DIR/Local State" ]; then
+  ln -s "$REAL_PROFILE/Local State" "$CDP_DATA_DIR/Local State"
+fi
+
 echo "Launching Chrome with CDP on port $PORT..."
-"$CHROME" --remote-debugging-port="$PORT" --restore-last-session &
+"$CHROME" \
+  --remote-debugging-port="$PORT" \
+  --user-data-dir="$CDP_DATA_DIR" \
+  --restore-last-session &
 disown
 
 # Wait for CDP to be available
@@ -45,5 +64,5 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-echo "CDP not available after 30s. Chrome may have started without debug port." >&2
+echo "CDP not available after 30s." >&2
 exit 1
