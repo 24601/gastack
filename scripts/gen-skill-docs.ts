@@ -263,6 +263,28 @@ AI-assisted coding makes the marginal cost of completeness near-zero. When you p
 - BAD: Quoting only human-team effort: "This would take 2 weeks." (Say: "2 weeks human / ~1 hour CC.")`;
 }
 
+function generateSearchBeforeBuildingSection(ctx: TemplateContext): string {
+  return `## Search Before Building
+
+Before building infrastructure, unfamiliar patterns, or anything the runtime might have a built-in — **search first.** Read \`${ctx.paths.skillRoot}/ETHOS.md\` for the full philosophy.
+
+**Three layers of knowledge:**
+- **Layer 1** (tried and true — in distribution). Don't reinvent the wheel. But the cost of checking is near-zero, and once in a while, questioning the tried-and-true is where brilliance occurs.
+- **Layer 2** (new and popular — search for these). But scrutinize: humans are subject to mania. Search results are inputs to your thinking, not answers.
+- **Layer 3** (first principles — prize these above all). Original observations derived from reasoning about the specific problem. The most valuable of all.
+
+**Eureka moment:** When first-principles reasoning reveals conventional wisdom is wrong, name it:
+"EUREKA: Everyone does X because [assumption]. But [evidence] shows this is wrong. Y is better because [reasoning]."
+
+Log eureka moments:
+\`\`\`bash
+jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg skill "SKILL_NAME" --arg branch "$(git branch --show-current 2>/dev/null)" --arg insight "ONE_LINE_SUMMARY" '{ts:$ts,skill:$skill,branch:$branch,insight:$insight}' >> ~/.gstack/analytics/eureka.jsonl 2>/dev/null || true
+\`\`\`
+Replace SKILL_NAME and ONE_LINE_SUMMARY. Runs inline — don't stop the workflow.
+
+**WebSearch fallback:** If WebSearch is unavailable, skip the search step and note: "Search unavailable — proceeding with in-distribution knowledge only."`;
+}
+
 function generateContributorMode(): string {
   return `## Contributor Mode
 
@@ -365,6 +387,7 @@ function generatePreamble(ctx: TemplateContext): string {
     generateTelemetryPrompt(ctx),
     generateAskUserFormat(ctx),
     generateCompletenessSection(),
+    generateSearchBeforeBuildingSection(ctx),
     generateContributorMode(),
     generateCompletionStatus(),
   ].join('\n\n');
@@ -1071,7 +1094,7 @@ After completing the review, read the review log and config to display the dashb
 ~/.claude/skills/gstack/bin/gstack-review-read
 \`\`\`
 
-Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, plan-design-review, design-review-lite, codex-review, land-and-deploy). Ignore entries with timestamps older than 7 days. For Design Review, show whichever is more recent between \`plan-design-review\` (full visual audit) and \`design-review-lite\` (code-level check). Append "(FULL)" or "(LITE)" to the status to distinguish. For Deployed, show the most recent \`land-and-deploy\` entry with status mapped: SUCCESS→HEALTHY, REVERTED→REVERTED, other→ISSUES. Display:
+Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, plan-design-review, design-review-lite, adversarial-review, codex-review). Ignore entries with timestamps older than 7 days. For the Adversarial row, show whichever is more recent between \`adversarial-review\` (new auto-scaled) and \`codex-review\` (legacy). For Design Review, show whichever is more recent between \`plan-design-review\` (full visual audit) and \`design-review-lite\` (code-level check). Append "(FULL)" or "(LITE)" to the status to distinguish. Display:
 
 \`\`\`
 +====================================================================+
@@ -1082,8 +1105,7 @@ Parse the output. Find the most recent entry for each skill (plan-ceo-review, pl
 | Eng Review      |  1   | 2026-03-16 15:00    | CLEAR     | YES      |
 | CEO Review      |  0   | —                   | —         | no       |
 | Design Review   |  0   | —                   | —         | no       |
-| Codex Review    |  0   | —                   | —         | no       |
-| Deployed        |  0   | —                   | —         | no       |
+| Adversarial     |  0   | —                   | —         | no       |
 +--------------------------------------------------------------------+
 | VERDICT: CLEARED — Eng Review passed                                |
 +====================================================================+
@@ -1093,8 +1115,7 @@ Parse the output. Find the most recent entry for each skill (plan-ceo-review, pl
 - **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance. Can be disabled globally with \\\`gstack-config set skip_eng_review true\\\` (the "don't bother me" setting).
 - **CEO Review (optional):** Use your judgment. Recommend it for big product/business changes, new user-facing features, or scope decisions. Skip for bug fixes, refactors, infra, and cleanup.
 - **Design Review (optional):** Use your judgment. Recommend it for UI/UX changes. Skip for backend-only, infra, or prompt-only changes.
-- **Codex Review (optional):** Independent second opinion from OpenAI Codex CLI. Shows pass/fail gate. Recommend for critical code changes where a second AI perspective adds value. Skip when Codex CLI is not installed.
-- **Deployed (informational):** Shows whether the most recent PR on this branch was successfully deployed and verified via \\\`/land-and-deploy\\\`. Status: HEALTHY, REVERTED, or ISSUES. Never gates shipping.
+- **Adversarial Review (automatic):** Auto-scales by diff size. Small diffs (<50 lines) skip adversarial. Medium diffs (50–199) get cross-model adversarial. Large diffs (200+) get all 4 passes: Claude structured, Codex structured, Claude adversarial subagent, Codex adversarial. No configuration needed.
 
 **Verdict logic:**
 - **CLEARED**: Eng Review has >= 1 entry within 7 days with status "clean" (or \\\`skip_eng_review\\\` is \\\`true\\\`)
@@ -1107,6 +1128,75 @@ Parse the output. Find the most recent entry for each skill (plan-ceo-review, pl
 - For each review entry that has a \\\`commit\\\` field: compare it against the current HEAD. If different, count elapsed commits: \\\`git rev-list --count STORED_COMMIT..HEAD\\\`. Display: "Note: {skill} review from {date} may be stale — {N} commits since review"
 - For entries without a \\\`commit\\\` field (legacy entries): display "Note: {skill} review from {date} has no commit tracking — consider re-running for accurate staleness detection"
 - If all reviews match the current HEAD, do not display any staleness notes`;
+}
+
+function generatePlanFileReviewReport(_ctx: TemplateContext): string {
+  return `## Plan File Review Report
+
+After displaying the Review Readiness Dashboard in conversation output, also update the
+**plan file** itself so review status is visible to anyone reading the plan.
+
+### Detect the plan file
+
+1. Check if there is an active plan file in this conversation (the host provides plan file
+   paths in system messages — look for plan file references in the conversation context).
+2. If not found, skip this section silently — not every review runs in plan mode.
+
+### Generate the report
+
+Read the review log output you already have from the Review Readiness Dashboard step above.
+Parse each JSONL entry. Each skill logs different fields:
+
+- **plan-ceo-review**: \\\`status\\\`, \\\`unresolved\\\`, \\\`critical_gaps\\\`, \\\`mode\\\`, \\\`scope_proposed\\\`, \\\`scope_accepted\\\`, \\\`scope_deferred\\\`, \\\`commit\\\`
+  → Findings: "{scope_proposed} proposals, {scope_accepted} accepted, {scope_deferred} deferred"
+  → If scope fields are 0 or missing (HOLD/REDUCTION mode): "mode: {mode}, {critical_gaps} critical gaps"
+- **plan-eng-review**: \\\`status\\\`, \\\`unresolved\\\`, \\\`critical_gaps\\\`, \\\`issues_found\\\`, \\\`mode\\\`, \\\`commit\\\`
+  → Findings: "{issues_found} issues, {critical_gaps} critical gaps"
+- **plan-design-review**: \\\`status\\\`, \\\`initial_score\\\`, \\\`overall_score\\\`, \\\`unresolved\\\`, \\\`decisions_made\\\`, \\\`commit\\\`
+  → Findings: "score: {initial_score}/10 → {overall_score}/10, {decisions_made} decisions"
+- **codex-review**: \\\`status\\\`, \\\`gate\\\`, \\\`findings\\\`, \\\`findings_fixed\\\`
+  → Findings: "{findings} findings, {findings_fixed}/{findings} fixed"
+
+All fields needed for the Findings column are now present in the JSONL entries.
+For the review you just completed, you may use richer details from your own Completion
+Summary. For prior reviews, use the JSONL fields directly — they contain all required data.
+
+Produce this markdown table:
+
+\\\`\\\`\\\`markdown
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | \\\`/plan-ceo-review\\\` | Scope & strategy | {runs} | {status} | {findings} |
+| Codex Review | \\\`/codex review\\\` | Independent 2nd opinion | {runs} | {status} | {findings} |
+| Eng Review | \\\`/plan-eng-review\\\` | Architecture & tests (required) | {runs} | {status} | {findings} |
+| Design Review | \\\`/plan-design-review\\\` | UI/UX gaps | {runs} | {status} | {findings} |
+\\\`\\\`\\\`
+
+Below the table, add these lines (omit any that are empty/not applicable):
+
+- **CODEX:** (only if codex-review ran) — one-line summary of codex fixes
+- **CROSS-MODEL:** (only if both Claude and Codex reviews exist) — overlap analysis
+- **UNRESOLVED:** total unresolved decisions across all reviews
+- **VERDICT:** list reviews that are CLEAR (e.g., "CEO + ENG CLEARED — ready to implement").
+  If Eng Review is not CLEAR and not skipped globally, append "eng review required".
+
+### Write to the plan file
+
+**PLAN MODE EXCEPTION — ALWAYS RUN:** This writes to the plan file, which is the one
+file you are allowed to edit in plan mode. The plan file review report is part of the
+plan's living status.
+
+- Search the plan file for a \\\`## GSTACK REVIEW REPORT\\\` section **anywhere** in the file
+  (not just at the end — content may have been added after it).
+- If found, **replace it** entirely using the Edit tool. Match from \\\`## GSTACK REVIEW REPORT\\\`
+  through either the next \\\`## \\\` heading or end of file, whichever comes first. This ensures
+  content added after the report section is preserved, not eaten. If the Edit fails
+  (e.g., concurrent edit changed the content), re-read the plan file and retry once.
+- If no such section exists, **append it** to the end of the plan file.
+- Always place it as the very last section in the plan file. If it was found mid-file,
+  move it: delete the old location and append at the end.`;
 }
 
 function generateTestBootstrap(_ctx: TemplateContext): string {
@@ -1264,148 +1354,6 @@ Only commit if there are changes. Stage all bootstrap files (config, test direct
 ---`;
 }
 
-function generateDeployBootstrap(_ctx: TemplateContext): string {
-  return `## Deploy Configuration Bootstrap
-
-**Detect existing deploy configuration in CLAUDE.md:**
-
-\`\`\`bash
-grep -q "## Deploy Configuration" CLAUDE.md 2>/dev/null && echo "DEPLOY_CONFIG_EXISTS" || echo "NO_DEPLOY_CONFIG"
-\`\`\`
-
-**If DEPLOY_CONFIG_EXISTS:** Read the Deploy Configuration section from CLAUDE.md. Use the detected platform, production URL, deploy workflow name, deploy status command, and merge method in subsequent steps. **Skip the rest of bootstrap.**
-
-**If NO_DEPLOY_CONFIG — auto-detect:**
-
-### D1. Detect deploy platform
-
-\`\`\`bash
-# Check for platform config files (order: most specific first)
-[ -f fly.toml ] && echo "PLATFORM:fly"
-[ -f render.yaml ] && echo "PLATFORM:render"
-[ -f vercel.json ] || [ -d .vercel ] && echo "PLATFORM:vercel"
-[ -f netlify.toml ] || [ -d netlify ] && echo "PLATFORM:netlify"
-[ -f Procfile ] && echo "PLATFORM:heroku"
-[ -f railway.json ] || [ -f railway.toml ] && echo "PLATFORM:railway"
-[ -f Dockerfile ] || [ -f docker-compose.yml ] && echo "PLATFORM:docker"
-# Check for GitHub Actions deploy workflows
-for f in .github/workflows/*.yml .github/workflows/*.yaml; do
-  [ -f "$f" ] && grep -qiE "deploy|release|production|staging|cd" "$f" 2>/dev/null && echo "DEPLOY_WORKFLOW:$f"
-done
-# Check project type
-[ -f package.json ] && grep -q '"bin"' package.json 2>/dev/null && echo "PROJECT_TYPE:cli"
-[ -f Cargo.toml ] && grep -q '\\[\\[bin\\]\\]' Cargo.toml 2>/dev/null && echo "PROJECT_TYPE:cli"
-[ -f setup.py ] || [ -f pyproject.toml ] && grep -qiE "console_scripts|entry_points" setup.py pyproject.toml 2>/dev/null && echo "PROJECT_TYPE:cli"
-ls *.gemspec 2>/dev/null && echo "PROJECT_TYPE:library"
-\`\`\`
-
-### D2. Detect production URL (platform-specific)
-
-\`\`\`bash
-# Fly.io — app name is in fly.toml, URL is {app}.fly.dev
-[ -f fly.toml ] && grep -m1 "^app" fly.toml 2>/dev/null | sed 's/app = "\\(.*\\)"/FLY_APP:\\1/'
-
-# Render — check render.yaml for service name and type
-[ -f render.yaml ] && grep -E "name:|type:" render.yaml 2>/dev/null
-
-# Vercel — check project.json or vercel.json for aliases/domains
-[ -f .vercel/project.json ] && cat .vercel/project.json 2>/dev/null
-[ -f vercel.json ] && grep -i "alias\\|domain" vercel.json 2>/dev/null
-
-# Netlify — check netlify.toml for custom domain or site name
-[ -f netlify.toml ] && grep -iE "site_id|domain|url" netlify.toml 2>/dev/null
-
-# Heroku — app name from git remote
-git remote -v 2>/dev/null | grep heroku | head -1 | sed 's/.*heroku.com\\/\\(.*\\)\\.git.*/HEROKU_APP:\\1/'
-
-# Generic — package.json homepage
-[ -f package.json ] && grep -o '"homepage":\\s*"[^"]*"' package.json 2>/dev/null
-\`\`\`
-
-**Platform-specific URL resolution:**
-
-| Platform | URL Pattern | How to detect |
-|----------|-------------|---------------|
-| Fly.io | \`https://{app}.fly.dev\` | \`app\` field in fly.toml |
-| Render | \`https://{service}.onrender.com\` | service name in render.yaml |
-| Vercel | \`https://{project}.vercel.app\` | .vercel/project.json or custom domain |
-| Netlify | \`https://{site}.netlify.app\` | site_id in netlify.toml |
-| Heroku | \`https://{app}.herokuapp.com\` | heroku git remote |
-| Railway | \`https://{project}.up.railway.app\` | railway.json |
-
-### D3. Detect merge method
-
-\`\`\`bash
-gh api repos/{owner}/{repo} --jq '{squash: .allow_squash_merge, merge: .allow_merge_commit, rebase: .allow_rebase_merge}' 2>/dev/null || echo "MERGE_DETECT_FAILED"
-\`\`\`
-
-Default preference order: squash (cleanest history) > merge > rebase.
-
-### D4. Detect deploy status command
-
-For platforms with CLIs, detect the deploy status check command:
-
-| Platform | Deploy status command | What it does |
-|----------|----------------------|-------------|
-| Fly.io | \`fly status --app {app}\` | Shows running machines, health checks |
-| Fly.io | \`fly deploy --app {app} --strategy rolling\` | (if deploy is triggered via CLI) |
-| Render | \`curl -s https://api.render.com/v1/services/{id}/deploys?limit=1\` | Latest deploy status (needs API key) |
-| Vercel | \`vercel ls --prod\` | Latest production deployment |
-| Heroku | \`heroku releases --app {app} -n 1\` | Latest release |
-
-If the platform CLI is installed, use it for deploy verification in Step 6 as a supplement to GitHub Actions workflow polling.
-
-### D5. Classify and present
-
-Based on the detection results, determine the deploy configuration:
-
-1. **If PLATFORM detected:** Note the platform, inferred URL, and status command.
-2. **If DEPLOY_WORKFLOW detected:** Note the workflow file path and name.
-3. **If PROJECT_TYPE is "cli" or "library":** Note that this project likely doesn't have a web deploy. Post-merge verification is not applicable.
-4. **If no platform, no workflow, and not a CLI/library:** Use AskUserQuestion:
-   - **Context:** Setting up deploy configuration for /land-and-deploy.
-   - **Question:** No deploy platform detected. Describe your deploy setup so gstack can verify deployments.
-   - **RECOMMENDATION:** Choose the option that matches your setup.
-   - A) We deploy via Fly.io (provide app name)
-   - B) We deploy via Render (provide service URL)
-   - C) We deploy via Vercel / Netlify / other platform (provide production URL)
-   - D) We deploy via GitHub Actions (specify workflow name)
-   - E) We deploy manually or via custom scripts (describe the process)
-   - F) This project doesn't deploy (library, CLI tool)
-
-   For option E (custom scripts), ask the user to describe:
-   - How is a deploy triggered? (e.g., "push to main triggers a webhook", "we run \`./deploy.sh\`")
-   - How do you check if a deploy succeeded? (e.g., "check https://myapp.com/health", "run \`kubectl rollout status\`")
-   - What's the production URL?
-
-### D6. Persist to CLAUDE.md
-
-If CLAUDE.md exists, append. If it doesn't exist, create it.
-
-Add a section:
-\`\`\`markdown
-## Deploy Configuration (auto-detected by gstack)
-- Platform: {platform or "none detected"}
-- Production URL: {url or "not detected — provide via /land-and-deploy <url>"}
-- Deploy workflow: {workflow file or "none"}
-- Deploy status command: {command or "none — using HTTP health check only"}
-- Merge method: {squash/merge/rebase}
-- Project type: {web app / CLI / library}
-- Post-deploy health check: {url}/health or {url} (HTTP 200 = healthy)
-
-### Custom deploy hooks (optional)
-If your deploy process doesn't fit the auto-detected pattern, add commands here:
-- Pre-merge: (command to run before merging, e.g., "bun run build")
-- Deploy trigger: (command that triggers deploy, if not automatic)
-- Deploy status: (command to check if deploy finished, e.g., "fly status --app myapp")
-- Health check: (URL or command to verify production, e.g., "curl -f https://myapp.com/health")
-\`\`\`
-
-Tell the user: "Deploy configuration saved to CLAUDE.md. Future /land-and-deploy runs will use these settings automatically. Edit the section manually to update. Run /setup-deploy to reconfigure."
-
----`;
-}
-
 function generateSpecReviewLoop(_ctx: TemplateContext): string {
   return `## Spec Review Loop
 
@@ -1556,6 +1504,150 @@ The screenshot file at \`/tmp/gstack-sketch.png\` can be referenced by downstrea
 (\`/plan-design-review\`, \`/design-review\`) to see what was originally envisioned.`;
 }
 
+function generateAdversarialStep(ctx: TemplateContext): string {
+  // Codex host: strip entirely — Codex should never invoke itself
+  if (ctx.host === 'codex') return '';
+
+  const isShip = ctx.skillName === 'ship';
+  const stepNum = isShip ? '3.8' : '5.7';
+
+  return `## Step ${stepNum}: Adversarial review (auto-scaled)
+
+Adversarial review thoroughness scales automatically based on diff size. No configuration needed.
+
+**Detect diff size and tool availability:**
+
+\`\`\`bash
+DIFF_INS=$(git diff origin/<base> --stat | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
+DIFF_DEL=$(git diff origin/<base> --stat | tail -1 | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
+DIFF_TOTAL=$((DIFF_INS + DIFF_DEL))
+which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
+# Respect old opt-out
+OLD_CFG=$(~/.claude/skills/gstack/bin/gstack-config get codex_reviews 2>/dev/null || true)
+echo "DIFF_SIZE: $DIFF_TOTAL"
+echo "OLD_CFG: \${OLD_CFG:-not_set}"
+\`\`\`
+
+If \`OLD_CFG\` is \`disabled\`: skip this step silently. Continue to the next step.
+
+**User override:** If the user explicitly requested a specific tier (e.g., "run all passes", "paranoid review", "full adversarial", "do all 4 passes", "thorough review"), honor that request regardless of diff size. Jump to the matching tier section.
+
+**Auto-select tier based on diff size:**
+- **Small (< 50 lines changed):** Skip adversarial review entirely. Print: "Small diff ($DIFF_TOTAL lines) — adversarial review skipped." Continue to the next step.
+- **Medium (50–199 lines changed):** Run Codex adversarial challenge (or Claude adversarial subagent if Codex unavailable). Jump to the "Medium tier" section.
+- **Large (200+ lines changed):** Run all remaining passes — Codex structured review + Claude adversarial subagent + Codex adversarial. Jump to the "Large tier" section.
+
+---
+
+### Medium tier (50–199 lines)
+
+Claude's structured review already ran. Now add a **cross-model adversarial challenge**.
+
+**If Codex is available:** run the Codex adversarial challenge. **If Codex is NOT available:** fall back to the Claude adversarial subagent instead.
+
+**Codex adversarial:**
+
+\`\`\`bash
+TMPERR_ADV=$(mktemp /tmp/codex-adv-XXXXXXXX)
+codex exec "Review the changes on this branch against the base branch. Run git diff origin/<base> to see the diff. Your job is to find ways this code will fail in production. Think like an attacker and a chaos engineer. Find edge cases, race conditions, security holes, resource leaks, failure modes, and silent data corruption paths. Be adversarial. Be thorough. No compliments — just the problems." -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached 2>"$TMPERR_ADV"
+\`\`\`
+
+Use a 5-minute timeout (\`timeout: 300000\`). After the command completes, read stderr:
+\`\`\`bash
+cat "$TMPERR_ADV"
+\`\`\`
+
+Present the full output verbatim. This is informational — it never blocks shipping.
+
+**Error handling:** All errors are non-blocking — adversarial review is a quality enhancement, not a prerequisite.
+- **Auth failure:** If stderr contains "auth", "login", "unauthorized", or "API key": "Codex authentication failed. Run \\\`codex login\\\` to authenticate."
+- **Timeout:** "Codex timed out after 5 minutes."
+- **Empty response:** "Codex returned no response. Stderr: <paste relevant error>."
+
+On any Codex error, fall back to the Claude adversarial subagent automatically.
+
+**Claude adversarial subagent** (fallback when Codex unavailable or errored):
+
+Dispatch via the Agent tool. The subagent has fresh context — no checklist bias from the structured review. This genuine independence catches things the primary reviewer is blind to.
+
+Subagent prompt:
+"Read the diff for this branch with \`git diff origin/<base>\`. Think like an attacker and a chaos engineer. Your job is to find ways this code will fail in production. Look for: edge cases, race conditions, security holes, resource leaks, failure modes, silent data corruption, logic errors that produce wrong results silently, error handling that swallows failures, and trust boundary violations. Be adversarial. Be thorough. No compliments — just the problems. For each finding, classify as FIXABLE (you know how to fix it) or INVESTIGATE (needs human judgment)."
+
+Present findings under an \`ADVERSARIAL REVIEW (Claude subagent):\` header. **FIXABLE findings** flow into the same Fix-First pipeline as the structured review. **INVESTIGATE findings** are presented as informational.
+
+If the subagent fails or times out: "Claude adversarial subagent unavailable. Continuing without adversarial review."
+
+**Persist the review result:**
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","tier":"medium","commit":"'"$(git rev-parse --short HEAD)"'"}'
+\`\`\`
+Substitute STATUS: "clean" if no findings, "issues_found" if findings exist. SOURCE: "codex" if Codex ran, "claude" if subagent ran. If both failed, do NOT persist.
+
+**Cleanup:** Run \`rm -f "$TMPERR_ADV"\` after processing (if Codex was used).
+
+---
+
+### Large tier (200+ lines)
+
+Claude's structured review already ran. Now run **all three remaining passes** for maximum coverage:
+
+**1. Codex structured review (if available):**
+\`\`\`bash
+TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
+codex review --base <base> -c 'model_reasoning_effort="xhigh"' --enable web_search_cached 2>"$TMPERR"
+\`\`\`
+
+Use a 5-minute timeout. Present output under \`CODEX SAYS (code review):\` header.
+Check for \`[P1]\` markers: found → \`GATE: FAIL\`, not found → \`GATE: PASS\`.
+
+If GATE is FAIL, use AskUserQuestion:
+\`\`\`
+Codex found N critical issues in the diff.
+
+A) Investigate and fix now (recommended)
+B) Continue — review will still complete
+\`\`\`
+
+If A: address the findings${isShip ? '. After fixing, re-run tests (Step 3) since code has changed' : ''}. Re-run \`codex review\` to verify.
+
+Read stderr for errors (same error handling as medium tier).
+
+After stderr: \`rm -f "$TMPERR"\`
+
+**2. Claude adversarial subagent:** Dispatch a subagent with the adversarial prompt (same prompt as medium tier). This always runs regardless of Codex availability.
+
+**3. Codex adversarial challenge (if available):** Run \`codex exec\` with the adversarial prompt (same as medium tier).
+
+If Codex is not available for steps 1 and 3, note to the user: "Codex CLI not found — large-diff review ran Claude structured + Claude adversarial (2 of 4 passes). Install Codex for full 4-pass coverage: \`npm install -g @openai/codex\`"
+
+**Persist the review result AFTER all passes complete** (not after each sub-step):
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","tier":"large","gate":"GATE","commit":"'"$(git rev-parse --short HEAD)"'"}'
+\`\`\`
+Substitute: STATUS = "clean" if no findings across ALL passes, "issues_found" if any pass found issues. SOURCE = "both" if Codex ran, "claude" if only Claude subagent ran. GATE = the Codex structured review gate result ("pass"/"fail"), or "informational" if Codex was unavailable. If all passes failed, do NOT persist.
+
+---
+
+### Cross-model synthesis (medium and large tiers)
+
+After all passes complete, synthesize findings across all sources:
+
+\`\`\`
+ADVERSARIAL REVIEW SYNTHESIS (auto: TIER, N lines):
+════════════════════════════════════════════════════════════
+  High confidence (found by multiple sources): [findings agreed on by >1 pass]
+  Unique to Claude structured review: [from earlier step]
+  Unique to Claude adversarial: [from subagent, if ran]
+  Unique to Codex: [from codex adversarial or code review, if ran]
+  Models used: Claude structured ✓  Claude adversarial ✓/✗  Codex ✓/✗
+════════════════════════════════════════════════════════════
+\`\`\`
+
+High-confidence findings (agreed on by multiple sources) should be prioritized for fixes.
+
+---`;
+}
+
 const RESOLVERS: Record<string, (ctx: TemplateContext) => string> = {
   COMMAND_REFERENCE: generateCommandReference,
   SNAPSHOT_FLAGS: generateSnapshotFlags,
@@ -1566,11 +1658,13 @@ const RESOLVERS: Record<string, (ctx: TemplateContext) => string> = {
   DESIGN_METHODOLOGY: generateDesignMethodology,
   DESIGN_REVIEW_LITE: generateDesignReviewLite,
   REVIEW_DASHBOARD: generateReviewDashboard,
+  PLAN_FILE_REVIEW_REPORT: generatePlanFileReviewReport,
   TEST_BOOTSTRAP: generateTestBootstrap,
-  DEPLOY_BOOTSTRAP: generateDeployBootstrap,
   SPEC_REVIEW_LOOP: generateSpecReviewLoop,
   DESIGN_SKETCH: generateDesignSketch,
   BENEFITS_FROM: generateBenefitsFrom,
+  CODEX_REVIEW_STEP: generateAdversarialStep,
+  ADVERSARIAL_STEP: generateAdversarialStep,
 };
 
 // ─── Codex Helpers ───────────────────────────────────────────

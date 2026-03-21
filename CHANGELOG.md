@@ -1,20 +1,71 @@
 # Changelog
 
-## [0.9.1] - 2026-03-20
+## [0.9.7.0] - 2026-03-21 — Plan File Review Report
 
 ### Added
 
-- **`/land-and-deploy` — the missing piece after `/ship`.** Merges your PR, waits for CI and deploy workflows, then runs a canary health check on production. Auto-detects merge queues, deploy platforms (Vercel, Netlify, Fly.io, GitHub Actions), and production URLs. Offers one-click revert if something breaks. Timing data (CI wait, queue, deploy, canary) logged for retrospectives. The workflow is now: `/review` → `/ship` → `/land-and-deploy`.
-- **`/canary` — standalone post-deploy monitoring.** Watches production for 10 minutes after a deploy using the browse daemon. Takes periodic screenshots, detects new console errors, flags performance regressions (>2x baseline). Run `--baseline` before deploying to capture the "before" state. Alerts on *changes*, not absolutes — 3 pre-existing errors is fine, 1 new error is an alert.
-- **`/benchmark` — performance regression detection.** Collects real Web Vitals (TTFB, FCP, LCP), bundle sizes, and request counts via `performance.getEntries()` through the browse daemon. Compares against saved baselines with configurable thresholds. Trend analysis across historical runs. Performance budgets with letter grades.
-- **Performance & Bundle Impact review category.** `/review` and `/ship` now catch heavy dependency additions (moment.js → date-fns), missing lazy loading, synchronous scripts, CSS @import blocking, fetch waterfalls, and tree-shaking breaks. Added to `review/checklist.md` as an INFORMATIONAL category.
-- **Deploy bootstrap auto-detection.** First time you run `/land-and-deploy`, it scans your repo for deploy platforms, production URLs, and merge method preferences. Saves results to CLAUDE.md so future runs skip detection. Same pattern as test bootstrap.
-- **"Deployed" row in Review Readiness Dashboard.** After `/land-and-deploy` runs, the dashboard shows deploy status (HEALTHY/REVERTED/ISSUES) alongside Eng, CEO, and Design review status.
+- **Every plan file now shows which reviews have run.** After any review skill finishes (`/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/codex review`), a markdown table is appended to the plan file itself — showing each review's trigger command, purpose, run count, status, and findings summary. Anyone reading the plan can see review status at a glance without checking conversation history.
+- **Review logs now capture richer data.** CEO reviews log scope proposal counts (proposed/accepted/deferred), eng reviews log total issues found, design reviews log before→after scores, and codex reviews log how many findings were fixed. The plan file report uses these fields directly — no more guessing from partial metadata.
 
-### For contributors
+## [0.9.6.0] - 2026-03-21 — Auto-Scaled Adversarial Review
 
-- Incorporated canary monitoring and benchmark patterns from community PR #151 (HMAKT99).
-- 3 new skills registered across gen-skill-docs.ts, skill-check.ts, skill-validation, and gen-skill-docs tests.
+### Changed
+
+- **Review thoroughness now scales automatically with diff size.** Small diffs (<50 lines) skip adversarial review entirely — no wasted time on typo fixes. Medium diffs (50–199 lines) get a cross-model adversarial challenge from Codex (or a Claude adversarial subagent if Codex isn't installed). Large diffs (200+ lines) get all four passes: Claude structured, Codex structured review with pass/fail gate, Claude adversarial subagent, and Codex adversarial challenge. No configuration needed — it just works.
+- **Claude now has an adversarial mode.** A fresh Claude subagent with no checklist bias reviews your code like an attacker — finding edge cases, race conditions, security holes, and silent data corruption that the structured review might miss. Findings are classified as FIXABLE (auto-fixed) or INVESTIGATE (your call).
+- **Review dashboard shows "Adversarial" instead of "Codex Review."** The dashboard row reflects the new multi-model reality — it tracks whichever adversarial passes actually ran, not just Codex.
+
+## [0.9.5.0] - 2026-03-21 — Builder Ethos
+
+### Added
+
+- **ETHOS.md — gstack's builder philosophy in one document.** Four principles: The Golden Age (AI compression ratios), Boil the Lake (completeness is cheap), Search Before Building (three layers of knowledge), and Build for Yourself. This is the philosophical source of truth that every workflow skill references.
+- **Every workflow skill now searches before recommending.** Before suggesting infrastructure patterns, concurrency approaches, or framework-specific solutions, gstack checks if the runtime has a built-in and whether the pattern is current best practice. Three layers of knowledge — tried-and-true (Layer 1), new-and-popular (Layer 2), and first-principles (Layer 3) — with the most valuable insights prized above all.
+- **Eureka moments.** When first-principles reasoning reveals that conventional wisdom is wrong, gstack names it, celebrates it, and logs it. Your weekly `/retro` now surfaces these insights so you can see where your projects zigged while others zagged.
+- **`/office-hours` adds Landscape Awareness phase.** After understanding your problem through questioning but before challenging premises, gstack searches for what the world thinks — then runs a three-layer synthesis to find where conventional wisdom might be wrong for your specific case.
+- **`/plan-eng-review` adds search check.** Step 0 now verifies architectural patterns against current best practices and flags custom solutions where built-ins exist.
+- **`/investigate` searches on hypothesis failure.** When your first debugging hypothesis is wrong, gstack searches for the exact error message and known framework issues before guessing again.
+- **`/design-consultation` three-layer synthesis.** Competitive research now uses the structured Layer 1/2/3 framework to find where your product should deliberately break from category norms.
+- **CEO review saves context when handing off to `/office-hours`.** When `/plan-ceo-review` suggests running `/office-hours` first, it now saves a handoff note with your system audit findings and any discussion so far. When you come back and re-invoke `/plan-ceo-review`, it picks up that context automatically — no more starting from scratch.
+
+## [0.9.4.1] - 2026-03-20
+
+### Changed
+
+- **`/retro` no longer nags about PR size.** The retro still reports PR size distribution (Small/Medium/Large/XL) as neutral data, but no longer flags XL PRs as problems or recommends splitting them. AI reviews don't fatigue — the unit of work is the feature, not the diff.
+
+## [0.9.4.0] - 2026-03-20 — Codex Reviews On By Default
+
+### Changed
+
+- **Codex code reviews now run automatically in `/ship` and `/review`.** No more "want a second opinion?" prompt every time — Codex reviews both your code (with a pass/fail gate) and runs an adversarial challenge by default. First-time users get a one-time opt-in prompt; after that, it's hands-free. Configure with `gstack-config set codex_reviews enabled|disabled`.
+- **All Codex operations use maximum reasoning power.** Review, adversarial, and consult modes all use `xhigh` reasoning effort — when an AI is reviewing your code, you want it thinking as hard as possible.
+- **Codex review errors can't corrupt the dashboard.** Auth failures, timeouts, and empty responses are now detected before logging results, so the Review Readiness Dashboard never shows a false "passed" entry. Adversarial stderr is captured separately.
+- **Codex review log includes commit hash.** Staleness detection now works correctly for Codex reviews, matching the same commit-tracking behavior as eng/CEO/design reviews.
+
+### Fixed
+
+- **Codex-for-Codex recursion prevented.** When gstack runs inside Codex CLI (`.agents/skills/`), the Codex review step is completely stripped — no accidental infinite loops.
+
+## [0.9.3.0] - 2026-03-20 — Windows Support
+
+### Fixed
+
+- **gstack now works on Windows 11.** Setup no longer hangs when verifying Playwright, and the browse server automatically falls back to Node.js to work around a Bun pipe-handling bug on Windows ([bun#4253](https://github.com/oven-sh/bun/issues/4253)). Just make sure Node.js is installed alongside Bun. macOS and Linux are completely unaffected.
+- **Path handling works on Windows.** All hardcoded `/tmp` paths and Unix-style path separators now use platform-aware equivalents via a new `platform.ts` module. Path traversal protection works correctly with Windows backslash separators.
+
+### Added
+
+- **Bun API polyfill for Node.js.** When the browse server runs under Node.js on Windows, a compatibility layer provides `Bun.serve()`, `Bun.spawn()`, `Bun.spawnSync()`, and `Bun.sleep()` equivalents. Fully tested.
+- **Node server build script.** `browse/scripts/build-node-server.sh` transpiles the server for Node.js, stubs `bun:sqlite`, and injects the polyfill — all automated during `bun run build`.
+
+## [0.9.2.0] - 2026-03-20 — Gemini CLI E2E Tests
+
+### Added
+
+- **Gemini CLI is now tested end-to-end.** Two E2E tests verify that gstack skills work when invoked by Google's Gemini CLI (`gemini -p`). The `gemini-discover-skill` test confirms skill discovery from `.agents/skills/`, and `gemini-review-findings` runs a full code review via gstack-review. Both parse Gemini's stream-json NDJSON output and track token usage.
+- **Gemini JSONL parser with 10 unit tests.** `parseGeminiJSONL` handles all Gemini event types (init, message, tool_use, tool_result, result) with defensive parsing for malformed input. The parser is a pure function, independently testable without spawning the CLI.
+- **`bun run test:gemini`** and **`bun run test:gemini:all`** scripts for running Gemini E2E tests independently. Gemini tests are also included in `test:evals` and `test:e2e` aggregate scripts.
 
 ## [0.9.1.0] - 2026-03-20 — Adversarial Spec Review + Skill Chaining
 
