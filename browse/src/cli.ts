@@ -386,12 +386,16 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
       // Handle manual restart needed (Conductor / sandboxed apps)
       if (isManualRestart(result)) {
         console.log(`\n${result.reason}\n`);
-        console.log(`To connect, quit ${result.browser.name} and restart it with CDP enabled:\n`);
+        console.log(`To connect, FULLY QUIT ${result.browser.name} first (no processes running), then relaunch with CDP:\n`);
         console.log(`  1. Quit ${result.browser.name} (Cmd+Q)`);
-        console.log(`  2. Open Terminal and run:`);
+        console.log(`  2. Wait 3 seconds for all processes to exit`);
+        console.log(`  3. Verify: pgrep -f "${result.browser.appName}" should return nothing`);
+        console.log(`  4. Open Terminal and run:`);
         console.log(`     ${result.command}`);
-        console.log(`  3. Then run: $B connect ${result.browser.name.toLowerCase()}\n`);
-        console.log(`Or add this to your shell profile to always launch with CDP:`);
+        console.log(`  5. Then run: $B connect ${result.browser.name.toLowerCase()}\n`);
+        console.log(`IMPORTANT: Chrome must be fully quit before step 4. If Chrome is already`);
+        console.log(`running, it ignores --remote-debugging-port and opens in the existing session.\n`);
+        console.log(`Pro tip — add to your shell profile to always launch with CDP:`);
         console.log(`  alias chrome-cdp='${result.command}'\n`);
 
         // Wait and poll — user might restart Chrome while we're printing

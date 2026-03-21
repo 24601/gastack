@@ -22,15 +22,12 @@ export interface BrowserBinary {
   userDataDir: string;  // required for --remote-debugging-port
 }
 
-const HOME = process.env.HOME || '/tmp';
-const APP_SUPPORT = `${HOME}/Library/Application Support`;
-
 export const BROWSER_BINARIES: BrowserBinary[] = [
-  { name: 'Comet',  binary: '/Applications/Comet.app/Contents/MacOS/Comet',                      appName: 'Comet',            aliases: ['comet', 'perplexity'],  userDataDir: `${APP_SUPPORT}/Comet` },
-  { name: 'Chrome', binary: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',       appName: 'Google Chrome',    aliases: ['chrome', 'google-chrome'], userDataDir: `${APP_SUPPORT}/Google/Chrome` },
-  { name: 'Arc',    binary: '/Applications/Arc.app/Contents/MacOS/Arc',                           appName: 'Arc',              aliases: ['arc'],                  userDataDir: `${APP_SUPPORT}/Arc/User Data` },
-  { name: 'Brave',  binary: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',      appName: 'Brave Browser',    aliases: ['brave'],                userDataDir: `${APP_SUPPORT}/BraveSoftware/Brave-Browser` },
-  { name: 'Edge',   binary: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',    appName: 'Microsoft Edge',   aliases: ['edge'],                 userDataDir: `${APP_SUPPORT}/Microsoft Edge` },
+  { name: 'Comet',  binary: '/Applications/Comet.app/Contents/MacOS/Comet',                      appName: 'Comet',            aliases: ['comet', 'perplexity'],     userDataDir: '' },
+  { name: 'Chrome', binary: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',       appName: 'Google Chrome',    aliases: ['chrome', 'google-chrome'], userDataDir: '' },
+  { name: 'Arc',    binary: '/Applications/Arc.app/Contents/MacOS/Arc',                           appName: 'Arc',              aliases: ['arc'],                    userDataDir: '' },
+  { name: 'Brave',  binary: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',      appName: 'Brave Browser',    aliases: ['brave'],                  userDataDir: '' },
+  { name: 'Edge',   binary: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',    appName: 'Microsoft Edge',   aliases: ['edge'],                   userDataDir: '' },
 ];
 
 // ─── CDP Probe ─────────────────────────────────────────────────
@@ -204,7 +201,7 @@ export async function launchWithCdp(
         reason: runtime === 'conductor'
           ? `Conductor can't restart ${browser.name} due to macOS App Management security. You need to restart it manually.`
           : `This runtime can't restart ${browser.name}. You need to restart it manually.`,
-        command: `"${browser.binary}" --remote-debugging-port=${port} --user-data-dir="${browser.userDataDir}" --restore-last-session`,
+        command: `"${browser.binary}" --remote-debugging-port=${port} --restore-last-session`,
       };
     }
 
@@ -221,7 +218,7 @@ export async function launchWithCdp(
         browser,
         port,
         reason: `Failed to quit ${browser.name} via osascript. You need to restart it manually.`,
-        command: `"${browser.binary}" --remote-debugging-port=${port} --user-data-dir="${browser.userDataDir}" --restore-last-session`,
+        command: `"${browser.binary}" --remote-debugging-port=${port} --restore-last-session`,
       };
     }
 
@@ -236,10 +233,9 @@ export async function launchWithCdp(
     }
   }
 
-  // Launch with CDP flag + explicit user-data-dir (Chrome requires this for remote debugging)
+  // Launch with CDP flag — Chrome must NOT already be running (same profile can't have two instances)
   const child = spawn(browser.binary, [
     `--remote-debugging-port=${port}`,
-    `--user-data-dir=${browser.userDataDir}`,
     '--restore-last-session',
   ], {
     detached: true,
