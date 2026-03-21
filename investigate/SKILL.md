@@ -330,7 +330,7 @@ Also check:
 - `git log` for prior fixes in the same area — **recurring bugs in the same files are an architectural smell**, not a coincidence
 
 **External pattern search:** If the bug doesn't match a known pattern above, WebSearch for:
-- "{framework} {error message or symptom}"
+- "{framework} {generic error type}" — **sanitize first:** strip hostnames, IPs, file paths, SQL, customer data. Search the error category, not the raw message.
 - "{library} {component} known issues"
 
 If WebSearch is unavailable, skip this search and proceed with hypothesis testing. If a documented solution or known dependency bug surfaces, present it as a candidate hypothesis in Phase 3.
