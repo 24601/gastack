@@ -18,6 +18,7 @@ This document covers the command reference and internals of gstack's headless br
 | Cookies | `cookie-import`, `cookie-import-browser` | Import cookies from file or real browser |
 | Multi-step | `chain` (JSON from stdin) | Batch commands in one call |
 | Handoff | `handoff [reason]`, `resume` | Switch to visible Chrome for user takeover |
+| Real browser | `connect`, `disconnect`, `focus` | Control real Chrome, visible window |
 
 All selector arguments accept CSS selectors, `@e` refs after `snapshot`, or `@c` refs after `snapshot -C`. 50+ commands total plus cookie import.
 
@@ -70,6 +71,8 @@ browse/
 │   ├── cookie-import-browser.ts  # Decrypt + import cookies from real Chromium browsers
 │   ├── cookie-picker-routes.ts   # HTTP routes for interactive cookie picker UI
 │   ├── cookie-picker-ui.ts       # Self-contained HTML/CSS/JS for cookie picker
+│   ├── chrome-launcher.ts  # Browser discovery, CDP probe, runtime detection
+│   ├── activity.ts         # Activity streaming (SSE) for Chrome extension
 │   └── buffers.ts          # CircularBuffer<T> + console/network/dialog capture
 ├── test/                   # Integration tests + HTML fixtures
 └── dist/
@@ -124,6 +127,64 @@ The server hooks into Playwright's `page.on('console')`, `page.on('response')`, 
 
 The `console`, `network`, and `dialog` commands read from the in-memory buffers, not disk.
 
+### Real browser mode (`connect`)
+
+Instead of headless Chromium, `connect` launches your real Chrome as a headed window controlled by Playwright. You see everything Claude does in real time.
+
+```bash
+$B connect              # launch real Chrome, headed
+$B goto https://app.com # navigates in the visible window
+$B snapshot -i          # refs from the real page
+$B click @e3            # clicks in the real window
+$B focus                # bring Chrome window to foreground (macOS)
+$B status               # shows Mode: cdp
+$B disconnect           # back to headless mode
+```
+
+The window has a subtle green shimmer line at the top edge and a floating "gstack" pill in the bottom-right corner so you always know which Chrome window is being controlled.
+
+**How it works:** Playwright's `channel: 'chrome'` launches your system Chrome binary via a native pipe protocol — not CDP WebSocket. All existing browse commands work unchanged because they go through Playwright's abstraction layer.
+
+**When to use it:**
+- QA testing where you want to watch Claude click through your app
+- Design review where you need to see exactly what Claude sees
+- Debugging where headless behavior differs from real Chrome
+- Demos where you're sharing your screen
+
+**Commands:**
+
+| Command | What it does |
+|---------|-------------|
+| `connect` | Launch real Chrome, restart server in headed mode |
+| `disconnect` | Close real Chrome, restart in headless mode |
+| `focus` | Bring Chrome to foreground (macOS). `focus @e3` also scrolls element into view |
+| `status` | Shows `Mode: cdp` when connected, `Mode: launched` when headless |
+
+**CDP-aware skills:** When in real-browser mode, `/qa` and `/design-review` automatically skip cookie import prompts and headless workarounds.
+
+### Chrome extension (Side Panel)
+
+A Manifest V3 Chrome extension shows live browse activity in a Side Panel:
+
+```
+extension/
+  manifest.json       — Manifest V3, sidePanel permission
+  background.js       — polls /health, relays refs, badge status
+  sidepanel.html/js   — live activity feed, dark theme
+  popup.html/js       — port config, connection status
+  content.js/css      — @ref overlays + connection pill
+```
+
+**Install:** `chrome://extensions` → Developer mode → Load unpacked → select `extension/`
+
+**Setup:** Click the gstack icon → enter the browse server port (shown by `$B status` or in `.gstack/browse.json`).
+
+**Features:**
+- Toolbar badge: green when connected, gray when not
+- Side Panel: live feed of every browse command and result
+- @ref overlays: floating panel showing current refs on the page
+- Connection pill: subtle indicator on every page when connected
+
 ### User handoff
 
 When the headless browser can't proceed (CAPTCHA, MFA, complex auth), `handoff` opens a visible Chrome window at the exact same page with all cookies, localStorage, and tabs preserved. The user solves the problem manually, then `resume` returns control to the agent with a fresh snapshot.
@@ -171,6 +232,8 @@ No port collisions. No shared state. Each project is fully isolated.
 | `BROWSE_IDLE_TIMEOUT` | 1800000 (30 min) | Idle shutdown timeout in ms |
 | `BROWSE_STATE_FILE` | `.gstack/browse.json` | Path to state file (CLI passes to server) |
 | `BROWSE_SERVER_SCRIPT` | auto-detected | Path to server.ts |
+| `BROWSE_CDP_URL` | (none) | Set to `channel:chrome` for real browser mode |
+| `BROWSE_CDP_PORT` | 0 | CDP port (used internally) |
 
 ### Performance
 
@@ -250,6 +313,8 @@ Tests spin up a local HTTP server (`browse/test/test-server.ts`) serving HTML fi
 | `browse/src/cookie-import-browser.ts` | Decrypt Chromium cookies via macOS Keychain + PBKDF2/AES-128-CBC. Auto-detects installed browsers. |
 | `browse/src/cookie-picker-routes.ts` | HTTP routes for `/cookie-picker/*` — browser list, domain search, import, remove. |
 | `browse/src/cookie-picker-ui.ts` | Self-contained HTML generator for the interactive cookie picker (dark theme, no frameworks). |
+| `browse/src/chrome-launcher.ts` | Browser binary discovery, CDP port probe, runtime detection (Conductor/Claude Code/Codex/terminal). |
+| `browse/src/activity.ts` | Activity streaming — `ActivityEntry` type, `CircularBuffer`, privacy filtering, SSE subscriber management. |
 | `browse/src/buffers.ts` | `CircularBuffer<T>` (O(1) ring buffer) + console/network/dialog capture with async disk flush. |
 
 ### Deploying to the active skill
