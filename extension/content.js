@@ -7,6 +7,43 @@
  */
 
 let overlayContainer = null;
+let statusPill = null;
+let pillFadeTimer = null;
+let refCount = 0;
+
+// ─── Connection Status Pill ──────────────────────────────────
+
+function showStatusPill(connected, refs) {
+  refCount = refs || 0;
+
+  if (!statusPill) {
+    statusPill = document.createElement('div');
+    statusPill.id = 'gstack-status-pill';
+    document.body.appendChild(statusPill);
+  }
+
+  if (!connected) {
+    statusPill.style.display = 'none';
+    return;
+  }
+
+  const refText = refCount > 0 ? ` · ${refCount} refs` : '';
+  statusPill.innerHTML = `<span class="gstack-pill-dot"></span> gstack${refText}`;
+  statusPill.style.display = 'flex';
+  statusPill.style.opacity = '1';
+
+  // Fade to subtle after 3s
+  clearTimeout(pillFadeTimer);
+  pillFadeTimer = setTimeout(() => {
+    statusPill.style.opacity = '0.3';
+  }, 3000);
+}
+
+function hideStatusPill() {
+  if (statusPill) {
+    statusPill.style.display = 'none';
+  }
+}
 
 function ensureContainer() {
   if (overlayContainer) return overlayContainer;
@@ -74,7 +111,7 @@ function renderRefPanel(refs) {
   container.appendChild(panel);
 }
 
-// Listen for ref data from background worker
+// Listen for messages from background worker
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'refs' && msg.data) {
     const refs = msg.data.refs || [];
@@ -82,15 +119,27 @@ chrome.runtime.onMessage.addListener((msg) => {
 
     if (refs.length === 0) {
       clearOverlays();
+      showStatusPill(true, 0);
       return;
     }
 
     // CDP mode: could use bounding boxes (future)
     // For now: floating panel for all modes
     renderRefPanel(refs);
+    showStatusPill(true, refs.length);
   }
 
   if (msg.type === 'clearRefs') {
+    clearOverlays();
+    showStatusPill(true, 0);
+  }
+
+  if (msg.type === 'connected') {
+    showStatusPill(true, refCount);
+  }
+
+  if (msg.type === 'disconnected') {
+    hideStatusPill();
     clearOverlays();
   }
 });

@@ -51,23 +51,42 @@ async function checkHealth() {
 }
 
 function setConnected(healthData) {
-  if (!isConnected) {
-    isConnected = true;
-    chrome.action.setBadgeText({ text: '' });
-    chrome.action.setBadgeBackgroundColor({ color: '#4ade80' });
-    // Small green dot via badge
-    chrome.action.setBadgeText({ text: ' ' });
-  }
+  const wasDisconnected = !isConnected;
+  isConnected = true;
+  chrome.action.setBadgeBackgroundColor({ color: '#4ade80' });
+  chrome.action.setBadgeText({ text: ' ' });
+
   // Broadcast health to popup and side panel
   chrome.runtime.sendMessage({ type: 'health', data: healthData }).catch(() => {});
+
+  // Notify content scripts on connection change
+  if (wasDisconnected) {
+    notifyContentScripts('connected');
+  }
 }
 
 function setDisconnected() {
-  if (isConnected) {
-    isConnected = false;
-    chrome.action.setBadgeText({ text: '' });
-  }
+  const wasConnected = isConnected;
+  isConnected = false;
+  chrome.action.setBadgeText({ text: '' });
+
   chrome.runtime.sendMessage({ type: 'health', data: null }).catch(() => {});
+
+  // Notify content scripts on disconnection
+  if (wasConnected) {
+    notifyContentScripts('disconnected');
+  }
+}
+
+async function notifyContentScripts(type) {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id) {
+        chrome.tabs.sendMessage(tab.id, { type }).catch(() => {});
+      }
+    }
+  } catch {}
 }
 
 // ─── Refs Relay ─────────────────────────────────────────────────
