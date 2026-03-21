@@ -192,6 +192,19 @@ Completeness is cheap. Don't recommend shortcuts when the complete implementatio
 is a "lake" (achievable) not an "ocean" (multi-quarter migration). See the
 Completeness Principle in the skill preamble for the full philosophy.
 
+## Search before building
+
+Before designing any solution that involves concurrency, unfamiliar patterns,
+infrastructure, or anything where the runtime/framework might have a built-in:
+
+1. Search for "{runtime} {thing} built-in"
+2. Search for "{thing} best practice {current year}"
+3. Check official runtime/framework docs
+
+Three layers of knowledge: tried-and-true (Layer 1), new-and-popular (Layer 2),
+first-principles (Layer 3). Prize Layer 3 above all. See ETHOS.md for the full
+builder philosophy.
+
 ## Local plans
 
 Contributors can store long-range vision docs and design documents in `~/.gstack-dev/plans/`.
