@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="header-left">
+      <span class="monogram">G</span>
+      <span class="title">gstack</span>
+    </div>
+    <div class="header-right">
+      <span class="dot" id="header-dot"></span>
+      <span class="header-port" id="header-port"></span>
+    </div>
+  </header>
+
+  <!-- Tab Bar -->
+  <nav class="tabs" role="tablist">
+    <button class="tab active" role="tab" aria-selected="true" data-tab="activity">Activity</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="refs">Refs</button>
+    <button class="tab disabled" role="tab" aria-selected="false" data-tab="session" disabled title="Requires Conductor">Session</button>
+  </nav>
+
+  <!-- Activity Tab -->
+  <main id="tab-activity" class="tab-content active" role="log" aria-live="polite">
+    <div class="empty-state" id="empty-state">
+      <p>Waiting for commands...</p>
+      <p class="muted">Run a browse command to see activity here.</p>
+    </div>
+    <div id="activity-feed"></div>
+  </main>
+
+  <!-- Refs Tab -->
+  <main id="tab-refs" class="tab-content">
+    <div class="empty-state" id="refs-empty">
+      <p>No refs yet</p>
+      <p class="muted">Run <code>snapshot</code> to see element refs.</p>
+    </div>
+    <div id="refs-list"></div>
+    <div class="refs-footer" id="refs-footer"></div>
+  </main>
+
+  <!-- Session Tab -->
+  <main id="tab-session" class="tab-content">
+    <div class="session-placeholder">
+      <p>Full session view requires Conductor.</p>
+      <p class="muted">Activity tab shows browse commands.</p>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <span id="footer-url"></span>
+    <span id="footer-info"></span>
+  </footer>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

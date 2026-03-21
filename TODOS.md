@@ -131,14 +131,53 @@
 **Effort:** L
 **Priority:** P4
 
-### CDP mode
+### CDP mode — SHIPPED (Phase 1)
 
-**What:** Connect to already-running Chrome/Electron apps via Chrome DevTools Protocol.
+`$B connect` connects to real Chrome/Comet via CDP. All existing browse commands work unchanged. Chrome extension with Side Panel activity feed. See `browse/src/chrome-launcher.ts`.
 
-**Why:** Test production apps, Electron apps, and existing browser sessions without launching new instances.
+### `$B watch` — passive observation mode
 
-**Effort:** M
+**What:** Claude observes your browsing without interacting. Captures snapshots, console logs, network requests as you navigate. "Watch me do this, then you do the same."
+
+**Why:** Bridges the gap between "Claude controls my browser" and "Claude learns from me." Enables flow recording for QA regression tests.
+
+**Context:** Requires CDP connect (shipped). Would add a new browse command that enters read-only mode with periodic snapshot capture. User demonstrates a flow, Claude records it, then can reproduce.
+
+**Effort:** M (human: ~1 week / CC: ~30 min)
+**Priority:** P2
+**Depends on:** CDP connect (shipped)
+
+### Multi-agent tab isolation
+
+**What:** Two Claude sessions connect to the same Chrome, each operating on different tabs. No cross-contamination.
+
+**Why:** Enables parallel /qa + /design-review on different tabs in the same browser.
+
+**Context:** Requires tab ownership model for concurrent CDP connections. Playwright may not cleanly support two `connectOverCDP` sessions to the same browser. Needs investigation.
+
+**Effort:** L (human: ~2 weeks / CC: ~2 hours)
+**Priority:** P3
+**Depends on:** CDP connect (shipped)
+
+### Cross-platform CDP browser discovery
+
+**What:** Extend browser discovery algorithm to Windows (`where chrome`, registry lookup) and Linux (`which google-chrome`, XDG paths). Focus command via wmctrl (Linux) and PowerShell (Windows).
+
+**Why:** gstack already has Windows support (Node.js fallback). CDP connect should follow.
+
+**Effort:** M (human: ~1 week / CC: ~30 min)
+**Priority:** P3
+**Depends on:** CDP connect (shipped)
+
+### Chrome Web Store publishing
+
+**What:** Publish the gstack browse Chrome extension to Chrome Web Store for easier install.
+
+**Why:** Currently sideloaded via chrome://extensions. Web Store makes install one-click.
+
+**Effort:** S
 **Priority:** P4
+**Depends on:** Chrome extension proving value via sideloading
 
 ### Linux/Windows cookie decryption
 
