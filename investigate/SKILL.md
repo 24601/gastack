@@ -16,6 +16,7 @@ allowed-tools:
   - Grep
   - Glob
   - AskUserQuestion
+  - WebSearch
 hooks:
   PreToolUse:
     - matcher: "Edit"
@@ -328,6 +329,12 @@ Also check:
 - `TODOS.md` for related known issues
 - `git log` for prior fixes in the same area — **recurring bugs in the same files are an architectural smell**, not a coincidence
 
+**External pattern search:** If the bug doesn't match a known pattern above, WebSearch for:
+- "{framework} {error message or symptom}"
+- "{library} {component} known issues"
+
+If WebSearch is unavailable, skip this search and proceed with hypothesis testing. If a documented solution or known dependency bug surfaces, present it as a candidate hypothesis in Phase 3.
+
 ---
 
 ## Phase 3: Hypothesis Testing
@@ -336,7 +343,7 @@ Before writing ANY fix, verify your hypothesis.
 
 1. **Confirm the hypothesis:** Add a temporary log statement, assertion, or debug output at the suspected root cause. Run the reproduction. Does the evidence match?
 
-2. **If the hypothesis is wrong:** Return to Phase 1. Gather more evidence. Do not guess.
+2. **If the hypothesis is wrong:** Before forming the next hypothesis, WebSearch for the exact error message (quoted) and "{component} {unexpected behavior} {framework version}". This often surfaces version-specific regressions or known issues that save hypothesis cycles. If WebSearch is unavailable, skip and proceed. Then return to Phase 1. Gather more evidence. Do not guess.
 
 3. **3-strike rule:** If 3 hypotheses fail, **STOP**. Use AskUserQuestion:
    ```
