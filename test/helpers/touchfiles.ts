@@ -94,6 +94,8 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   // Coverage audit (shared fixture) + triage
   'ship-coverage-audit': ['ship/**', 'test/fixtures/coverage-audit-fixture.ts', 'bin/gstack-repo-mode'],
   'review-coverage-audit': ['review/**', 'test/fixtures/coverage-audit-fixture.ts'],
+  'plan-eng-coverage-audit': ['plan-eng-review/**', 'test/fixtures/coverage-audit-fixture.ts'],
+  'ship-triage': ['ship/**', 'bin/gstack-repo-mode'],
 
   // Design
   'design-consultation-core':     ['design-consultation/**'],

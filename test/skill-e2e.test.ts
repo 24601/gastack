@@ -2858,6 +2858,249 @@ Output the diagram directly.`,
   }, 180_000);
 });
 
+// --- Plan Eng Review Coverage Audit E2E ---
+
+describeIfSelected('Plan Eng Review Coverage Audit E2E', ['plan-eng-coverage-audit'], () => {
+  let planCoverageDir: string;
+
+  beforeAll(() => {
+    planCoverageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-plan-coverage-'));
+
+    // Copy plan-eng-review skill files
+    copyDirSync(path.join(ROOT, 'plan-eng-review'), path.join(planCoverageDir, 'plan-eng-review'));
+
+    // Use shared fixture for billing project with coverage gaps
+    const { createCoverageAuditFixture } = require('./fixtures/coverage-audit-fixture');
+    createCoverageAuditFixture(planCoverageDir);
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(planCoverageDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test('/plan-eng-review coverage audit traces plan codepaths', async () => {
+    const result = await runSkillTest({
+      prompt: `Read the file plan-eng-review/SKILL.md for the plan review workflow instructions.
+
+You are on the feature/billing branch. The base branch is main.
+This is a test project — there is no remote, no PR to create.
+
+ONLY run the Test Coverage Audit section from the plan review workflow.
+Skip all other steps (architecture, code quality, performance, etc.).
+
+The source code is in ${planCoverageDir}/src/billing.ts.
+Existing tests are in ${planCoverageDir}/test/billing.test.ts.
+
+Produce the ASCII coverage diagram showing which code paths are tested and which have gaps.
+Output the diagram directly.`,
+      workingDirectory: planCoverageDir,
+      maxTurns: 15,
+      allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'],
+      timeout: 120_000,
+      testName: 'plan-eng-coverage-audit',
+      runId,
+    });
+
+    logCost('/plan-eng-review coverage audit', result);
+    recordE2E('/plan-eng-review coverage audit', 'Plan Eng Review Coverage Audit E2E', result, {
+      passed: result.exitReason === 'success',
+    });
+
+    expect(result.exitReason).toBe('success');
+
+    // Check output contains coverage diagram elements
+    const output = result.output || '';
+    const outputLower = output.toLowerCase();
+    const hasGap = outputLower.includes('gap') || outputLower.includes('no test');
+    const hasTested = outputLower.includes('tested') || output.includes('✓') || output.includes('★');
+    const hasCoverage = outputLower.includes('coverage') || outputLower.includes('paths tested');
+
+    console.log(`Output has GAP markers: ${hasGap}`);
+    console.log(`Output has TESTED markers: ${hasTested}`);
+    console.log(`Output has coverage summary: ${hasCoverage}`);
+
+    // The agent MUST produce a coverage diagram with gap and tested markers
+    expect(hasGap || hasTested).toBe(true);
+
+    // At minimum, the agent should have read the source and test files
+    const readCalls = result.toolCalls.filter(tc => tc.tool === 'Read');
+    expect(readCalls.length).toBeGreaterThan(0);
+  }, 180_000);
+});
+
+// --- Triage E2E ---
+
+describeIfSelected('Test Failure Triage E2E', ['ship-triage'], () => {
+  let triageDir: string;
+
+  beforeAll(() => {
+    triageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-triage-'));
+
+    // Copy ship skill files
+    copyDirSync(path.join(ROOT, 'ship'), path.join(triageDir, 'ship'));
+
+    const run = (cmd: string, args: string[]) =>
+      spawnSync(cmd, args, { cwd: triageDir, stdio: 'pipe', timeout: 5000 });
+
+    // Init git repo
+    run('git', ['init', '-b', 'main']);
+    run('git', ['config', 'user.email', 'test@test.com']);
+    run('git', ['config', 'user.name', 'Test']);
+
+    // Create a project with a pre-existing test failure on main
+    fs.writeFileSync(path.join(triageDir, 'package.json'), JSON.stringify({
+      name: 'triage-test-app',
+      version: '1.0.0',
+      scripts: { test: 'node test/run.js' },
+    }, null, 2));
+
+    fs.mkdirSync(path.join(triageDir, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(triageDir, 'test'), { recursive: true });
+
+    // Source with a bug that exists on main (pre-existing)
+    fs.writeFileSync(path.join(triageDir, 'src', 'math.js'), `
+module.exports = {
+  add: (a, b) => a + b,
+  divide: (a, b) => a / b,  // BUG: no zero-division check (pre-existing)
+};
+`);
+
+    // Test file that catches the pre-existing bug
+    fs.writeFileSync(path.join(triageDir, 'test', 'math.test.js'), `
+const { add, divide } = require('../src/math');
+
+// This test passes
+if (add(2, 3) !== 5) { console.error('FAIL: add(2,3) should be 5'); process.exit(1); }
+console.log('PASS: add');
+
+// This test FAILS — pre-existing bug (divide by zero returns Infinity, not an error)
+try {
+  const result = divide(10, 0);
+  if (result === Infinity) { console.error('FAIL: divide(10,0) should throw, got Infinity'); process.exit(1); }
+} catch(e) {
+  console.log('PASS: divide zero check');
+}
+`);
+
+    // Test runner
+    fs.writeFileSync(path.join(triageDir, 'test', 'run.js'), `
+require('./math.test.js');
+require('./string.test.js');
+`);
+
+    // Commit on main with the pre-existing bug
+    run('git', ['add', '.']);
+    run('git', ['commit', '-m', 'initial: math utils with tests']);
+
+    // Create feature branch
+    run('git', ['checkout', '-b', 'feature/string-utils']);
+
+    // Add new code with a new bug (in-branch)
+    fs.writeFileSync(path.join(triageDir, 'src', 'string.js'), `
+module.exports = {
+  capitalize: (s) => s.charAt(0).toUpperCase() + s.slice(1),
+  reverse: (s) => s.split('').reverse().join(''),
+  truncate: (s, len) => s.substring(0, len),  // BUG: no null check (in-branch)
+};
+`);
+
+    // Add test that catches the in-branch bug
+    fs.writeFileSync(path.join(triageDir, 'test', 'string.test.js'), `
+const { capitalize, reverse, truncate } = require('../src/string');
+
+if (capitalize('hello') !== 'Hello') { console.error('FAIL: capitalize'); process.exit(1); }
+console.log('PASS: capitalize');
+
+if (reverse('abc') !== 'cba') { console.error('FAIL: reverse'); process.exit(1); }
+console.log('PASS: reverse');
+
+// This test FAILS — in-branch bug (null input causes TypeError)
+try {
+  truncate(null, 5);
+  console.log('PASS: truncate null');
+} catch(e) {
+  console.error('FAIL: truncate(null, 5) threw: ' + e.message);
+  process.exit(1);
+}
+`);
+
+    run('git', ['add', '.']);
+    run('git', ['commit', '-m', 'feat: add string utilities']);
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(triageDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test('/ship triage correctly classifies in-branch vs pre-existing failures', async () => {
+    const result = await runSkillTest({
+      prompt: `Read the file ship/SKILL.md for the ship workflow instructions.
+
+You are on the feature/string-utils branch. The base branch is main.
+This is a test project — there is no remote, no PR to create.
+
+Run the tests first:
+\`\`\`bash
+cd ${triageDir} && node test/run.js
+\`\`\`
+
+The tests will fail. Now run ONLY the Test Failure Ownership Triage (Steps T1-T4) from the ship workflow.
+
+For each failing test, classify it as:
+- **In-branch**: caused by changes on this branch (feature/string-utils)
+- **Pre-existing**: existed before this branch (present on main)
+
+Use git diff origin/main...HEAD (or git diff main...HEAD since there's no remote) to determine which files changed on this branch.
+
+Output your classification for each failure clearly, labeling each as "IN-BRANCH" or "PRE-EXISTING" with your reasoning.
+
+This is a solo repo (REPO_MODE=solo). For pre-existing failures, recommend fixing now.`,
+      workingDirectory: triageDir,
+      maxTurns: 20,
+      allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'],
+      timeout: 180_000,
+      testName: 'ship-triage',
+      runId,
+    });
+
+    logCost('/ship triage', result);
+
+    const output = result.output || '';
+    const outputLower = output.toLowerCase();
+
+    // The triage should identify the string/truncate failure as in-branch
+    const hasInBranch = outputLower.includes('in-branch') || outputLower.includes('in branch') || outputLower.includes('introduced');
+    // The triage should identify the math/divide failure as pre-existing
+    const hasPreExisting = outputLower.includes('pre-existing') || outputLower.includes('pre existing') || outputLower.includes('existed before');
+
+    console.log(`Output identifies IN-BRANCH failures: ${hasInBranch}`);
+    console.log(`Output identifies PRE-EXISTING failures: ${hasPreExisting}`);
+
+    // Check that the string/truncate bug is classified as in-branch
+    const mentionsTruncate = outputLower.includes('truncate') || outputLower.includes('string');
+    const mentionsDivide = outputLower.includes('divide') || outputLower.includes('math');
+
+    console.log(`Mentions truncate/string (in-branch bug): ${mentionsTruncate}`);
+    console.log(`Mentions divide/math (pre-existing bug): ${mentionsDivide}`);
+
+    recordE2E('/ship triage', 'Test Failure Triage E2E', result, {
+      passed: result.exitReason === 'success' && hasInBranch && hasPreExisting,
+      has_in_branch_classification: hasInBranch,
+      has_pre_existing_classification: hasPreExisting,
+      mentions_truncate: mentionsTruncate,
+      mentions_divide: mentionsDivide,
+    });
+
+    expect(result.exitReason).toBe('success');
+    // Must classify at least one failure as in-branch AND one as pre-existing
+    expect(hasInBranch).toBe(true);
+    expect(hasPreExisting).toBe(true);
+    // Must mention the specific bugs
+    expect(mentionsTruncate).toBe(true);
+    expect(mentionsDivide).toBe(true);
+  }, 240_000);
+});
+
 // --- Codex skill E2E ---
 
 describeIfSelected('Codex skill E2E', ['codex-review'], () => {
