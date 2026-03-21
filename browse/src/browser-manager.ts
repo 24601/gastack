@@ -160,7 +160,7 @@ export class BrowserManager {
 
     // Find the gstack extension directory for auto-loading
     const extensionPath = this.findExtensionPath();
-    const launchArgs = ['--restore-last-session'];
+    const launchArgs = ['--hide-crash-restore-bubble'];
     if (extensionPath) {
       launchArgs.push(`--disable-extensions-except=${extensionPath}`);
       launchArgs.push(`--load-extension=${extensionPath}`);
@@ -189,13 +189,12 @@ export class BrowserManager {
     this.connectionMode = 'cdp';
     this.intentionalDisconnect = false;
 
-    // Inject visual indicator — subtle top-edge gradient + floating pill
-    // so the user always knows which Chrome window gstack controls
+    // Inject visual indicator — subtle top-edge amber gradient
+    // Extension's content script handles the floating pill
     const indicatorScript = () => {
       const injectIndicator = () => {
         if (document.getElementById('gstack-ctrl')) return;
 
-        // Thin gradient line at the very top of the viewport
         const topLine = document.createElement('div');
         topLine.id = 'gstack-ctrl';
         topLine.style.cssText = `
@@ -207,27 +206,6 @@ export class BrowserManager {
           opacity: 0.8;
         `;
 
-        // Floating pill — bottom-right, fades to subtle
-        const pill = document.createElement('div');
-        pill.id = 'gstack-pill';
-        pill.style.cssText = `
-          position: fixed; bottom: 12px; right: 12px;
-          z-index: 2147483647; pointer-events: none;
-          display: flex; align-items: center; gap: 5px;
-          padding: 4px 10px;
-          background: rgba(12, 12, 12, 0.7);
-          backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-          border: 1px solid rgba(245, 158, 11, 0.25);
-          border-radius: 9999px;
-          font: 500 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-          color: rgba(255, 255, 255, 0.7);
-          letter-spacing: 0.03em;
-          transition: opacity 0.5s ease;
-          opacity: 1;
-        `;
-        pill.innerHTML = '<span style="width:5px;height:5px;border-radius:50%;background:#F59E0B;box-shadow:0 0 4px rgba(245,158,11,0.5);flex-shrink:0;"></span>gstack';
-
-        // Keyframe for shimmer animation
         const style = document.createElement('style');
         style.textContent = `
           @keyframes gstack-shimmer {
@@ -241,10 +219,6 @@ export class BrowserManager {
 
         document.documentElement.appendChild(style);
         document.documentElement.appendChild(topLine);
-        document.documentElement.appendChild(pill);
-
-        // Fade pill to subtle after 4s
-        setTimeout(() => { pill.style.opacity = '0.25'; }, 4000);
       };
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', injectIndicator);
