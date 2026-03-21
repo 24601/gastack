@@ -78,6 +78,7 @@ gstack/
 ├── setup            # One-time setup: build binary + symlink skills
 ├── SKILL.md         # Generated from SKILL.md.tmpl (don't edit directly)
 ├── SKILL.md.tmpl    # Template: edit this, run gen:skill-docs
+├── ETHOS.md         # Builder philosophy (Boil the Lake, Search Before Building)
 └── package.json     # Build scripts for browse
 ```
 
