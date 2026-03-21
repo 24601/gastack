@@ -3092,12 +3092,20 @@ This is a solo repo (REPO_MODE=solo). For pre-existing failures, recommend fixin
     console.log(`Mentions truncate/string (in-branch bug): ${mentionsTruncate}`);
     console.log(`Mentions divide/math (pre-existing bug): ${mentionsDivide}`);
 
+    // Verify BOTH failure classes are exercised (not just detected):
+    // The test runner must have actually run both test files
+    const ranMathTest = output.includes('math.test') || output.includes('FAIL: divide');
+    const ranStringTest = output.includes('string.test') || output.includes('FAIL: truncate');
+    console.log(`Ran math test file (pre-existing failure): ${ranMathTest}`);
+    console.log(`Ran string test file (in-branch failure): ${ranStringTest}`);
+
     recordE2E('/ship triage', 'Test Failure Triage E2E', result, {
       passed: result.exitReason === 'success' && hasInBranch && hasPreExisting,
       has_in_branch_classification: hasInBranch,
       has_pre_existing_classification: hasPreExisting,
       mentions_truncate: mentionsTruncate,
       mentions_divide: mentionsDivide,
+      ran_both_test_files: ranMathTest && ranStringTest,
     });
 
     expect(result.exitReason).toBe('success');
@@ -3107,6 +3115,9 @@ This is a solo repo (REPO_MODE=solo). For pre-existing failures, recommend fixin
     // Must mention the specific bugs
     expect(mentionsTruncate).toBe(true);
     expect(mentionsDivide).toBe(true);
+    // Must have actually run both test files (exercises both failure classes)
+    expect(ranMathTest).toBe(true);
+    expect(ranStringTest).toBe(true);
   }, 240_000);
 });
 
