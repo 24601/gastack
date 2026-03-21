@@ -141,6 +141,40 @@ export class BrowserManager {
     };
     this.context = await this.browser.newContext(contextOptions);
 
+    // Inject visual indicator on every page — thin green border so user
+    // knows this window is controlled by gstack
+    await this.context.addInitScript(() => {
+      const injectIndicator = () => {
+        if (document.getElementById('gstack-controlled-indicator')) return;
+        // Green border around viewport
+        const border = document.createElement('div');
+        border.id = 'gstack-controlled-indicator';
+        border.style.cssText = `
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          border: 2px solid rgba(74, 222, 128, 0.6);
+          pointer-events: none; z-index: 2147483647;
+        `;
+        // Small label in top-left
+        const label = document.createElement('div');
+        label.style.cssText = `
+          position: fixed; top: 0; left: 0; z-index: 2147483647;
+          background: rgba(74, 222, 128, 0.9); color: #000;
+          font: 600 10px -apple-system, sans-serif;
+          padding: 2px 8px; pointer-events: none;
+          border-bottom-right-radius: 4px;
+          letter-spacing: 0.05em;
+        `;
+        label.textContent = 'gstack';
+        document.documentElement.appendChild(border);
+        document.documentElement.appendChild(label);
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', injectIndicator);
+      } else {
+        injectIndicator();
+      }
+    });
+
     // Create first tab
     await this.newTab();
 
@@ -190,10 +224,13 @@ export class BrowserManager {
   async close() {
     if (this.browser) {
       if (this.connectionMode === 'cdp') {
-        // CDP mode: disconnect (don't kill user's browser)
+        // CDP/channel:chrome mode: close the browser we launched
         this.intentionalDisconnect = true;
         this.browser.removeAllListeners('disconnected');
-        await this.browser.disconnect().catch(() => {});
+        await Promise.race([
+          this.browser.close(),
+          new Promise(resolve => setTimeout(resolve, 5000)),
+        ]).catch(() => {});
       } else {
         // Launched mode: close the browser we spawned
         this.browser.removeAllListeners('disconnected');
