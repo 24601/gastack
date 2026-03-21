@@ -1,9 +1,9 @@
 /**
  * gstack browse — Side Panel
  *
- * Connects to browse server SSE stream for live activity.
- * Fetches /refs for the Refs tab.
- * Cursor-based replay ensures no missed events on reconnect.
+ * Chat tab: two-way messaging with Claude Code via file queue.
+ * Debug tabs: activity feed (SSE) + refs (REST).
+ * Polls /sidebar-chat for new messages every 1s.
  */
 
 const NAV_COMMANDS = new Set(['goto', 'back', 'forward', 'reload']);
@@ -13,23 +13,146 @@ const OBSERVE_COMMANDS = new Set(['snapshot', 'screenshot', 'diff', 'console', '
 let lastId = 0;
 let eventSource = null;
 let serverUrl = null;
-let pendingEntries = new Map(); // id → entry element (for command_start without command_end)
+let chatLineCount = 0;
+let chatPollInterval = null;
 
-// ─── Tab Switching ─────────────────────────────────────────────
+// ─── Chat ───────────────────────────────────────────────────────
 
-document.querySelectorAll('.tab:not(.disabled)').forEach(tab => {
+const chatMessages = document.getElementById('chat-messages');
+const commandInput = document.getElementById('command-input');
+const sendBtn = document.getElementById('send-btn');
+const commandHistory = [];
+let historyIndex = -1;
+
+function formatChatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+}
+
+function addChatBubble(entry) {
+  // Remove welcome message on first real message
+  const welcome = chatMessages.querySelector('.chat-welcome');
+  if (welcome) welcome.remove();
+
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${entry.role}`;
+
+  let content = escapeHtml(entry.message);
+  // Simple markdown-ish: wrap ```...``` in <pre>
+  content = content.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+  // Bold **text**
+  content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Line breaks
+  content = content.replace(/\n/g, '<br>');
+
+  bubble.innerHTML = `${content}<span class="chat-time">${formatChatTime(entry.ts)}</span>`;
+  chatMessages.appendChild(bubble);
+  bubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+async function sendMessage() {
+  const msg = commandInput.value.trim();
+  if (!msg) return;
+
+  commandHistory.push(msg);
+  historyIndex = commandHistory.length;
+  commandInput.value = '';
+  commandInput.disabled = true;
+  sendBtn.disabled = true;
+
+  const result = await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'sidebar-command', message: msg }, resolve);
+  });
+
+  commandInput.disabled = false;
+  sendBtn.disabled = false;
+  commandInput.focus();
+
+  if (result?.ok) {
+    // Immediately poll to show the user's own message
+    pollChat();
+  } else {
+    commandInput.classList.add('error');
+    commandInput.placeholder = result?.error || 'Failed to send';
+    setTimeout(() => {
+      commandInput.classList.remove('error');
+      commandInput.placeholder = 'Message Claude Code...';
+    }, 2000);
+  }
+}
+
+commandInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (historyIndex > 0) { historyIndex--; commandInput.value = commandHistory[historyIndex]; }
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (historyIndex < commandHistory.length - 1) { historyIndex++; commandInput.value = commandHistory[historyIndex]; }
+    else { historyIndex = commandHistory.length; commandInput.value = ''; }
+  }
+});
+
+sendBtn.addEventListener('click', sendMessage);
+
+// Poll for new chat messages
+async function pollChat() {
+  if (!serverUrl) return;
+  try {
+    const resp = await fetch(`${serverUrl}/sidebar-chat?after=${chatLineCount}`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.entries && data.entries.length > 0) {
+      for (const entry of data.entries) {
+        addChatBubble(entry);
+      }
+      chatLineCount = data.total;
+    }
+  } catch {}
+}
+
+// ─── Debug Tabs ─────────────────────────────────────────────────
+
+const debugToggle = document.getElementById('debug-toggle');
+const debugTabs = document.getElementById('debug-tabs');
+const closeDebug = document.getElementById('close-debug');
+let debugOpen = false;
+
+debugToggle.addEventListener('click', () => {
+  debugOpen = !debugOpen;
+  debugToggle.classList.toggle('active', debugOpen);
+  debugTabs.style.display = debugOpen ? 'flex' : 'none';
+  if (!debugOpen) {
+    // Close debug panels, show chat
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('tab-chat').classList.add('active');
+    document.querySelectorAll('.debug-tabs .tab').forEach(t => t.classList.remove('active'));
+  }
+});
+
+closeDebug.addEventListener('click', () => {
+  debugOpen = false;
+  debugToggle.classList.remove('active');
+  debugTabs.style.display = 'none';
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-chat').classList.add('active');
+});
+
+document.querySelectorAll('.debug-tabs .tab:not(.close-debug)').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+    document.querySelectorAll('.debug-tabs .tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     tab.classList.add('active');
-    tab.setAttribute('aria-selected', 'true');
     document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
 
     if (tab.dataset.tab === 'refs') fetchRefs();
   });
 });
 
-// ─── Activity Feed ─────────────────────────────────────────────
+// ─── Activity Feed ──────────────────────────────────────────────
 
 function getEntryClass(entry) {
   if (entry.status === 'error') return 'error';
@@ -45,6 +168,8 @@ function formatTime(ts) {
   const d = new Date(ts);
   return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
+
+let pendingEntries = new Map();
 
 function createEntryElement(entry) {
   const div = document.createElement('div');
@@ -76,17 +201,7 @@ function createEntryElement(entry) {
     ` : ''}
   `;
 
-  // Click to expand/collapse
   div.addEventListener('click', () => div.classList.toggle('expanded'));
-  div.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') div.classList.toggle('expanded');
-    if (e.key === 'Escape') div.classList.remove('expanded');
-  });
-
-  // Screen reader label
-  const srLabel = `${entry.command || entry.type} ${argsText} ${statusIcon ? (entry.status === 'ok' ? 'succeeded' : 'failed') : 'in progress'} ${duration ? 'in ' + duration : ''}`;
-  div.setAttribute('aria-label', srLabel);
-
   return div;
 }
 
@@ -95,9 +210,7 @@ function addEntry(entry) {
   const empty = document.getElementById('empty-state');
   if (empty) empty.style.display = 'none';
 
-  // If command_end, update the matching pending entry
   if (entry.type === 'command_end') {
-    // Remove the pending command_start for this command
     for (const [id, el] of pendingEntries) {
       if (el.querySelector('.entry-command')?.textContent === entry.command) {
         el.remove();
@@ -109,21 +222,10 @@ function addEntry(entry) {
 
   const el = createEntryElement(entry);
   feed.appendChild(el);
-
-  if (entry.type === 'command_start') {
-    pendingEntries.set(entry.id, el);
-  }
-
-  // Auto-scroll
+  if (entry.type === 'command_start') pendingEntries.set(entry.id, el);
   el.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
-  // Update footer
-  if (entry.url) document.getElementById('footer-url').textContent = new URL(entry.url).hostname;
-  const parts = [];
-  if (entry.tabs) parts.push(`${entry.tabs} tabs`);
-  if (entry.mode) parts.push(entry.mode);
-  if (parts.length) document.getElementById('footer-info').textContent = parts.join(' \u00b7 ');
-
+  if (entry.url) document.getElementById('footer-url')?.textContent && (document.getElementById('footer-url').textContent = new URL(entry.url).hostname);
   lastId = Math.max(lastId, entry.id);
 }
 
@@ -133,24 +235,17 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ─── SSE Connection ────────────────────────────────────────────
+// ─── SSE Connection ─────────────────────────────────────────────
 
 function connectSSE() {
   if (!serverUrl) return;
-
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
-  }
+  if (eventSource) { eventSource.close(); eventSource = null; }
 
   const url = `${serverUrl}/activity/stream?after=${lastId}`;
   eventSource = new EventSource(url);
 
   eventSource.addEventListener('activity', (e) => {
-    try {
-      const entry = JSON.parse(e.data);
-      addEntry(entry);
-    } catch {}
+    try { addEntry(JSON.parse(e.data)); } catch {}
   });
 
   eventSource.addEventListener('gap', (e) => {
@@ -159,17 +254,13 @@ function connectSSE() {
       const feed = document.getElementById('activity-feed');
       const banner = document.createElement('div');
       banner.className = 'gap-banner';
-      banner.textContent = `Missed ${data.availableFrom - data.gapFrom} events (buffer overflow)`;
+      banner.textContent = `Missed ${data.availableFrom - data.gapFrom} events`;
       feed.appendChild(banner);
     } catch {}
   });
-
-  eventSource.onerror = () => {
-    // EventSource auto-reconnects
-  };
 }
 
-// ─── Refs Tab ──────────────────────────────────────────────────
+// ─── Refs Tab ───────────────────────────────────────────────────
 
 async function fetchRefs() {
   if (!serverUrl) return;
@@ -197,28 +288,64 @@ async function fetchRefs() {
         <span class="ref-name">"${escapeHtml(r.name)}"</span>
       </div>
     `).join('');
-    footer.textContent = `${data.refs.length} refs \u00b7 ${data.url ? new URL(data.url).hostname : ''}`;
+    footer.textContent = `${data.refs.length} refs`;
   } catch {}
 }
 
-// ─── Server Discovery ──────────────────────────────────────────
+// ─── Server Discovery ───────────────────────────────────────────
 
 function updateConnection(url) {
   serverUrl = url;
   if (url) {
-    document.getElementById('header-dot').className = 'dot connected';
+    document.getElementById('footer-dot').className = 'dot connected';
     const port = new URL(url).port;
-    document.getElementById('header-port').textContent = `:${port}`;
+    document.getElementById('footer-port').textContent = `:${port}`;
     connectSSE();
+    // Start chat polling
+    if (chatPollInterval) clearInterval(chatPollInterval);
+    chatPollInterval = setInterval(pollChat, 1000);
+    pollChat();  // immediate first poll
   } else {
-    document.getElementById('header-dot').className = 'dot';
-    document.getElementById('header-port').textContent = '';
+    document.getElementById('footer-dot').className = 'dot';
+    document.getElementById('footer-port').textContent = '';
+    if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
   }
 }
+
+// ─── Port Configuration ─────────────────────────────────────────
+
+const portLabel = document.getElementById('footer-port');
+const portInput = document.getElementById('port-input');
+
+portLabel.addEventListener('click', () => {
+  portLabel.style.display = 'none';
+  portInput.style.display = '';
+  chrome.runtime.sendMessage({ type: 'getPort' }, (resp) => {
+    portInput.value = resp?.port || '';
+    portInput.focus();
+    portInput.select();
+  });
+});
+
+function savePort() {
+  const port = parseInt(portInput.value, 10);
+  if (port > 0 && port < 65536) {
+    chrome.runtime.sendMessage({ type: 'setPort', port });
+  }
+  portInput.style.display = 'none';
+  portLabel.style.display = '';
+}
+portInput.addEventListener('blur', savePort);
+portInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') savePort();
+  if (e.key === 'Escape') { portInput.style.display = 'none'; portLabel.style.display = ''; }
+});
 
 chrome.runtime.sendMessage({ type: 'getServerUrl' }, (resp) => {
   if (resp && resp.url) updateConnection(resp.url);
 });
+
+// ─── Message Listener ───────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'health') {
@@ -227,7 +354,6 @@ chrome.runtime.onMessage.addListener((msg) => {
     });
   }
   if (msg.type === 'refs') {
-    // Auto-refresh refs tab if visible
     if (document.querySelector('.tab[data-tab="refs"].active')) {
       fetchRefs();
     }

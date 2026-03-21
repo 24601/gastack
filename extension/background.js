@@ -3,10 +3,13 @@
  *
  * Polls /health every 10s to detect browse server.
  * Fetches /refs on snapshot completion, relays to content script.
- * Updates badge: green (connected), gray (disconnected).
+ * Proxies commands from sidebar → browse server.
+ * Updates badge: amber (connected), gray (disconnected).
  */
 
+const DEFAULT_PORT = 34567;  // Well-known port used by `$B connect`
 let serverPort = null;
+let authToken = null;
 let isConnected = false;
 let healthInterval = null;
 
@@ -14,7 +17,7 @@ let healthInterval = null;
 
 async function loadPort() {
   const data = await chrome.storage.local.get('port');
-  serverPort = data.port || null;
+  serverPort = data.port || DEFAULT_PORT;
   return serverPort;
 }
 
@@ -41,6 +44,8 @@ async function checkHealth() {
     if (!resp.ok) { setDisconnected(); return; }
     const data = await resp.json();
     if (data.status === 'healthy') {
+      // Capture auth token from health response
+      if (data.token) authToken = data.token;
       setConnected(data);
     } else {
       setDisconnected();
@@ -53,7 +58,7 @@ async function checkHealth() {
 function setConnected(healthData) {
   const wasDisconnected = !isConnected;
   isConnected = true;
-  chrome.action.setBadgeBackgroundColor({ color: '#4ade80' });
+  chrome.action.setBadgeBackgroundColor({ color: '#F59E0B' });
   chrome.action.setBadgeText({ text: ' ' });
 
   // Broadcast health to popup and side panel
@@ -68,6 +73,7 @@ function setConnected(healthData) {
 function setDisconnected() {
   const wasConnected = isConnected;
   isConnected = false;
+  authToken = null;
   chrome.action.setBadgeText({ text: '' });
 
   chrome.runtime.sendMessage({ type: 'health', data: null }).catch(() => {});
@@ -87,6 +93,31 @@ async function notifyContentScripts(type) {
       }
     }
   } catch {}
+}
+
+// ─── Command Proxy ─────────────────────────────────────────────
+
+async function executeCommand(command, args) {
+  const base = getBaseUrl();
+  if (!base || !authToken) {
+    return { error: 'Not connected to browse server' };
+  }
+
+  try {
+    const resp = await fetch(`${base}/command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ command, args }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const data = await resp.json();
+    return data;
+  } catch (err) {
+    return { error: err.message || 'Command failed' };
+  }
 }
 
 // ─── Refs Relay ─────────────────────────────────────────────────
@@ -135,11 +166,41 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     fetchAndRelayRefs().then(() => sendResponse({ ok: true }));
     return true;
   }
+
+  // Sidebar → browse server command proxy
+  if (msg.type === 'command') {
+    executeCommand(msg.command, msg.args).then(result => sendResponse(result));
+    return true;
+  }
+
+  // Sidebar → Claude Code (file-based message queue)
+  if (msg.type === 'sidebar-command') {
+    const base = getBaseUrl();
+    if (!base || !authToken) {
+      sendResponse({ error: 'Not connected' });
+      return true;
+    }
+    fetch(`${base}/sidebar-command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ message: msg.message }),
+    })
+      .then(r => r.json())
+      .then(data => sendResponse(data))
+      .catch(err => sendResponse({ error: err.message }));
+    return true;
+  }
 });
 
 // ─── Side Panel ─────────────────────────────────────────────────
 
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+// Click extension icon → open side panel directly (no popup)
+if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+}
 
 // ─── Startup ────────────────────────────────────────────────────
 

@@ -5,27 +5,19 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <!-- Header -->
-  <header>
-    <div class="header-left">
-      <span class="monogram">G</span>
-      <span class="title">gstack</span>
+  <!-- Chat Tab (default, full height) -->
+  <main id="tab-chat" class="tab-content active">
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-welcome">
+        <div class="chat-welcome-icon">G</div>
+        <p>Send a message to Claude Code.</p>
+        <p class="muted">Your agent will see it and act on it.</p>
+      </div>
     </div>
-    <div class="header-right">
-      <span class="dot" id="header-dot"></span>
-      <span class="header-port" id="header-port"></span>
-    </div>
-  </header>
+  </main>
 
-  <!-- Tab Bar -->
-  <nav class="tabs" role="tablist">
-    <button class="tab active" role="tab" aria-selected="true" data-tab="activity">Activity</button>
-    <button class="tab" role="tab" aria-selected="false" data-tab="refs">Refs</button>
-    <button class="tab disabled" role="tab" aria-selected="false" data-tab="session" disabled title="Requires Conductor">Session</button>
-  </nav>
-
-  <!-- Activity Tab -->
-  <main id="tab-activity" class="tab-content active" role="log" aria-live="polite">
+  <!-- Debug: Activity Tab (hidden by default) -->
+  <main id="tab-activity" class="tab-content" role="log" aria-live="polite">
     <div class="empty-state" id="empty-state">
       <p>Waiting for commands...</p>
       <p class="muted">Run a browse command to see activity here.</p>
@@ -33,7 +25,7 @@
     <div id="activity-feed"></div>
   </main>
 
-  <!-- Refs Tab -->
+  <!-- Debug: Refs Tab (hidden by default) -->
   <main id="tab-refs" class="tab-content">
     <div class="empty-state" id="refs-empty">
       <p>No refs yet</p>
@@ -43,19 +35,28 @@
     <div class="refs-footer" id="refs-footer"></div>
   </main>
 
-  <!-- Session Tab -->
-  <main id="tab-session" class="tab-content">
-    <div class="session-placeholder">
-      <p>Full session view requires Conductor.</p>
-      <p class="muted">Activity tab shows browse commands.</p>
-    </div>
-  </main>
+  <!-- Command Bar -->
+  <div class="command-bar">
+    <input type="text" class="command-input" id="command-input" placeholder="Message Claude Code..." autocomplete="off" spellcheck="false">
+    <button class="send-btn" id="send-btn" title="Send">&#x2191;</button>
+  </div>
 
-  <!-- Footer -->
+  <!-- Footer with connection + debug toggle -->
   <footer>
-    <span id="footer-url"></span>
-    <span id="footer-info"></span>
+    <button class="debug-toggle" id="debug-toggle" title="Toggle debug panels">debug</button>
+    <div class="footer-right">
+      <span class="dot" id="footer-dot"></span>
+      <span class="footer-port" id="footer-port" title="Click to change port"></span>
+      <input type="text" class="port-input" id="port-input" placeholder="34567" autocomplete="off" style="display:none">
+    </div>
   </footer>
+
+  <!-- Debug tab bar (hidden by default) -->
+  <nav class="tabs debug-tabs" id="debug-tabs" role="tablist" style="display:none">
+    <button class="tab" role="tab" data-tab="activity">Activity</button>
+    <button class="tab" role="tab" data-tab="refs">Refs</button>
+    <button class="tab close-debug" id="close-debug" title="Close debug">&times;</button>
+  </nav>
 
   <script src="sidepanel.js"></script>
 </body>
