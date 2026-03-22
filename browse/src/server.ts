@@ -108,6 +108,7 @@ interface SidebarSession {
   id: string;
   name: string;
   claudeSessionId: string | null;
+  worktreePath: string | null;
   createdAt: string;
   lastActiveAt: string;
 }
@@ -193,12 +194,81 @@ function loadSession(): SidebarSession | null {
   }
 }
 
+/**
+ * Create a git worktree for session isolation.
+ * Falls back to null (use main cwd) if:
+ *  - not in a git repo
+ *  - git worktree add fails (submodules, LFS, permissions)
+ *  - worktree dir already exists (collision from prior crash)
+ */
+function createWorktree(sessionId: string): string | null {
+  try {
+    // Check if we're in a git repo
+    const gitCheck = Bun.spawnSync(['git', 'rev-parse', '--show-toplevel'], {
+      stdout: 'pipe', stderr: 'pipe', timeout: 3000,
+    });
+    if (gitCheck.exitCode !== 0) return null;
+    const repoRoot = gitCheck.stdout.toString().trim();
+
+    const worktreeDir = path.join(process.env.HOME || '/tmp', '.gstack', 'worktrees', sessionId.slice(0, 8));
+
+    // Clean up if dir exists from prior crash
+    if (fs.existsSync(worktreeDir)) {
+      Bun.spawnSync(['git', 'worktree', 'remove', '--force', worktreeDir], {
+        cwd: repoRoot, stdout: 'pipe', stderr: 'pipe', timeout: 5000,
+      });
+      try { fs.rmSync(worktreeDir, { recursive: true, force: true }); } catch {}
+    }
+
+    // Get current branch/commit
+    const headCheck = Bun.spawnSync(['git', 'rev-parse', 'HEAD'], {
+      cwd: repoRoot, stdout: 'pipe', stderr: 'pipe', timeout: 3000,
+    });
+    if (headCheck.exitCode !== 0) return null;
+    const head = headCheck.stdout.toString().trim();
+
+    // Create worktree (detached HEAD — no branch conflicts)
+    const result = Bun.spawnSync(['git', 'worktree', 'add', '--detach', worktreeDir, head], {
+      cwd: repoRoot, stdout: 'pipe', stderr: 'pipe', timeout: 10000,
+    });
+
+    if (result.exitCode !== 0) {
+      console.log(`[browse] Worktree creation failed: ${result.stderr.toString().trim()}`);
+      return null;
+    }
+
+    console.log(`[browse] Created worktree: ${worktreeDir}`);
+    return worktreeDir;
+  } catch (err: any) {
+    console.log(`[browse] Worktree creation error: ${err.message}`);
+    return null;
+  }
+}
+
+function removeWorktree(worktreePath: string | null): void {
+  if (!worktreePath) return;
+  try {
+    const gitCheck = Bun.spawnSync(['git', 'rev-parse', '--show-toplevel'], {
+      stdout: 'pipe', stderr: 'pipe', timeout: 3000,
+    });
+    if (gitCheck.exitCode === 0) {
+      Bun.spawnSync(['git', 'worktree', 'remove', '--force', worktreePath], {
+        cwd: gitCheck.stdout.toString().trim(), stdout: 'pipe', stderr: 'pipe', timeout: 5000,
+      });
+    }
+    // Cleanup dir if git worktree remove didn't
+    try { fs.rmSync(worktreePath, { recursive: true, force: true }); } catch {}
+  } catch {}
+}
+
 function createSession(): SidebarSession {
   const id = crypto.randomUUID();
+  const worktreePath = createWorktree(id);
   const session: SidebarSession = {
     id,
     name: 'Chrome sidebar',
     claudeSessionId: null,
+    worktreePath,
     createdAt: new Date().toISOString(),
     lastActiveAt: new Date().toISOString(),
   };
@@ -294,7 +364,7 @@ function spawnClaude(userMessage: string): void {
 
   const proc = spawn('claude', args, {
     stdio: ['pipe', 'pipe', 'pipe'],
-    cwd: (sidebarSession as any)?.worktreePath || process.cwd(),  // worktreePath added in Phase 6
+    cwd: sidebarSession?.worktreePath || process.cwd(),
     env: { ...process.env, BROWSE_STATE_FILE: config.stateFile },
   } as any);
   proc.stdin?.end();
@@ -602,6 +672,7 @@ async function shutdown() {
   killAgent();
   messageQueue = [];
   saveSession(); // Persist chat history before exit
+  if (sidebarSession?.worktreePath) removeWorktree(sidebarSession.worktreePath);
   if (agentHealthInterval) clearInterval(agentHealthInterval);
   clearInterval(flushInterval);
   clearInterval(idleCheckInterval);
@@ -907,6 +978,8 @@ async function start() {
         }
         killAgent();
         messageQueue = [];
+        // Clean up old session's worktree before creating new one
+        if (sidebarSession?.worktreePath) removeWorktree(sidebarSession.worktreePath);
         sidebarSession = createSession();
         return new Response(JSON.stringify({ ok: true, session: sidebarSession }), {
           status: 200, headers: { 'Content-Type': 'application/json' },
