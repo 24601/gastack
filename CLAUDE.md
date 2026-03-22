@@ -71,10 +71,16 @@ gstack/
 ├── review/          # PR review skill
 ├── plan-ceo-review/ # /plan-ceo-review skill
 ├── plan-eng-review/ # /plan-eng-review skill
+├── autoplan/        # /autoplan skill (auto-review pipeline: CEO → design → eng)
+├── benchmark/       # /benchmark skill (performance regression detection)
+├── canary/          # /canary skill (post-deploy monitoring loop)
+├── codex/           # /codex skill (multi-AI second opinion via OpenAI Codex CLI)
+├── land-and-deploy/ # /land-and-deploy skill (merge → deploy → canary verify)
 ├── office-hours/    # /office-hours skill (YC Office Hours — startup diagnostic + builder brainstorm)
 ├── investigate/     # /investigate skill (systematic root-cause debugging)
 ├── retro/           # Retrospective skill
 ├── document-release/ # /document-release skill (post-ship doc updates)
+├── setup-deploy/    # /setup-deploy skill (one-time deploy config)
 ├── bin/             # CLI utilities (gstack-repo-mode, gstack-slug, gstack-config, etc.)
 ├── setup            # One-time setup: build binary + symlink skills
 ├── SKILL.md         # Generated from SKILL.md.tmpl (don't edit directly)
