@@ -242,12 +242,13 @@ export class BrowserManager {
       await this.newTab();
     }
 
-    // Browser disconnect handler
+    // Browser disconnect handler — exit code 2 distinguishes from crashes (1)
     if (this.browser) {
       this.browser.on('disconnected', () => {
         if (this.intentionalDisconnect) return;
-        console.error('[browse] Real browser disconnected.');
-        process.exit(1);
+        console.error('[browse] Real browser disconnected (user closed or crashed).');
+        console.error('[browse] Run `$B connect` to reconnect.');
+        process.exit(2);
       });
     }
 

@@ -601,6 +601,7 @@ async function shutdown() {
   console.log('[browse] Shutting down...');
   killAgent();
   messageQueue = [];
+  saveSession(); // Persist chat history before exit
   if (agentHealthInterval) clearInterval(agentHealthInterval);
   clearInterval(flushInterval);
   clearInterval(idleCheckInterval);
@@ -624,10 +625,15 @@ async function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-// Emergency cleanup for crashes (OOM, uncaught exceptions)
+// Emergency cleanup for crashes (OOM, uncaught exceptions, browser disconnect)
 function emergencyCleanup() {
   if (isShuttingDown) return;
   isShuttingDown = true;
+  // Kill agent subprocess if running
+  try { killAgent(); } catch {}
+  // Save session state so chat history persists across crashes
+  try { saveSession(); } catch {}
+  // Clean Chromium profile locks
   const profileDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
   for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
     try { fs.unlinkSync(path.join(profileDir, lockFile)); } catch {}
