@@ -421,6 +421,51 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
     process.exit(0);
   }
 
+  // ─── CDP Disconnect (pre-server command) ──────────────────
+  // disconnect must be handled BEFORE ensureServer() because the CDP
+  // guard blocks all commands when the server is unresponsive.
+  if (command === 'disconnect') {
+    const existingState = readState();
+    if (!existingState || existingState.mode !== 'cdp') {
+      console.log('Not in CDP mode — nothing to disconnect.');
+      process.exit(0);
+    }
+    // Try graceful shutdown via server
+    try {
+      const resp = await fetch(`http://127.0.0.1:${existingState.port}/command`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${existingState.token}`,
+        },
+        body: JSON.stringify({ command: 'disconnect', args: [] }),
+        signal: AbortSignal.timeout(3000),
+      });
+      if (resp.ok) {
+        console.log('Disconnected from real browser.');
+        process.exit(0);
+      }
+    } catch {
+      // Server not responding — force cleanup
+    }
+    // Force kill + cleanup
+    if (isProcessAlive(existingState.pid)) {
+      try { process.kill(existingState.pid, 'SIGTERM'); } catch {}
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (isProcessAlive(existingState.pid)) {
+        try { process.kill(existingState.pid, 'SIGKILL'); } catch {}
+      }
+    }
+    // Clean profile locks and state file
+    const profileDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
+    for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+      try { fs.unlinkSync(path.join(profileDir, lockFile)); } catch {}
+    }
+    try { fs.unlinkSync(config.stateFile); } catch {}
+    console.log('Disconnected (server was unresponsive — force cleaned).');
+    process.exit(0);
+  }
+
   // Special case: chain reads from stdin
   if (command === 'chain' && commandArgs.length === 0) {
     const stdin = await Bun.stdin.text();
