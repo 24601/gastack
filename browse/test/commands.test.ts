@@ -391,6 +391,38 @@ describe('Cookies and storage', () => {
     const storage = JSON.parse(result);
     expect(storage.localStorage.testKey).toBe('testValue');
   });
+
+  test('storage read redacts sensitive keys', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    await handleReadCommand('storage', ['set', 'auth_token', 'my-secret-token'], bm);
+    await handleReadCommand('storage', ['set', 'api_key', 'key-12345'], bm);
+    await handleReadCommand('storage', ['set', 'normalKey', 'normalValue'], bm);
+    const result = await handleReadCommand('storage', [], bm);
+    const storage = JSON.parse(result);
+    expect(storage.localStorage.auth_token).toMatch(/REDACTED/);
+    expect(storage.localStorage.api_key).toMatch(/REDACTED/);
+    expect(storage.localStorage.normalKey).toBe('normalValue');
+  });
+
+  test('storage read redacts sensitive values by prefix', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    // JWT value under innocuous key name
+    await handleReadCommand('storage', ['set', 'userData', 'eyJhbGciOiJIUzI1NiJ9.payload.sig'], bm);
+    // GitHub PAT under innocuous key name
+    await handleReadCommand('storage', ['set', 'repoAccess', 'ghp_abc123def456'], bm);
+    const result = await handleReadCommand('storage', [], bm);
+    const storage = JSON.parse(result);
+    expect(storage.localStorage.userData).toMatch(/REDACTED/);
+    expect(storage.localStorage.repoAccess).toMatch(/REDACTED/);
+  });
+
+  test('storage redaction includes value length', async () => {
+    await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
+    await handleReadCommand('storage', ['set', 'session_token', 'abc123'], bm);
+    const result = await handleReadCommand('storage', [], bm);
+    const storage = JSON.parse(result);
+    expect(storage.localStorage.session_token).toBe('[REDACTED — 6 chars]');
+  });
 });
 
 // ─── Performance ────────────────────────────────────────────────
