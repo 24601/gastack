@@ -22,6 +22,7 @@ import { COMMAND_DESCRIPTIONS } from './commands';
 import { SNAPSHOT_FLAGS } from './snapshot';
 import { resolveConfig, ensureStateDir, readVersionHash } from './config';
 import { emitActivity, subscribe, getActivityAfter, getActivityHistory, getSubscriberCount } from './activity';
+import { spawn, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -88,6 +89,295 @@ export { consoleBuffer, networkBuffer, dialogBuffer, addConsoleEntry, addNetwork
 const CONSOLE_LOG_PATH = config.consoleLog;
 const NETWORK_LOG_PATH = config.networkLog;
 const DIALOG_LOG_PATH = config.dialogLog;
+
+// ─── Sidebar Agent (integrated — no separate process) ─────────────
+
+interface ChatEntry {
+  id: number;
+  ts: string;
+  role: 'user' | 'assistant' | 'agent';
+  message?: string;
+  type?: string;
+  tool?: string;
+  input?: string;
+  text?: string;
+  error?: string;
+}
+
+interface SidebarSession {
+  id: string;
+  name: string;
+  claudeSessionId: string | null;
+  createdAt: string;
+  lastActiveAt: string;
+}
+
+const SESSIONS_DIR = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-sessions');
+const AGENT_TIMEOUT_MS = 120_000;
+const MAX_QUEUE = 5;
+
+let sidebarSession: SidebarSession | null = null;
+let agentProcess: ChildProcess | null = null;
+let agentStatus: 'idle' | 'processing' | 'hung' = 'idle';
+let agentStartTime: number | null = null;
+let messageQueue: Array<{message: string, ts: string}> = [];
+let currentMessage: string | null = null;
+let chatBuffer: ChatEntry[] = [];
+let chatNextId = 0;
+
+// Find the browse binary for the claude subprocess system prompt
+function findBrowseBin(): string {
+  const candidates = [
+    path.resolve(__dirname, '..', 'dist', 'browse'),
+    path.resolve(__dirname, '..', '..', '.claude', 'skills', 'gstack', 'browse', 'dist', 'browse'),
+    path.join(process.env.HOME || '', '.claude', 'skills', 'gstack', 'browse', 'dist', 'browse'),
+  ];
+  for (const c of candidates) {
+    try { if (fs.existsSync(c)) return c; } catch {}
+  }
+  return 'browse'; // fallback to PATH
+}
+
+const BROWSE_BIN = findBrowseBin();
+
+function shortenPath(str: string): string {
+  return str
+    .replace(new RegExp(BROWSE_BIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '$B')
+    .replace(/\/Users\/[^/]+/g, '~')
+    .replace(/\/conductor\/workspaces\/[^/]+\/[^/]+/g, '')
+    .replace(/\.claude\/skills\/gstack\//g, '')
+    .replace(/browse\/dist\/browse/g, '$B');
+}
+
+function summarizeToolInput(tool: string, input: any): string {
+  if (!input) return '';
+  if (tool === 'Bash' && input.command) {
+    let cmd = shortenPath(input.command);
+    return cmd.length > 80 ? cmd.slice(0, 80) + '…' : cmd;
+  }
+  if (tool === 'Read' && input.file_path) return shortenPath(input.file_path);
+  if (tool === 'Edit' && input.file_path) return shortenPath(input.file_path);
+  if (tool === 'Write' && input.file_path) return shortenPath(input.file_path);
+  if (tool === 'Grep' && input.pattern) return `/${input.pattern}/`;
+  if (tool === 'Glob' && input.pattern) return input.pattern;
+  try { return shortenPath(JSON.stringify(input)).slice(0, 60); } catch { return ''; }
+}
+
+function addChatEntry(entry: Omit<ChatEntry, 'id'>): ChatEntry {
+  const full: ChatEntry = { ...entry, id: chatNextId++ };
+  chatBuffer.push(full);
+  // Persist to disk (best-effort)
+  if (sidebarSession) {
+    const chatFile = path.join(SESSIONS_DIR, sidebarSession.id, 'chat.jsonl');
+    try { fs.appendFileSync(chatFile, JSON.stringify(full) + '\n'); } catch {}
+  }
+  return full;
+}
+
+function loadSession(): SidebarSession | null {
+  try {
+    const activeFile = path.join(SESSIONS_DIR, 'active.json');
+    const activeData = JSON.parse(fs.readFileSync(activeFile, 'utf-8'));
+    const sessionFile = path.join(SESSIONS_DIR, activeData.id, 'session.json');
+    const session = JSON.parse(fs.readFileSync(sessionFile, 'utf-8')) as SidebarSession;
+    // Load chat history
+    const chatFile = path.join(SESSIONS_DIR, session.id, 'chat.jsonl');
+    try {
+      const lines = fs.readFileSync(chatFile, 'utf-8').split('\n').filter(Boolean);
+      chatBuffer = lines.map(line => { try { return JSON.parse(line); } catch { return null; } }).filter(Boolean);
+      chatNextId = chatBuffer.length > 0 ? Math.max(...chatBuffer.map(e => e.id)) + 1 : 0;
+    } catch {}
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function createSession(): SidebarSession {
+  const id = crypto.randomUUID();
+  const session: SidebarSession = {
+    id,
+    name: 'Chrome sidebar',
+    claudeSessionId: null,
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+  };
+  const sessionDir = path.join(SESSIONS_DIR, id);
+  fs.mkdirSync(sessionDir, { recursive: true });
+  fs.writeFileSync(path.join(sessionDir, 'session.json'), JSON.stringify(session, null, 2));
+  fs.writeFileSync(path.join(sessionDir, 'chat.jsonl'), '');
+  fs.writeFileSync(path.join(SESSIONS_DIR, 'active.json'), JSON.stringify({ id }));
+  chatBuffer = [];
+  chatNextId = 0;
+  return session;
+}
+
+function saveSession(): void {
+  if (!sidebarSession) return;
+  sidebarSession.lastActiveAt = new Date().toISOString();
+  const sessionFile = path.join(SESSIONS_DIR, sidebarSession.id, 'session.json');
+  try { fs.writeFileSync(sessionFile, JSON.stringify(sidebarSession, null, 2)); } catch {}
+}
+
+function listSessions(): Array<SidebarSession & { chatLines: number }> {
+  try {
+    const dirs = fs.readdirSync(SESSIONS_DIR).filter(d => d !== 'active.json');
+    return dirs.map(d => {
+      try {
+        const session = JSON.parse(fs.readFileSync(path.join(SESSIONS_DIR, d, 'session.json'), 'utf-8'));
+        let chatLines = 0;
+        try { chatLines = fs.readFileSync(path.join(SESSIONS_DIR, d, 'chat.jsonl'), 'utf-8').split('\n').filter(Boolean).length; } catch {}
+        return { ...session, chatLines };
+      } catch { return null; }
+    }).filter(Boolean);
+  } catch { return []; }
+}
+
+function processAgentEvent(event: any): void {
+  if (event.type === 'system' && event.session_id && sidebarSession && !sidebarSession.claudeSessionId) {
+    // Capture session_id from first claude init event for --resume
+    sidebarSession.claudeSessionId = event.session_id;
+    saveSession();
+  }
+
+  if (event.type === 'assistant' && event.message?.content) {
+    for (const block of event.message.content) {
+      if (block.type === 'tool_use') {
+        addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'tool_use', tool: block.name, input: summarizeToolInput(block.name, block.input) });
+      } else if (block.type === 'text' && block.text) {
+        addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'text', text: block.text });
+      }
+    }
+  }
+
+  if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'tool_use', tool: event.content_block.name, input: summarizeToolInput(event.content_block.name, event.content_block.input) });
+  }
+
+  if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta' && event.delta.text) {
+    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'text_delta', text: event.delta.text });
+  }
+
+  if (event.type === 'result') {
+    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'result', text: event.result || '' });
+  }
+}
+
+function spawnClaude(userMessage: string): void {
+  agentStatus = 'processing';
+  agentStartTime = Date.now();
+  currentMessage = userMessage;
+
+  const pageUrl = browserManager.getCurrentUrl() || 'about:blank';
+  const B = BROWSE_BIN;
+  const systemPrompt = [
+    'You are a browser assistant running in a Chrome sidebar.',
+    `Current page: ${pageUrl}`,
+    `Browse binary: ${B}`,
+    '',
+    'Commands (run via bash):',
+    `  ${B} goto <url>    ${B} click <@ref>    ${B} fill <@ref> <text>`,
+    `  ${B} snapshot -i   ${B} text            ${B} screenshot`,
+    `  ${B} back          ${B} forward         ${B} reload`,
+    '',
+    'Rules: run snapshot -i before clicking. Keep responses SHORT.',
+  ].join('\n');
+
+  const prompt = `${systemPrompt}\n\nUser: ${userMessage}`;
+  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose',
+    '--allowedTools', 'Bash,Read,Glob,Grep'];
+  if (sidebarSession?.claudeSessionId) {
+    args.push('--resume', sidebarSession.claudeSessionId);
+  }
+
+  addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_start' });
+
+  const proc = spawn('claude', args, {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    cwd: (sidebarSession as any)?.worktreePath || process.cwd(),  // worktreePath added in Phase 6
+    env: { ...process.env, BROWSE_STATE_FILE: config.stateFile },
+  } as any);
+  proc.stdin?.end();
+  agentProcess = proc;
+
+  let buffer = '';
+
+  proc.stdout?.on('data', (data: Buffer) => {
+    buffer += data.toString();
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try { processAgentEvent(JSON.parse(line)); } catch {}
+    }
+  });
+
+  proc.stderr?.on('data', () => {}); // Claude logs to stderr, ignore
+
+  proc.on('close', () => {
+    if (buffer.trim()) {
+      try { processAgentEvent(JSON.parse(buffer)); } catch {}
+    }
+    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_done' });
+    agentProcess = null;
+    agentStartTime = null;
+    currentMessage = null;
+
+    // Process next queued message (set status synchronously first — race condition guard)
+    if (messageQueue.length > 0) {
+      const next = messageQueue.shift()!;
+      spawnClaude(next.message);
+    } else {
+      agentStatus = 'idle';
+    }
+  });
+
+  proc.on('error', (err) => {
+    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_error', error: err.message });
+    agentProcess = null;
+    agentStartTime = null;
+    currentMessage = null;
+    agentStatus = 'idle';
+    // Try next in queue even after error
+    if (messageQueue.length > 0) {
+      const next = messageQueue.shift()!;
+      spawnClaude(next.message);
+    }
+  });
+}
+
+function killAgent(): void {
+  if (agentProcess) {
+    try { agentProcess.kill('SIGTERM'); } catch {}
+    setTimeout(() => { try { agentProcess?.kill('SIGKILL'); } catch {} }, 3000);
+  }
+  agentProcess = null;
+  agentStartTime = null;
+  currentMessage = null;
+  agentStatus = 'idle';
+}
+
+// Agent health check — detect hung processes
+let agentHealthInterval: ReturnType<typeof setInterval> | null = null;
+function startAgentHealthCheck(): void {
+  agentHealthInterval = setInterval(() => {
+    if (agentStatus === 'processing' && agentStartTime && Date.now() - agentStartTime > AGENT_TIMEOUT_MS) {
+      agentStatus = 'hung';
+      console.log(`[browse] Sidebar agent hung (>${AGENT_TIMEOUT_MS / 1000}s)`);
+    }
+  }, 10000);
+}
+
+// Initialize session on startup
+function initSidebarSession(): void {
+  fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+  sidebarSession = loadSession();
+  if (!sidebarSession) {
+    sidebarSession = createSession();
+  }
+  console.log(`[browse] Sidebar session: ${sidebarSession.id} (${chatBuffer.length} chat entries loaded)`);
+  startAgentHealthCheck();
+}
 let lastConsoleFlushed = 0;
 let lastNetworkFlushed = 0;
 let lastDialogFlushed = 0;
@@ -309,6 +599,9 @@ async function shutdown() {
   isShuttingDown = true;
 
   console.log('[browse] Shutting down...');
+  killAgent();
+  messageQueue = [];
+  if (agentHealthInterval) clearInterval(agentHealthInterval);
   clearInterval(flushInterval);
   clearInterval(idleCheckInterval);
   await flushBuffers(); // Final flush (async now)
@@ -392,7 +685,14 @@ async function start() {
           uptime: Math.floor((Date.now() - startTime) / 1000),
           tabs: browserManager.getTabCount(),
           currentUrl: browserManager.getCurrentUrl(),
-          token: AUTH_TOKEN,  // Extension uses this to POST /command
+          token: AUTH_TOKEN,  // Extension uses this for Bearer auth
+          agent: {
+            status: agentStatus,
+            runningFor: agentStartTime ? Date.now() - agentStartTime : null,
+            currentMessage,
+            queueLength: messageQueue.length,
+          },
+          session: sidebarSession ? { id: sidebarSession.id, name: sidebarSession.name } : null,
         }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -482,89 +782,138 @@ async function start() {
         });
       }
 
-      // ─── Sidebar endpoints (no auth — localhost only) ─────────────
+      // ─── Sidebar endpoints (auth required — token from /health) ────
 
-      // Sidebar → Claude Code command queue
+      // Sidebar chat history — read from in-memory buffer
+      if (url.pathname === '/sidebar-chat') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        const afterId = parseInt(url.searchParams.get('after') || '0', 10);
+        const entries = chatBuffer.filter(e => e.id >= afterId);
+        return new Response(JSON.stringify({ entries, total: chatNextId }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      }
+
+      // Sidebar → server: user message → queue or process immediately
       if (url.pathname === '/sidebar-command' && req.method === 'POST') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
         const body = await req.json();
         const msg = body.message?.trim();
         if (!msg) {
-          return new Response(JSON.stringify({ error: 'Empty message' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
+          return new Response(JSON.stringify({ error: 'Empty message' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        const ts = new Date().toISOString();
+        addChatEntry({ ts, role: 'user', message: msg });
+        if (sidebarSession) { sidebarSession.lastActiveAt = ts; saveSession(); }
+
+        if (agentStatus === 'idle') {
+          spawnClaude(msg);
+          return new Response(JSON.stringify({ ok: true, processing: true }), {
+            status: 200, headers: { 'Content-Type': 'application/json' },
+          });
+        } else if (messageQueue.length < MAX_QUEUE) {
+          messageQueue.push({ message: msg, ts });
+          return new Response(JSON.stringify({ ok: true, queued: true, position: messageQueue.length }), {
+            status: 200, headers: { 'Content-Type': 'application/json' },
+          });
+        } else {
+          return new Response(JSON.stringify({ error: 'Queue full (max 5)' }), {
+            status: 429, headers: { 'Content-Type': 'application/json' },
           });
         }
-        const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
-        fs.mkdirSync(gstackDir, { recursive: true });
-        const entry = JSON.stringify({ ts: new Date().toISOString(), role: 'user', message: msg }) + '\n';
-        fs.appendFileSync(path.join(gstackDir, 'sidebar-commands.jsonl'), entry);
-        fs.appendFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), entry);
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Claude Code → Sidebar response
-      if (url.pathname === '/sidebar-response' && req.method === 'POST') {
-        const body = await req.json();
-        const msg = body.message?.trim();
-        if (!msg) {
-          return new Response(JSON.stringify({ error: 'Empty message' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
-        fs.mkdirSync(gstackDir, { recursive: true });
-        const entry = JSON.stringify({ ts: new Date().toISOString(), role: 'assistant', message: msg }) + '\n';
-        fs.appendFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), entry);
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Streaming events from sidebar agent
-      if (url.pathname === '/sidebar-event' && req.method === 'POST') {
-        const body = await req.json();
-        const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
-        fs.mkdirSync(gstackDir, { recursive: true });
-        const entry = JSON.stringify({ ts: new Date().toISOString(), role: 'agent', ...body }) + '\n';
-        fs.appendFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), entry);
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
       }
 
       // Clear sidebar chat
       if (url.pathname === '/sidebar-chat/clear' && req.method === 'POST') {
-        const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
-        try {
-          fs.writeFileSync(path.join(gstackDir, 'sidebar-chat.jsonl'), '');
-        } catch {}
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        chatBuffer = [];
+        chatNextId = 0;
+        if (sidebarSession) {
+          try { fs.writeFileSync(path.join(SESSIONS_DIR, sidebarSession.id, 'chat.jsonl'), ''); } catch {}
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // Kill hung agent
+      if (url.pathname === '/sidebar-agent/kill' && req.method === 'POST') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        killAgent();
+        addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_error', error: 'Killed by user' });
+        // Process next in queue
+        if (messageQueue.length > 0) {
+          const next = messageQueue.shift()!;
+          spawnClaude(next.message);
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // Stop agent (user-initiated) — queued messages remain for dismissal
+      if (url.pathname === '/sidebar-agent/stop' && req.method === 'POST') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        killAgent();
+        addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_error', error: 'Stopped by user' });
+        return new Response(JSON.stringify({ ok: true, queuedMessages: messageQueue.length }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
         });
       }
 
-      // Sidebar chat history + polling
-      if (url.pathname === '/sidebar-chat') {
-        const afterParam = url.searchParams.get('after') || '0';
-        const afterLine = parseInt(afterParam, 10);
-        const chatFile = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-chat.jsonl');
-        let lines: string[] = [];
-        try {
-          lines = fs.readFileSync(chatFile, 'utf-8').split('\n').filter(Boolean);
-        } catch {}
-        const entries = lines.slice(afterLine).map((line: string, i: number) => {
-          try { return { ...JSON.parse(line), id: afterLine + i }; } catch { return null; }
-        }).filter(Boolean);
-        return new Response(JSON.stringify({ entries, total: lines.length }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      // Dismiss a queued message by index
+      if (url.pathname === '/sidebar-queue/dismiss' && req.method === 'POST') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        const body = await req.json();
+        const idx = body.index;
+        if (typeof idx === 'number' && idx >= 0 && idx < messageQueue.length) {
+          messageQueue.splice(idx, 1);
+        }
+        return new Response(JSON.stringify({ ok: true, queueLength: messageQueue.length }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Session info
+      if (url.pathname === '/sidebar-session') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({
+          session: sidebarSession,
+          agent: { status: agentStatus, runningFor: agentStartTime ? Date.now() - agentStartTime : null, currentMessage, queueLength: messageQueue.length, queue: messageQueue },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // Create new session
+      if (url.pathname === '/sidebar-session/new' && req.method === 'POST') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        killAgent();
+        messageQueue = [];
+        sidebarSession = createSession();
+        return new Response(JSON.stringify({ ok: true, session: sidebarSession }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // List all sessions
+      if (url.pathname === '/sidebar-session/list') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ sessions: listSessions(), activeId: sidebarSession?.id }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
         });
       }
 
@@ -606,6 +955,9 @@ async function start() {
   console.log(`[browse] Server running on http://127.0.0.1:${port} (PID: ${process.pid})`);
   console.log(`[browse] State file: ${config.stateFile}`);
   console.log(`[browse] Idle timeout: ${IDLE_TIMEOUT_MS / 1000}s`);
+
+  // Initialize sidebar session (load existing or create new)
+  initSidebarSession();
 }
 
 start().catch((err) => {
