@@ -34,12 +34,6 @@ _TEL_START=$(date +%s)
 _SESSION_ID="$$-$(date +%s)"
 echo "TELEMETRY: ${_TEL:-off}"
 echo "TEL_PROMPTED: $_TEL_PROMPTED"
-_EMAIL=$(~/.codex/skills/gstack/bin/gstack-config get email 2>/dev/null || true)
-_COMM_PROMPTED=$([ -f ~/.gstack/.community-prompted ] && echo "yes" || echo "no")
-_AUTH_OK=$(~/.codex/skills/gstack/bin/gstack-auth-refresh --check 2>/dev/null && echo "yes" || echo "no")
-echo "EMAIL: ${_EMAIL:-none}"
-echo "COMM_PROMPTED: $_COMM_PROMPTED"
-echo "AUTH: $_AUTH_OK"
 mkdir -p ~/.gstack/analytics
 echo '{"skill":"design-consultation","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
 for _PF in ~/.gstack/analytics/.pending-*; do [ -f "$_PF" ] && ~/.codex/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
@@ -65,31 +59,28 @@ Only run `open` if the user says yes. Always run `touch` to mark as seen. This o
 If `TEL_PROMPTED` is `no` AND `LAKE_INTRO` is `yes`: After the lake intro is handled,
 ask the user about telemetry. Use AskUserQuestion:
 
-> gstack can share usage data (which skills you use, how long they take, crash info)
-> to help improve the project. No code, file paths, or repo names are ever sent.
->
-> The **community tier** unlocks extra features:
-> - **Cloud backup** of your gstack config + history (restore on new machines)
-> - **Benchmarks**: see how your usage compares to other builders
-> - **Skill recommendations** based on community patterns
->
+> Help gstack get better! Community mode shares usage data (which skills you use, how long
+> they take, crash info) with a stable device ID so we can track trends and fix bugs faster.
+> No code, file paths, or repo names are ever sent.
 > Change anytime with `gstack-config set telemetry off`.
 
 Options:
-- A) Community — share data + email for backup, benchmarks & recommendations (recommended)
-- B) Anonymous — share data only, no account
-- C) No thanks
+- A) Help gstack get better! (recommended)
+- B) No thanks
 
-If A: ask for their email via a follow-up AskUserQuestion, then run:
-```bash
-~/.codex/skills/gstack/bin/gstack-config set telemetry community
-~/.codex/skills/gstack/bin/gstack-auth <user-provided-email>
-```
-The auth script will send a verification code to their email. Wait for them to enter the 6-digit code.
-If auth succeeds, continue with the skill. If it fails, fall back to anonymous tier.
+If A: run `~/.codex/skills/gstack/bin/gstack-config set telemetry community`
 
-If B: run `~/.codex/skills/gstack/bin/gstack-config set telemetry anonymous`
-If C: run `~/.codex/skills/gstack/bin/gstack-config set telemetry off`
+If B: ask a follow-up AskUserQuestion:
+
+> How about anonymous mode? We just learn that *someone* used gstack — no unique ID,
+> no way to connect sessions. Just a counter that helps us know if anyone's out there.
+
+Options:
+- A) Sure, anonymous is fine
+- B) No thanks, fully off
+
+If B→A: run `~/.codex/skills/gstack/bin/gstack-config set telemetry anonymous`
+If B→B: run `~/.codex/skills/gstack/bin/gstack-config set telemetry off`
 
 Always run:
 ```bash
@@ -97,33 +88,6 @@ touch ~/.gstack/.telemetry-prompted
 ```
 
 This only happens once. If `TEL_PROMPTED` is `yes`, skip this entirely.
-
-If `TELEMETRY` is `anonymous` AND `COMM_PROMPTED` is `no`: After the main skill workflow
-begins (not during preamble), offer the community tier upgrade once. Use AskUserQuestion:
-
-> You're already sharing anonymous usage data — nice! Want to unlock more?
->
-> The **community tier** adds:
-> - Cloud backup of your gstack config (restore on new machines)
-> - Benchmarks: see how your /qa times compare to the community
-> - Skill recommendations based on what other builders use
->
-> Just needs your email (verified via a one-time code).
-
-Options:
-- A) Yes, join community (enter email)
-- B) Not now
-
-If A: ask for their email, then run `~/.codex/skills/gstack/bin/gstack-auth <email>`.
-Wait for the verification code. On success, run `~/.codex/skills/gstack/bin/gstack-config set telemetry community`.
-If B: do nothing.
-
-Always run:
-```bash
-touch ~/.gstack/.community-prompted
-```
-
-This only happens once. If `COMM_PROMPTED` is `yes`, skip this entirely.
 
 ## AskUserQuestion Format
 
@@ -161,6 +125,26 @@ AI-assisted coding makes the marginal cost of completeness near-zero. When you p
 - BAD: "We can skip edge case handling to save time." (Edge case handling costs minutes with CC.)
 - BAD: "Let's defer test coverage to a follow-up PR." (Tests are the cheapest lake to boil.)
 - BAD: Quoting only human-team effort: "This would take 2 weeks." (Say: "2 weeks human / ~1 hour CC.")
+
+## Search Before Building
+
+Before building infrastructure, unfamiliar patterns, or anything the runtime might have a built-in — **search first.** Read `~/.codex/skills/gstack/ETHOS.md` for the full philosophy.
+
+**Three layers of knowledge:**
+- **Layer 1** (tried and true — in distribution). Don't reinvent the wheel. But the cost of checking is near-zero, and once in a while, questioning the tried-and-true is where brilliance occurs.
+- **Layer 2** (new and popular — search for these). But scrutinize: humans are subject to mania. Search results are inputs to your thinking, not answers.
+- **Layer 3** (first principles — prize these above all). Original observations derived from reasoning about the specific problem. The most valuable of all.
+
+**Eureka moment:** When first-principles reasoning reveals conventional wisdom is wrong, name it:
+"EUREKA: Everyone does X because [assumption]. But [evidence] shows this is wrong. Y is better because [reasoning]."
+
+Log eureka moments:
+```bash
+jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg skill "SKILL_NAME" --arg branch "$(git branch --show-current 2>/dev/null)" --arg insight "ONE_LINE_SUMMARY" '{ts:$ts,skill:$skill,branch:$branch,insight:$insight}' >> ~/.gstack/analytics/eureka.jsonl 2>/dev/null || true
+```
+Replace SKILL_NAME and ONE_LINE_SUMMARY. Runs inline — don't stop the workflow.
+
+**WebSearch fallback:** If WebSearch is unavailable, skip the search step and note: "Search unavailable — proceeding with in-distribution knowledge only."
 
 ## Contributor Mode
 
@@ -231,15 +215,10 @@ Determine the skill name from the `name:` field in this file's YAML frontmatter.
 Determine the outcome from the workflow result (success if completed normally, error
 if it failed, abort if the user interrupted).
 
-**For errors:** Also determine:
-- `ERROR_CLASS`: a short category — one of: `timeout`, `test_failure`, `build_failure`,
-  `git_error`, `auth_error`, `network_error`, `browse_error`, `lint_error`,
-  `merge_conflict`, `permission_error`, `unknown_error`. Pick the most specific match.
-- `ERROR_MESSAGE`: a one-line summary of what went wrong (max 200 chars). Include the
-  command that failed and the key error text. Example: `"bun test: 3 tests failed in
-  auth.test.ts — expected 200 got 401"`. Never include file paths, secrets, or PII.
-- `FAILED_STEP`: which step in the skill workflow failed. Example: `"run_tests"`,
-  `"create_pr"`, `"merge_base"`, `"build"`, `"qa_browse"`. Use snake_case, max 30 chars.
+**PLAN MODE EXCEPTION — ALWAYS RUN:** This command writes telemetry to
+`~/.gstack/analytics/` (user config directory, not project files). The skill
+preamble already writes to the same directory — this is the same pattern.
+Skipping this command loses session duration and outcome data.
 
 Run this bash:
 
@@ -249,16 +228,12 @@ _TEL_DUR=$(( _TEL_END - _TEL_START ))
 rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 ~/.codex/skills/gstack/bin/gstack-telemetry-log \
   --skill "SKILL_NAME" --duration "$_TEL_DUR" --outcome "OUTCOME" \
-  --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" \
-  --error-class "ERROR_CLASS" --error-message "ERROR_MESSAGE" \
-  --failed-step "FAILED_STEP" 2>/dev/null &
+  --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" 2>/dev/null &
 ```
 
 Replace `SKILL_NAME` with the actual skill name from frontmatter, `OUTCOME` with
 success/error/abort, and `USED_BROWSE` with true/false based on whether `$B` was used.
-For `ERROR_CLASS`, `ERROR_MESSAGE`, and `FAILED_STEP`: use empty string `""` if the
-outcome is not error. If the outcome is error but you cannot determine the details,
-use `"unknown_error"`, `""`, and `""` respectively. This runs in the background and
+If you cannot determine the outcome, use "unknown". This runs in the background and
 never blocks the user.
 
 # /design-consultation: Your Design System, Built Together
@@ -368,7 +343,12 @@ If browse is not available, rely on WebSearch results and your built-in design k
 
 **Step 3: Synthesize findings**
 
-The goal of research is NOT to copy. It is to get in the ballpark — to understand the visual language users in this category already expect. This gives you the baseline. The interesting design work starts after you have the baseline: deciding where to follow conventions (so the product feels literate) and where to break from them (so the product is memorable).
+**Three-layer synthesis:**
+- **Layer 1 (tried and true):** What design patterns does every product in this category share? These are table stakes — users expect them.
+- **Layer 2 (new and popular):** What are the search results and current design discourse saying? What's trending? What new patterns are emerging?
+- **Layer 3 (first principles):** Given what we know about THIS product's users and positioning — is there a reason the conventional design approach is wrong? Where should we deliberately break from the category norms?
+
+**Eureka check:** If Layer 3 reasoning reveals a genuine design insight — a reason the category's visual language fails THIS product — name it: "EUREKA: Every [category] product does X because they assume [assumption]. But this product's users [evidence] — so we should do Y instead." Log the eureka moment (see preamble).
 
 Summarize conversationally:
 > "I looked at what's out there. Here's the landscape: they converge on [patterns]. Most of them feel [observation — e.g., interchangeable, polished but generic, etc.]. The opportunity to stand out is [gap]. Here's where I'd play it safe and where I'd take a risk..."
