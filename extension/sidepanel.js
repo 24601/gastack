@@ -16,12 +16,68 @@ let serverUrl = null;
 let serverToken = null;
 let chatLineCount = 0;
 let chatPollInterval = null;
+let connState = 'disconnected'; // disconnected | connected | reconnecting | dead
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+const MAX_RECONNECT_ATTEMPTS = 30; // 30 * 2s = 60s before showing "dead"
 
 // Auth headers for sidebar endpoints
 function authHeaders() {
   const h = { 'Content-Type': 'application/json' };
   if (serverToken) h['Authorization'] = `Bearer ${serverToken}`;
   return h;
+}
+
+// ─── Connection State Machine ─────────────────────────────────────
+
+function setConnState(state) {
+  const prev = connState;
+  connState = state;
+  const banner = document.getElementById('conn-banner');
+  const bannerText = document.getElementById('conn-banner-text');
+  const bannerActions = document.getElementById('conn-banner-actions');
+
+  if (state === 'connected') {
+    if (prev === 'reconnecting' || prev === 'dead') {
+      // Show "reconnected" toast that fades
+      banner.style.display = '';
+      banner.className = 'conn-banner reconnected';
+      bannerText.textContent = 'Reconnected';
+      bannerActions.style.display = 'none';
+      setTimeout(() => { banner.style.display = 'none'; }, 5000);
+    } else {
+      banner.style.display = 'none';
+    }
+    reconnectAttempts = 0;
+    if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+  } else if (state === 'reconnecting') {
+    banner.style.display = '';
+    banner.className = 'conn-banner reconnecting';
+    bannerText.textContent = `Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`;
+    bannerActions.style.display = 'none';
+  } else if (state === 'dead') {
+    banner.style.display = '';
+    banner.className = 'conn-banner dead';
+    bannerText.textContent = 'Server offline';
+    bannerActions.style.display = '';
+    if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function startReconnect() {
+  if (reconnectTimer) return;
+  setConnState('reconnecting');
+  reconnectTimer = setInterval(() => {
+    reconnectAttempts++;
+    if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+      setConnState('dead');
+      return;
+    }
+    setConnState('reconnecting');
+    tryConnect();
+  }, 2000);
 }
 
 // ─── Chat ───────────────────────────────────────────────────────
@@ -451,21 +507,25 @@ async function fetchRefs() {
 // ─── Server Discovery ───────────────────────────────────────────
 
 function updateConnection(url, token) {
+  const wasConnected = !!serverUrl;
   serverUrl = url;
   serverToken = token || null;
   if (url) {
     document.getElementById('footer-dot').className = 'dot connected';
     const port = new URL(url).port;
     document.getElementById('footer-port').textContent = `:${port}`;
+    setConnState('connected');
     connectSSE();
-    // Start chat polling
     if (chatPollInterval) clearInterval(chatPollInterval);
     chatPollInterval = setInterval(pollChat, 1000);
-    pollChat();  // immediate first poll
+    pollChat();
   } else {
     document.getElementById('footer-dot').className = 'dot';
     document.getElementById('footer-port').textContent = '';
     if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
+    if (wasConnected) {
+      startReconnect();
+    }
   }
 }
 
@@ -496,6 +556,21 @@ portInput.addEventListener('blur', savePort);
 portInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') savePort();
   if (e.key === 'Escape') { portInput.style.display = 'none'; portLabel.style.display = ''; }
+});
+
+// ─── Reconnect / Copy Buttons ────────────────────────────────────
+
+document.getElementById('conn-reconnect').addEventListener('click', () => {
+  reconnectAttempts = 0;
+  startReconnect();
+});
+
+document.getElementById('conn-copy').addEventListener('click', () => {
+  navigator.clipboard.writeText('/connect-chrome').then(() => {
+    const btn = document.getElementById('conn-copy');
+    btn.textContent = 'copied!';
+    setTimeout(() => { btn.textContent = '/connect-chrome'; }, 2000);
+  });
 });
 
 // Try to connect immediately, retry every 2s until connected

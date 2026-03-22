@@ -47,6 +47,68 @@
   --radius-full: 9999px;
 }
 
+/* ─── Connection Banner ─────────────────────────────────────────── */
+
+.conn-banner {
+  padding: 6px 10px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.conn-banner.reconnecting {
+  background: rgba(245, 158, 11, 0.1);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+  color: var(--amber-400);
+}
+
+.conn-banner.dead {
+  background: rgba(239, 68, 68, 0.1);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--error);
+}
+
+.conn-banner.reconnected {
+  background: rgba(34, 197, 94, 0.1);
+  border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+  color: var(--success);
+  animation: fadeOut 3s ease forwards;
+  animation-delay: 2s;
+}
+
+@keyframes fadeOut {
+  to { opacity: 0; height: 0; padding: 0; overflow: hidden; }
+}
+
+.conn-banner-text {
+  flex: 1;
+}
+
+.conn-btn {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-label);
+  transition: all 150ms;
+}
+
+.conn-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-heading);
+}
+
+.conn-copy {
+  color: var(--text-meta);
+  font-style: italic;
+}
+
 body {
   background: var(--bg-base);
   color: var(--text-body);

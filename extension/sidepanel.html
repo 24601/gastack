@@ -5,6 +5,15 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
+  <!-- Connection status banner -->
+  <div class="conn-banner" id="conn-banner" style="display:none">
+    <span class="conn-banner-text" id="conn-banner-text">Reconnecting...</span>
+    <div class="conn-banner-actions" id="conn-banner-actions" style="display:none">
+      <button class="conn-btn" id="conn-reconnect">Reconnect</button>
+      <button class="conn-btn conn-copy" id="conn-copy" title="Copy command">/connect-chrome</button>
+    </div>
+  </div>
+
   <!-- Chat Tab (default, full height) -->
   <main id="tab-chat" class="tab-content active">
     <div class="chat-messages" id="chat-messages">
