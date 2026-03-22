@@ -81,6 +81,8 @@ gstack/
 ├── retro/           # Retrospective skill (includes /retro global cross-project mode)
 ├── bin/             # Standalone scripts (gstack-global-discover for cross-tool session discovery)
 ├── document-release/ # /document-release skill (post-ship doc updates)
+├── cso/             # /cso skill (OWASP Top 10 + STRIDE security audit)
+├── design-consultation/ # /design-consultation skill (design system from scratch)
 ├── setup-deploy/    # /setup-deploy skill (one-time deploy config)
 ├── bin/             # CLI utilities (gstack-repo-mode, gstack-slug, gstack-config, etc.)
 ├── setup            # One-time setup: build binary + symlink skills
