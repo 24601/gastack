@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.9.0] - 2026-03-22 — Global Retro: Cross-Project AI Coding Retrospective
+
+### Added
+
+- **`/retro global` — see everything you shipped across every project in one report.** Scans your Claude Code, Codex CLI, and Gemini CLI sessions, traces each back to its git repo, deduplicates by remote, then runs a full retro across all of them. Global shipping streak, context-switching metrics, per-project breakdowns, and cross-tool usage patterns. Run `/retro global 14d` for a two-week view.
+- **`gstack-global-discover` — the engine behind global retro.** Standalone discovery script that finds all AI coding sessions on your machine, resolves working directories to git repos, normalizes SSH/HTTPS remotes for dedup, and outputs structured JSON. Compiled binary ships with gstack — no `bun` runtime needed.
+
+### Fixed
+
+- **Discovery script reads only the first few KB of session files** instead of loading entire multi-MB JSONL transcripts into memory. Prevents OOM on machines with extensive coding history.
+- **Claude Code session counts are now accurate.** Previously counted all JSONL files in a project directory; now only counts files modified within the time window.
+- **Week windows (`1w`, `2w`) are now midnight-aligned** like day windows, so `/retro global 1w` and `/retro global 7d` produce consistent results.
+
 ## [0.9.8.0] - 2026-03-21 — Deploy Pipeline + E2E Performance
 
 ### Added
