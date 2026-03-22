@@ -227,6 +227,7 @@ describe('Update check preamble', () => {
     'benchmark/SKILL.md',
     'land-and-deploy/SKILL.md',
     'setup-deploy/SKILL.md',
+    'cso/SKILL.md',
   ];
 
   for (const skill of skillsWithUpdateCheck) {
@@ -543,6 +544,7 @@ describe('v0.4.1 preamble features', () => {
     'benchmark/SKILL.md',
     'land-and-deploy/SKILL.md',
     'setup-deploy/SKILL.md',
+    'cso/SKILL.md',
   ];
 
   for (const skill of skillsWithPreamble) {
@@ -821,7 +823,7 @@ describe('Completeness Principle in generated SKILL.md files', () => {
     'design-review/SKILL.md',
     'design-consultation/SKILL.md',
     'document-release/SKILL.md',
-  ];
+    'cso/SKILL.md',  ];
 
   for (const skill of skillsWithPreamble) {
     test(`${skill} contains Completeness Principle section`, () => {
