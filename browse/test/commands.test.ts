@@ -386,22 +386,22 @@ describe('Cookies and storage', () => {
   });
 
   test('storage set and get works', async () => {
-    await handleReadCommand('storage', ['set', 'testKey', 'testValue'], bm);
+    await handleReadCommand('storage', ['set', 'testData', 'testValue'], bm);
     const result = await handleReadCommand('storage', [], bm);
     const storage = JSON.parse(result);
-    expect(storage.localStorage.testKey).toBe('testValue');
+    expect(storage.localStorage.testData).toBe('testValue');
   });
 
   test('storage read redacts sensitive keys', async () => {
     await handleWriteCommand('goto', [baseUrl + '/basic.html'], bm);
     await handleReadCommand('storage', ['set', 'auth_token', 'my-secret-token'], bm);
     await handleReadCommand('storage', ['set', 'api_key', 'key-12345'], bm);
-    await handleReadCommand('storage', ['set', 'normalKey', 'normalValue'], bm);
+    await handleReadCommand('storage', ['set', 'displayName', 'normalValue'], bm);
     const result = await handleReadCommand('storage', [], bm);
     const storage = JSON.parse(result);
     expect(storage.localStorage.auth_token).toMatch(/REDACTED/);
     expect(storage.localStorage.api_key).toMatch(/REDACTED/);
-    expect(storage.localStorage.normalKey).toBe('normalValue');
+    expect(storage.localStorage.displayName).toBe('normalValue');
   });
 
   test('storage read redacts sensitive values by prefix', async () => {
