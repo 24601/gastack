@@ -162,6 +162,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'getToken') {
+    sendResponse({ token: authToken });
+    return true;
+  }
+
   if (msg.type === 'fetchRefs') {
     fetchAndRelayRefs().then(() => sendResponse({ ok: true }));
     return true;

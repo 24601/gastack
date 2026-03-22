@@ -13,8 +13,16 @@ const OBSERVE_COMMANDS = new Set(['snapshot', 'screenshot', 'diff', 'console', '
 let lastId = 0;
 let eventSource = null;
 let serverUrl = null;
+let serverToken = null;
 let chatLineCount = 0;
 let chatPollInterval = null;
+
+// Auth headers for sidebar endpoints
+function authHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (serverToken) h['Authorization'] = `Bearer ${serverToken}`;
+  return h;
+}
 
 // ─── Chat ───────────────────────────────────────────────────────
 
@@ -225,9 +233,10 @@ sendBtn.addEventListener('click', sendMessage);
 
 // Poll for new chat messages
 async function pollChat() {
-  if (!serverUrl) return;
+  if (!serverUrl || !serverToken) return;
   try {
     const resp = await fetch(`${serverUrl}/sidebar-chat?after=${chatLineCount}`, {
+      headers: authHeaders(),
       signal: AbortSignal.timeout(3000),
     });
     if (!resp.ok) return;
@@ -246,7 +255,7 @@ async function pollChat() {
 document.getElementById('clear-chat').addEventListener('click', async () => {
   if (!serverUrl) return;
   try {
-    await fetch(`${serverUrl}/sidebar-chat/clear`, { method: 'POST' });
+    await fetch(`${serverUrl}/sidebar-chat/clear`, { method: 'POST', headers: authHeaders() });
   } catch {}
   // Reset local state
   chatLineCount = 0;
@@ -441,8 +450,9 @@ async function fetchRefs() {
 
 // ─── Server Discovery ───────────────────────────────────────────
 
-function updateConnection(url) {
+function updateConnection(url, token) {
   serverUrl = url;
+  serverToken = token || null;
   if (url) {
     document.getElementById('footer-dot').className = 'dot connected';
     const port = new URL(url).port;
@@ -490,11 +500,14 @@ portInput.addEventListener('keydown', (e) => {
 
 // Try to connect immediately, retry every 2s until connected
 function tryConnect() {
-  chrome.runtime.sendMessage({ type: 'getServerUrl' }, (resp) => {
-    if (resp && resp.url) {
-      updateConnection(resp.url);
+  chrome.runtime.sendMessage({ type: 'getPort' }, (resp) => {
+    if (resp && resp.port && resp.connected) {
+      const url = `http://127.0.0.1:${resp.port}`;
+      // Get the token from background
+      chrome.runtime.sendMessage({ type: 'getToken' }, (tokenResp) => {
+        updateConnection(url, tokenResp?.token);
+      });
     } else {
-      // Retry in 2s
       setTimeout(tryConnect, 2000);
     }
   });
@@ -505,9 +518,12 @@ tryConnect();
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'health') {
-    chrome.runtime.sendMessage({ type: 'getServerUrl' }, (resp) => {
-      updateConnection(msg.data ? resp?.url : null);
-    });
+    if (msg.data) {
+      const url = `http://127.0.0.1:${msg.data.port || 34567}`;
+      updateConnection(url, msg.data.token);
+    } else {
+      updateConnection(null);
+    }
   }
   if (msg.type === 'refs') {
     if (document.querySelector('.tab[data-tab="refs"].active')) {
