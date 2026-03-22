@@ -70,7 +70,7 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'plan-eng-review-artifact':  ['plan-eng-review/**'],
 
   // Ship
-  'ship-base-branch':    ['ship/**'],
+  'ship-base-branch': ['ship/**', 'bin/gstack-repo-mode'],
   'ship-local-workflow': ['ship/**', 'scripts/gen-skill-docs.ts'],
 
   // Setup browser cookies
@@ -98,8 +98,11 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'gemini-review-findings': ['review/**', '.agents/skills/gstack-review/**', 'test/helpers/gemini-session-runner.ts'],
 
 
-  // Ship coverage audit
-  'ship-coverage-audit': ['ship/**'],
+  // Coverage audit (shared fixture) + triage
+  'ship-coverage-audit': ['ship/**', 'test/fixtures/coverage-audit-fixture.ts', 'bin/gstack-repo-mode'],
+  'review-coverage-audit': ['review/**', 'test/fixtures/coverage-audit-fixture.ts'],
+  'plan-eng-coverage-audit': ['plan-eng-review/**', 'test/fixtures/coverage-audit-fixture.ts'],
+  'ship-triage': ['ship/**', 'bin/gstack-repo-mode'],
 
   // Design
   'design-consultation-core':       ['design-consultation/**'],
@@ -118,6 +121,9 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'canary-workflow':            ['canary/**', 'browse/src/**'],
   'benchmark-workflow':         ['benchmark/**', 'browse/src/**'],
   'setup-deploy-workflow':      ['setup-deploy/**', 'scripts/gen-skill-docs.ts'],
+
+  // Autoplan
+  'autoplan-core':  ['autoplan/**', 'plan-ceo-review/**', 'plan-eng-review/**', 'plan-design-review/**'],
 
   // Skill routing — journey-stage tests (depend on ALL skill descriptions)
   'journey-ideation':       ['*/SKILL.md.tmpl', 'SKILL.md.tmpl', 'scripts/gen-skill-docs.ts'],

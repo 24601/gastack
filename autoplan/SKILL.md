@@ -1,18 +1,25 @@
 ---
-name: browse
-version: 1.1.0
+name: autoplan
+version: 1.0.0
 description: |
-  Fast headless browser for QA testing and site dogfooding. Navigate any URL, interact with
-  elements, verify page state, diff before/after actions, take annotated screenshots, check
-  responsive layouts, test forms and uploads, handle dialogs, and assert element states.
-  ~100ms per command. Use when you need to test a feature, verify a deployment, dogfood a
-  user flow, or file a bug with evidence. Use when asked to "open in browser", "test the
-  site", "take a screenshot", or "dogfood this".
+  Auto-review pipeline — reads the full CEO, design, and eng review skills from disk
+  and runs them sequentially with auto-decisions using 6 decision principles. Surfaces
+  taste decisions (close approaches, borderline scope, codex disagreements) at a final
+  approval gate. One command, fully reviewed plan out.
+  Use when asked to "auto review", "autoplan", "run all reviews", "review this plan
+  automatically", or "make the decisions for me".
+  Proactively suggest when the user has a plan file and wants to run the full review
+  gauntlet without answering 15-30 intermediate questions.
+benefits-from: [office-hours]
 allowed-tools:
   - Bash
   - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+  - WebSearch
   - AskUserQuestion
-
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -31,9 +38,6 @@ _PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null
 _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 echo "BRANCH: $_BRANCH"
 echo "PROACTIVE: $_PROACTIVE"
-source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
-REPO_MODE=${REPO_MODE:-unknown}
-echo "REPO_MODE: $REPO_MODE"
 _LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
 echo "LAKE_INTRO: $_LAKE_SEEN"
 _TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || true)
@@ -43,7 +47,7 @@ _SESSION_ID="$$-$(date +%s)"
 echo "TELEMETRY: ${_TEL:-off}"
 echo "TEL_PROMPTED: $_TEL_PROMPTED"
 mkdir -p ~/.gstack/analytics
-echo '{"skill":"browse","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
+echo '{"skill":"autoplan","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
 for _PF in ~/.gstack/analytics/.pending-*; do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
 ```
 
@@ -133,18 +137,6 @@ AI-assisted coding makes the marginal cost of completeness near-zero. When you p
 - BAD: "We can skip edge case handling to save time." (Edge case handling costs minutes with CC.)
 - BAD: "Let's defer test coverage to a follow-up PR." (Tests are the cheapest lake to boil.)
 - BAD: Quoting only human-team effort: "This would take 2 weeks." (Say: "2 weeks human / ~1 hour CC.")
-
-## Repo Ownership Mode — See Something, Say Something
-
-`REPO_MODE` from the preamble tells you who owns issues in this repo:
-
-- **`solo`** — One person does 80%+ of the work. They own everything. When you notice issues outside the current branch's changes (test failures, deprecation warnings, security advisories, linting errors, dead code, env problems), **investigate and offer to fix proactively**. The solo dev is the only person who will fix it. Default to action.
-- **`collaborative`** — Multiple active contributors. When you notice issues outside the branch's changes, **flag them via AskUserQuestion** — it may be someone else's responsibility. Default to asking, not fixing.
-- **`unknown`** — Treat as collaborative (safer default — ask before fixing).
-
-**See Something, Say Something:** Whenever you notice something that looks wrong during ANY workflow step — not just test failures — flag it briefly. One sentence: what you noticed and its impact. In solo mode, follow up with "Want me to fix it?" In collaborative mode, just flag it and move on.
-
-Never let a noticed issue silently pass. The whole point is proactive communication.
 
 ## Search Before Building
 
@@ -256,262 +248,299 @@ success/error/abort, and `USED_BROWSE` with true/false based on whether `$B` was
 If you cannot determine the outcome, use "unknown". This runs in the background and
 never blocks the user.
 
-# browse: QA Testing & Dogfooding
+## Step 0: Detect base branch
 
-Persistent headless Chromium. First call auto-starts (~3s), then ~100ms per command.
-State persists between calls (cookies, tabs, login sessions).
+Determine which branch this PR targets. Use the result as "the base branch" in all subsequent steps.
 
-## SETUP (run this check BEFORE any browse command)
+1. Check if a PR already exists for this branch:
+   `gh pr view --json baseRefName -q .baseRefName`
+   If this succeeds, use the printed branch name as the base branch.
 
-```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-B=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/browse/dist/browse" ] && B="$_ROOT/.claude/skills/gstack/browse/dist/browse"
-[ -z "$B" ] && B=~/.claude/skills/gstack/browse/dist/browse
-if [ -x "$B" ]; then
-  echo "READY: $B"
-else
-  echo "NEEDS_SETUP"
-fi
-```
+2. If no PR exists (command fails), detect the repo's default branch:
+   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
 
-If `NEEDS_SETUP`:
-1. Tell the user: "gstack browse needs a one-time build (~10 seconds). OK to proceed?" Then STOP and wait.
-2. Run: `cd <SKILL_DIR> && ./setup`
-3. If `bun` is not installed: `curl -fsSL https://bun.sh/install | bash`
+3. If both commands fail, fall back to `main`.
 
-## Core QA Patterns
+Print the detected base branch name. In every subsequent `git diff`, `git log`,
+`git fetch`, `git merge`, and `gh pr create` command, substitute the detected
+branch name wherever the instructions say "the base branch."
 
-### 1. Verify a page loads correctly
-```bash
-$B goto https://yourapp.com
-$B text                          # content loads?
-$B console                       # JS errors?
-$B network                       # failed requests?
-$B is visible ".main-content"    # key elements present?
-```
+---
 
-### 2. Test a user flow
-```bash
-$B goto https://app.com/login
-$B snapshot -i                   # see all interactive elements
-$B fill @e3 "user@test.com"
-$B fill @e4 "password"
-$B click @e5                     # submit
-$B snapshot -D                   # diff: what changed after submit?
-$B is visible ".dashboard"       # success state present?
-```
+## Prerequisite Skill Offer
 
-### 3. Verify an action worked
-```bash
-$B snapshot                      # baseline
-$B click @e3                     # do something
-$B snapshot -D                   # unified diff shows exactly what changed
-```
+When the design doc check above prints "No design doc found," offer the prerequisite
+skill before proceeding.
 
-### 4. Visual evidence for bug reports
-```bash
-$B snapshot -i -a -o /tmp/annotated.png   # labeled screenshot
-$B screenshot /tmp/bug.png                # plain screenshot
-$B console                                # error log
-```
+Say to the user via AskUserQuestion:
 
-### 5. Find all clickable elements (including non-ARIA)
-```bash
-$B snapshot -C                   # finds divs with cursor:pointer, onclick, tabindex
-$B click @c1                     # interact with them
-```
+> "No design doc found for this branch. `/office-hours` produces a structured problem
+> statement, premise challenge, and explored alternatives — it gives this review much
+> sharper input to work with. Takes about 10 minutes. The design doc is per-feature,
+> not per-product — it captures the thinking behind this specific change."
 
-### 6. Assert element states
-```bash
-$B is visible ".modal"
-$B is enabled "#submit-btn"
-$B is disabled "#submit-btn"
-$B is checked "#agree-checkbox"
-$B is editable "#name-field"
-$B is focused "#search-input"
-$B js "document.body.textContent.includes('Success')"
-```
+Options:
+- A) Run /office-hours first (in another window, then come back)
+- B) Skip — proceed with standard review
 
-### 7. Test responsive layouts
-```bash
-$B responsive /tmp/layout        # mobile + tablet + desktop screenshots
-$B viewport 375x812              # or set specific viewport
-$B screenshot /tmp/mobile.png
-```
+If they skip: "No worries — standard review. If you ever want sharper input, try
+/office-hours first next time." Then proceed normally. Do not re-offer later in the session.
 
-### 8. Test file uploads
-```bash
-$B upload "#file-input" /path/to/file.pdf
-$B is visible ".upload-success"
-```
+# /autoplan — Auto-Review Pipeline
 
-### 9. Test dialogs
-```bash
-$B dialog-accept "yes"           # set up handler
-$B click "#delete-button"        # trigger dialog
-$B dialog                        # see what appeared
-$B snapshot -D                   # verify deletion happened
-```
+One command. Rough plan in, fully reviewed plan out.
 
-### 10. Compare environments
-```bash
-$B diff https://staging.app.com https://prod.app.com
-```
+/autoplan reads the full CEO, design, and eng review skill files from disk and follows
+them at full depth — same rigor, same sections, same methodology as running each skill
+manually. The only difference: intermediate AskUserQuestion calls are auto-decided using
+the 6 principles below. Taste decisions (where reasonable people could disagree) are
+surfaced at a final approval gate.
 
-### 11. Show screenshots to the user
-After `$B screenshot`, `$B snapshot -a -o`, or `$B responsive`, always use the Read tool on the output PNG(s) so the user can see them. Without this, screenshots are invisible.
+---
 
-## User Handoff
+## The 6 Decision Principles
 
-When you hit something you can't handle in headless mode (CAPTCHA, complex auth, multi-factor
-login), hand off to the user:
+These rules auto-answer every intermediate question:
+
+1. **Choose completeness** — Ship the whole thing. Pick the approach that covers more edge cases.
+2. **Boil lakes** — Fix everything in the blast radius (files modified by this plan + direct importers). Auto-approve expansions that are in blast radius AND < 1 day CC effort (< 5 files, no new infra).
+3. **Pragmatic** — If two options fix the same thing, pick the cleaner one. 5 seconds choosing, not 5 minutes.
+4. **DRY** — Duplicates existing functionality? Reject. Reuse what exists.
+5. **Explicit over clever** — 10-line obvious fix > 200-line abstraction. Pick what a new contributor reads in 30 seconds.
+6. **Bias toward action** — Merge > review cycles > stale deliberation. Flag concerns but don't block.
+
+**Conflict resolution (context-dependent tiebreakers):**
+- **CEO phase:** P1 (completeness) + P2 (boil lakes) dominate.
+- **Eng phase:** P5 (explicit) + P3 (pragmatic) dominate.
+- **Design phase:** P5 (explicit) + P1 (completeness) dominate.
+
+---
+
+## Decision Classification
+
+Every auto-decision is classified:
+
+**Mechanical** — one clearly right answer. Auto-decide silently.
+Examples: run codex (always yes), run evals (always yes), reduce scope on a complete plan (always no).
+
+**Taste** — reasonable people could disagree. Auto-decide with recommendation, but surface at the final gate. Three natural sources:
+1. **Close approaches** — top two are both viable with different tradeoffs.
+2. **Borderline scope** — in blast radius but 3-5 files, or ambiguous radius.
+3. **Codex disagreements** — codex recommends differently and has a valid point.
+
+---
+
+## Phase 0: Intake + Restore Point
+
+### Step 1: Capture restore point
+
+Before doing anything, save the plan file's current state to an external file:
 
 ```bash
-# 1. Open a visible Chrome at the current page
-$B handoff "Stuck on CAPTCHA at login page"
-
-# 2. Tell the user what happened (via AskUserQuestion)
-#    "I've opened Chrome at the login page. Please solve the CAPTCHA
-#     and let me know when you're done."
-
-# 3. When user says "done", re-snapshot and continue
-$B resume
+source <(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null) && mkdir -p ~/.gstack/projects/$SLUG
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-')
+DATETIME=$(date +%Y%m%d-%H%M%S)
+echo "RESTORE_PATH=$HOME/.gstack/projects/$SLUG/${BRANCH}-autoplan-restore-${DATETIME}.md"
 ```
 
-**When to use handoff:**
-- CAPTCHAs or bot detection
-- Multi-factor authentication (SMS, authenticator app)
-- OAuth flows that require user interaction
-- Complex interactions the AI can't handle after 3 attempts
-
-The browser preserves all state (cookies, localStorage, tabs) across the handoff.
-After `resume`, you get a fresh snapshot of wherever the user left off.
-
-## Snapshot Flags
-
-The snapshot is your primary tool for understanding and interacting with pages.
-
+Write the plan file's full contents to the restore path with this header:
 ```
--i        --interactive           Interactive elements only (buttons, links, inputs) with @e refs
--c        --compact               Compact (no empty structural nodes)
--d <N>    --depth                 Limit tree depth (0 = root only, default: unlimited)
--s <sel>  --selector              Scope to CSS selector
--D        --diff                  Unified diff against previous snapshot (first call stores baseline)
--a        --annotate              Annotated screenshot with red overlay boxes and ref labels
--o <path> --output                Output path for annotated screenshot (default: <temp>/browse-annotated.png)
--C        --cursor-interactive    Cursor-interactive elements (@c refs — divs with pointer, onclick)
+# /autoplan Restore Point
+Captured: [timestamp] | Branch: [branch] | Commit: [short hash]
+
+## Re-run Instructions
+1. Copy "Original Plan State" below back to your plan file
+2. Invoke /autoplan
+
+## Original Plan State
+[verbatim plan file contents]
 ```
 
-All flags can be combined freely. `-o` only applies when `-a` is also used.
-Example: `$B snapshot -i -a -C -o /tmp/annotated.png`
+Then prepend a one-line HTML comment to the plan file:
+`<!-- /autoplan restore point: [RESTORE_PATH] -->`
 
-**Ref numbering:** @e refs are assigned sequentially (@e1, @e2, ...) in tree order.
-@c refs from `-C` are numbered separately (@c1, @c2, ...).
+### Step 2: Read context
 
-After snapshot, use @refs as selectors in any command:
+- Read CLAUDE.md, TODOS.md, git log -30, git diff against the base branch --stat
+- Discover design docs: `ls -t ~/.gstack/projects/$SLUG/*-design-*.md 2>/dev/null | head -1`
+- Detect UI scope: grep the plan for view/rendering terms (component, screen, form,
+  button, modal, layout, dashboard, sidebar, nav, dialog). Require 2+ matches. Exclude
+  false positives ("page" alone, "UI" in acronyms).
+
+### Step 3: Load skill files from disk
+
+Read each file using the Read tool:
+- `~/.claude/skills/gstack/plan-ceo-review/SKILL.md`
+- `~/.claude/skills/gstack/plan-design-review/SKILL.md` (only if UI scope detected)
+- `~/.claude/skills/gstack/plan-eng-review/SKILL.md`
+
+**Section skip list — when following a loaded skill file, SKIP these sections
+(they are already handled by /autoplan):**
+- Preamble (run first)
+- AskUserQuestion Format
+- Completeness Principle — Boil the Lake
+- Search Before Building
+- Contributor Mode
+- Completion Status Protocol
+- Telemetry (run last)
+- Step 0: Detect base branch
+- Review Readiness Dashboard
+- Plan File Review Report
+- Prerequisite Skill Offer (BENEFITS_FROM)
+
+Follow ONLY the review-specific methodology, sections, and required outputs.
+
+Output: "Here's what I'm working with: [plan summary]. UI scope: [yes/no].
+Loaded review skills from disk. Starting full review pipeline with auto-decisions."
+
+---
+
+## Phase 1: CEO Review (Strategy & Scope)
+
+Follow plan-ceo-review/SKILL.md — all sections, full depth.
+Override: every AskUserQuestion → auto-decide using the 6 principles.
+
+**Override rules:**
+- Mode selection: SELECTIVE EXPANSION
+- Premises: accept reasonable ones (P6), challenge only clearly wrong ones
+- **GATE: Present premises to user for confirmation** — this is the ONE AskUserQuestion
+  that is NOT auto-decided. Premises require human judgment.
+- Alternatives: pick highest completeness (P1). If tied, pick simplest (P5).
+  If top 2 are close → mark TASTE DECISION.
+- Scope expansion: in blast radius + <1d CC → approve (P2). Outside → defer to TODOS.md (P3).
+  Duplicates → reject (P4). Borderline (3-5 files) → mark TASTE DECISION.
+- All 10 review sections: run fully, auto-decide each issue, log every decision.
+
+---
+
+## Phase 2: Design Review (conditional — skip if no UI scope)
+
+Follow plan-design-review/SKILL.md — all 7 dimensions, full depth.
+Override: every AskUserQuestion → auto-decide using the 6 principles.
+
+**Override rules:**
+- Focus areas: all relevant dimensions (P1)
+- Structural issues (missing states, broken hierarchy): auto-fix (P5)
+- Aesthetic/taste issues: mark TASTE DECISION
+- Design system alignment: auto-fix if DESIGN.md exists and fix is obvious
+
+---
+
+## Phase 3: Eng Review + Codex
+
+Follow plan-eng-review/SKILL.md — all sections, full depth.
+Override: every AskUserQuestion → auto-decide using the 6 principles.
+
+**Override rules:**
+- Scope challenge: never reduce (P2)
+- Codex review: always run if available (P6)
+  Command: `codex exec "Review this plan for architectural issues, missing edge cases, and hidden complexity. Be adversarial. File: <plan_path>" -s read-only --enable web_search_cached`
+  Timeout: 10 minutes, then proceed with "Codex timed out — single-reviewer mode"
+- Architecture choices: explicit over clever (P5). If codex disagrees with valid reason → TASTE DECISION.
+- Evals: always include all relevant suites (P1)
+- Test plan: generate artifact at `~/.gstack/projects/$SLUG/{user}-{branch}-test-plan-{datetime}.md`
+- TODOS.md: collect all deferred scope expansions from Phase 1, auto-write
+
+---
+
+## Decision Audit Trail
+
+After each auto-decision, append a row to the plan file using Edit:
+
+```markdown
+<!-- AUTONOMOUS DECISION LOG -->
+## Decision Audit Trail
+
+| # | Phase | Decision | Principle | Rationale | Rejected |
+|---|-------|----------|-----------|-----------|----------|
+```
+
+Write one row per decision incrementally (via Edit). This keeps the audit on disk,
+not accumulated in conversation context.
+
+---
+
+## Phase 4: Final Approval Gate
+
+**STOP here and present the final state to the user.**
+
+Present as a message, then use AskUserQuestion:
+
+```
+## /autoplan Review Complete
+
+### Plan Summary
+[1-3 sentence summary]
+
+### Decisions Made: [N] total ([M] auto-decided, [K] choices for you)
+
+### Your Choices (taste decisions)
+[For each taste decision:]
+**Choice [N]: [title]** (from [phase])
+I recommend [X] — [principle]. But [Y] is also viable:
+  [1-sentence downstream impact if you pick Y]
+
+### Auto-Decided: [M] decisions [see Decision Audit Trail in plan file]
+
+### Review Scores
+- CEO: [summary]
+- Design: [summary or "skipped, no UI scope"]
+- Eng: [summary]
+- Codex: [summary or "unavailable"]
+
+### Deferred to TODOS.md
+[Items auto-deferred with reasons]
+```
+
+**Cognitive load management:**
+- 0 taste decisions: skip "Your Choices" section
+- 1-7 taste decisions: flat list
+- 8+: group by phase. Add warning: "This plan had unusually high ambiguity ([N] taste decisions). Review carefully."
+
+AskUserQuestion options:
+- A) Approve as-is (accept all recommendations)
+- B) Approve with overrides (specify which taste decisions to change)
+- C) Interrogate (ask about any specific decision)
+- D) Revise (the plan itself needs changes)
+- E) Reject (start over)
+
+**Option handling:**
+- A: mark APPROVED, write review logs, suggest /ship
+- B: ask which overrides, apply, re-present gate
+- C: answer freeform, re-present gate
+- D: make changes, re-run affected phases (scope→1B, design→2, test plan→3, arch→3). Max 3 cycles.
+- E: start over
+
+---
+
+## Completion: Write Review Logs
+
+On approval, write 3 separate review log entries so /ship's dashboard recognizes them:
+
 ```bash
-$B click @e3       $B fill @e4 "value"     $B hover @e1
-$B html @e2        $B css @e5 "color"      $B attrs @e6
-$B click @c1       # cursor-interactive ref (from -C)
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null)
+TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"plan-ceo-review","timestamp":"'"$TIMESTAMP"'","status":"clean","unresolved":0,"critical_gaps":0,"mode":"SELECTIVE_EXPANSION","via":"autoplan","commit":"'"$COMMIT"'"}'
+
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"plan-eng-review","timestamp":"'"$TIMESTAMP"'","status":"clean","unresolved":0,"critical_gaps":0,"issues_found":0,"mode":"FULL_REVIEW","via":"autoplan","commit":"'"$COMMIT"'"}'
 ```
 
-**Output format:** indented accessibility tree with @ref IDs, one element per line.
-```
-  @e1 [heading] "Welcome" [level=1]
-  @e2 [textbox] "Email"
-  @e3 [button] "Submit"
+If Phase 2 ran (UI scope):
+```bash
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"plan-design-review","timestamp":"'"$TIMESTAMP"'","status":"clean","unresolved":0,"via":"autoplan","commit":"'"$COMMIT"'"}'
 ```
 
-Refs are invalidated on navigation — run `snapshot` again after `goto`.
+Replace field values with actual counts from the review.
 
-## Full Command List
+Suggest next step: `/ship` when ready to create the PR.
 
-### Navigation
-| Command | Description |
-|---------|-------------|
-| `back` | History back |
-| `forward` | History forward |
-| `goto <url>` | Navigate to URL |
-| `reload` | Reload page |
-| `url` | Print current URL |
+---
 
-### Reading
-| Command | Description |
-|---------|-------------|
-| `accessibility` | Full ARIA tree |
-| `forms` | Form fields as JSON |
-| `html [selector]` | innerHTML of selector (throws if not found), or full page HTML if no selector given |
-| `links` | All links as "text → href" |
-| `text` | Cleaned page text |
+## Important Rules
 
-### Interaction
-| Command | Description |
-|---------|-------------|
-| `click <sel>` | Click element |
-| `cookie <name>=<value>` | Set cookie on current page domain |
-| `cookie-import <json>` | Import cookies from JSON file |
-| `cookie-import-browser [browser] [--domain d]` | Import cookies from Comet, Chrome, Arc, Brave, or Edge (opens picker, or use --domain for direct import) |
-| `dialog-accept [text]` | Auto-accept next alert/confirm/prompt. Optional text is sent as the prompt response |
-| `dialog-dismiss` | Auto-dismiss next dialog |
-| `fill <sel> <val>` | Fill input |
-| `header <name>:<value>` | Set custom request header (colon-separated, sensitive values auto-redacted) |
-| `hover <sel>` | Hover element |
-| `press <key>` | Press key — Enter, Tab, Escape, ArrowUp/Down/Left/Right, Backspace, Delete, Home, End, PageUp, PageDown, or modifiers like Shift+Enter |
-| `scroll [sel]` | Scroll element into view, or scroll to page bottom if no selector |
-| `select <sel> <val>` | Select dropdown option by value, label, or visible text |
-| `type <text>` | Type into focused element |
-| `upload <sel> <file> [file2...]` | Upload file(s) |
-| `useragent <string>` | Set user agent |
-| `viewport <WxH>` | Set viewport size |
-| `wait <sel|--networkidle|--load>` | Wait for element, network idle, or page load (timeout: 15s) |
-
-### Inspection
-| Command | Description |
-|---------|-------------|
-| `attrs <sel|@ref>` | Element attributes as JSON |
-| `console [--clear|--errors]` | Console messages (--errors filters to error/warning) |
-| `cookies` | All cookies as JSON |
-| `css <sel> <prop>` | Computed CSS value |
-| `dialog [--clear]` | Dialog messages |
-| `eval <file>` | Run JavaScript from file and return result as string (path must be under /tmp or cwd) |
-| `is <prop> <sel>` | State check (visible/hidden/enabled/disabled/checked/editable/focused) |
-| `js <expr>` | Run JavaScript expression and return result as string |
-| `network [--clear]` | Network requests |
-| `perf` | Page load timings |
-| `storage [set k v]` | Read all localStorage + sessionStorage as JSON, or set <key> <value> to write localStorage |
-
-### Visual
-| Command | Description |
-|---------|-------------|
-| `diff <url1> <url2>` | Text diff between pages |
-| `pdf [path]` | Save as PDF |
-| `responsive [prefix]` | Screenshots at mobile (375x812), tablet (768x1024), desktop (1280x720). Saves as {prefix}-mobile.png etc. |
-| `screenshot [--viewport] [--clip x,y,w,h] [selector|@ref] [path]` | Save screenshot (supports element crop via CSS/@ref, --clip region, --viewport) |
-
-### Snapshot
-| Command | Description |
-|---------|-------------|
-| `snapshot [flags]` | Accessibility tree with @e refs for element selection. Flags: -i interactive only, -c compact, -d N depth limit, -s sel scope, -D diff vs previous, -a annotated screenshot, -o path output, -C cursor-interactive @c refs |
-
-### Meta
-| Command | Description |
-|---------|-------------|
-| `chain` | Run commands from JSON stdin. Format: [["cmd","arg1",...],...] |
-
-### Tabs
-| Command | Description |
-|---------|-------------|
-| `closetab [id]` | Close tab |
-| `newtab [url]` | Open new tab |
-| `tab <id>` | Switch to tab |
-| `tabs` | List open tabs |
-
-### Server
-| Command | Description |
-|---------|-------------|
-| `handoff [message]` | Open visible Chrome at current page for user takeover |
-| `restart` | Restart server |
-| `resume` | Re-snapshot after user takeover, return control to AI |
-| `status` | Health check |
-| `stop` | Shutdown server |
+- **Never abort.** The user chose /autoplan. Respect that choice. Surface all taste decisions, never redirect to interactive review.
+- **Premises are the one gate.** The only non-auto-decided AskUserQuestion is the premise confirmation in Phase 1.
+- **Log every decision.** No silent auto-decisions. Every choice gets a row in the audit trail.
+- **Full depth.** Do not compress or skip sections from the loaded skill files (except the skip list in Phase 0).
+- **Sequential order.** CEO → Design → Eng. Each phase builds on the last.
