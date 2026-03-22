@@ -1,32 +1,25 @@
 # Changelog
 
-## [0.11.0.0] - 2026-03-22 — Zero-Noise Security Audits
-
-### Changed
-
-- **`/cso` now filters false positives like Anthropic's security review.** 17 hard exclusions (DOS, test files, log spoofing, SSRF path-only, regex injection, and 12 more) plus 9 established precedents (React is XSS-safe by default, env vars are trusted, client-side code doesn't need auth checks). Every finding must score 8/10+ confidence with a concrete exploit scenario — "this pattern is bad" doesn't make the cut. The result: reports with 3 real findings instead of 3 real + 12 theoretical.
-- **Independent finding verification.** Each candidate finding is verified by a fresh sub-agent that only sees the finding and the FP rules — no anchoring bias from the initial scan. Findings that fail independent verification are silently dropped.
-- **Exploit scenario requirement.** Every finding now requires a step-by-step attack path: who sends what, to where, and what they get. No more "insecure pattern detected" without a walkable attack.
-- **Framework-aware analysis.** /cso now knows that Rails has CSRF tokens, React escapes HTML, Angular sanitizes by default. It won't flag what the framework already handles.
-
-## [0.10.1.0] - 2026-03-22 — Community Security Wave
+## [0.11.0.0] - 2026-03-22 — /cso: Zero-Noise Security Audits
 
 ### Added
 
-- **`/cso` — Chief Security Officer audit.** Run `/cso` on any codebase for an OWASP Top 10 + STRIDE threat model scan. Checks injection, auth, crypto, access control, and six more categories. Each finding includes severity, evidence, and a fix. Community contribution from the HMAKT99 batch.
-- **`browse storage` now redacts secrets automatically.** Tokens, JWTs, API keys, GitHub PATs, and Bearer tokens are detected by both key name (`auth_token`, `session`, `api_key`, etc.) and value prefix (`eyJ`, `sk-`, `ghp_`, `xox`). You see `[REDACTED — 42 chars]` instead of the secret. No more accidentally pasting credentials into your conversation.
-- **Azure metadata endpoint blocked.** The existing SSRF protection for `browse goto` now also blocks `metadata.azure.internal` — closing the last cloud provider gap alongside AWS and GCP.
+- **`/cso` — your Chief Security Officer.** Full codebase security audit: OWASP Top 10, STRIDE threat modeling, attack surface mapping, data classification, and dependency scanning. Each finding includes severity, confidence score, a concrete exploit scenario, and remediation options. Not a linter — a threat model.
+- **Zero-noise false positive filtering.** 17 hard exclusions and 9 precedents adapted from Anthropic's security review methodology. DOS isn't a finding. Test files aren't attack surface. React is XSS-safe by default. Every finding must score 8/10+ confidence to make the report. The result: 3 real findings, not 3 real + 12 theoretical.
+- **Independent finding verification.** Each candidate finding is verified by a fresh sub-agent that only sees the finding and the false positive rules — no anchoring bias from the initial scan. Findings that fail independent verification are silently dropped.
+- **`browse storage` now redacts secrets automatically.** Tokens, JWTs, API keys, GitHub PATs, and Bearer tokens are detected by both key name and value prefix. You see `[REDACTED — 42 chars]` instead of the secret.
+- **Azure metadata endpoint blocked.** SSRF protection for `browse goto` now covers all three major cloud providers (AWS, GCP, Azure).
 
 ### Fixed
 
-- **`gstack-slug` hardened against shell injection.** The slug script output is now sanitized to alphanumeric, dot, dash, and underscore only. Prevents shell metacharacter injection when the output is consumed via `eval`. New test validates the character allowlist.
-- **Orphaned Chromium processes cleaned up on restart.** When the browse server restarts or loses connection, it now kills the old server process before starting a new one. No more zombie browsers accumulating.
-- **CI workflow YAML lint error fixed.** Nested mapping in compact sequence entries in `skill-docs.yml` now uses proper block syntax.
+- **`gstack-slug` hardened against shell injection.** Output sanitized to alphanumeric, dot, dash, and underscore only.
+- **Orphaned Chromium processes cleaned up on restart.** The browse server now kills the old process before starting a new one.
+- **CI workflow YAML lint error fixed.**
 
 ### For contributors
 
-- **Community PR triage process documented.** CONTRIBUTING.md now includes the wave-based triage pattern: categorize, deduplicate, collector branch, close with context, ship as one PR. References PR #205 as the original example.
-- **Storage redaction test coverage.** Four new tests verify key-based redaction, value-based prefix detection, pass-through for normal values, and length preservation in redacted output.
+- **Community PR triage process documented** in CONTRIBUTING.md.
+- **Storage redaction test coverage.** Four new tests for key-based and value-based detection.
 
 ## [0.10.0.0] - 2026-03-22 — Autoplan
 
