@@ -1,11 +1,15 @@
 # Changelog
 
-## [0.9.9.0] - 2026-03-22 — Global Retro: Cross-Project AI Coding Retrospective
+## [0.9.9.0] - 2026-03-22 — Global Retro + Harder Office Hours
 
 ### Added
 
 - **`/retro global` — see everything you shipped across every project in one report.** Scans your Claude Code, Codex CLI, and Gemini CLI sessions, traces each back to its git repo, deduplicates by remote, then runs a full retro across all of them. Global shipping streak, context-switching metrics, per-project breakdowns, and cross-tool usage patterns. Run `/retro global 14d` for a two-week view.
 - **`gstack-global-discover` — the engine behind global retro.** Standalone discovery script that finds all AI coding sessions on your machine, resolves working directories to git repos, normalizes SSH/HTTPS remotes for dedup, and outputs structured JSON. Compiled binary ships with gstack — no `bun` runtime needed.
+
+### Changed
+
+- **`/office-hours` now pushes back harder.** The diagnostic questions no longer soften toward confident founders. Five changes: hardened response posture ("direct to the point of discomfort"), anti-sycophancy rules (banned phrases like "that's an interesting approach"), 5 worked pushback patterns showing BAD vs GOOD responses, a post-Q1 framing check that challenges undefined terms and hidden assumptions, and a gated escape hatch that asks 2 more questions before letting founders skip. Inspired by user feedback comparing gstack with dontbesilent's diagnostic skill.
 
 ### Fixed
 
