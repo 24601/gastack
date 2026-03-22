@@ -176,7 +176,24 @@ Examples of good bisection:
 When the user says "bisect commit" or "bisect and push," split staged/unstaged
 changes into logical commits and push.
 
-## CHANGELOG style
+## CHANGELOG + VERSION style
+
+**VERSION and CHANGELOG are branch-scoped.** Every feature branch that ships gets its
+own version bump and CHANGELOG entry. The entry describes what THIS branch adds —
+not what was already on main.
+
+**When to write the CHANGELOG entry:**
+- At `/ship` time (Step 5), not during development or mid-branch.
+- The entry covers ALL commits on this branch vs the base branch.
+- Never fold new work into an existing CHANGELOG entry from a prior version that
+  already landed on main. If main has v0.10.0.0 and your branch adds features,
+  bump to v0.10.1.0 with a new entry — don't edit the v0.10.0.0 entry.
+
+**Key questions before writing:**
+1. What branch am I on? What did THIS branch change?
+2. Is the base branch version already released? (If yes, bump and create new entry.)
+3. Does an existing entry on this branch already cover earlier work? (If yes, replace
+   it with one unified entry for the final version.)
 
 CHANGELOG.md is **for users**, not contributors. Write it like product release notes:
 
