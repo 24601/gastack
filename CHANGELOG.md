@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.11.0.0] - 2026-03-22 — Zero-Noise Security Audits
+
+### Changed
+
+- **`/cso` now filters false positives like Anthropic's security review.** 17 hard exclusions (DOS, test files, log spoofing, SSRF path-only, regex injection, and 12 more) plus 9 established precedents (React is XSS-safe by default, env vars are trusted, client-side code doesn't need auth checks). Every finding must score 8/10+ confidence with a concrete exploit scenario — "this pattern is bad" doesn't make the cut. The result: reports with 3 real findings instead of 3 real + 12 theoretical.
+- **Independent finding verification.** Each candidate finding is verified by a fresh sub-agent that only sees the finding and the FP rules — no anchoring bias from the initial scan. Findings that fail independent verification are silently dropped.
+- **Exploit scenario requirement.** Every finding now requires a step-by-step attack path: who sends what, to where, and what they get. No more "insecure pattern detected" without a walkable attack.
+- **Framework-aware analysis.** /cso now knows that Rails has CSRF tokens, React escapes HTML, Angular sanitizes by default. It won't flag what the framework already handles.
+
 ## [0.10.1.0] - 2026-03-22 — Community Security Wave
 
 ### Added
