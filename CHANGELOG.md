@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0.0] - 2026-03-22 — Autoplan
+
+### Added
+
+- **`/autoplan` — one command, fully reviewed plan.** Hand it a rough plan and it runs the full CEO → design → eng review pipeline automatically. Reads the actual review skill files from disk (same depth, same rigor as running each review manually) and makes intermediate decisions using 6 encoded principles: completeness, boil lakes, pragmatic, DRY, explicit over clever, bias toward action. Taste decisions (close approaches, borderline scope, codex disagreements) surface at a final approval gate. You approve, override, interrogate, or revise. Saves a restore point so you can re-run from scratch. Writes review logs compatible with `/ship`'s dashboard.
+
+## [0.9.9.0] - 2026-03-21 — Harder Office Hours
+
+### Changed
+
+- **`/office-hours` now pushes back harder.** The diagnostic questions no longer soften toward confident founders. Five changes: hardened response posture ("direct to the point of discomfort"), anti-sycophancy rules (banned phrases like "that's an interesting approach"), 5 worked pushback patterns showing BAD vs GOOD responses, a post-Q1 framing check that challenges undefined terms and hidden assumptions, and a gated escape hatch that asks 2 more questions before letting founders skip. Inspired by user feedback comparing gstack with dontbesilent's diagnostic skill.
+
 ## [0.9.8.0] - 2026-03-21 — Deploy Pipeline + E2E Performance
 
 ### Added
