@@ -617,37 +617,36 @@ stats — no team data, no project breakdowns. Designed to screenshot and post.
 Use the user identity from `git config user.name` to filter all per-repo git data.
 Aggregate across all repos to compute personal totals.
 
-Render as a single visually clean block. The box must be **wide enough to fit full
-repo names** — never truncate project names. Use 80 characters inner width minimum.
-Pad repo names to the longest repo name in the list so columns align cleanly.
+Render as a single visually clean block. Left border only — no right border (LLMs
+can't align right borders reliably). Pad repo names to the longest name so columns
+align cleanly. Never truncate project names.
 
 ```
-╔════════════════════════════════════════════════════════════════════════════════════╗
-║  [USER NAME] — Week of [date]                                                     ║
-╠════════════════════════════════════════════════════════════════════════════════════╣
-║                                                                                    ║
-║  [N] commits across [M] projects                                                   ║
-║  +[X]k LOC added · [Y]k LOC deleted · [Z]k net                                    ║
-║  [N] AI coding sessions (CC: X, Codex: Y, Gemini: Z)                              ║
-║  [N]-day shipping streak 🔥                                                        ║
-║                                                                                    ║
-║  PROJECTS                                                                          ║
-║  ──────────────────────────────────────────────────────────────────────────────     ║
-║  [repo_name_full]        [N] commits    +[X]k LOC    [role: solo/team]             ║
-║  [repo_name_full]        [N] commits    +[X]k LOC    [role: solo/team]             ║
-║  [repo_name_full]        [N] commits    +[X]k LOC    [role: solo/team]             ║
-║  ...                                                                               ║
-║                                                                                    ║
-║  SHIP OF THE WEEK                                                                  ║
-║  [PR title] — [LOC] lines across [N] files                                         ║
-║                                                                                    ║
-║  TOP WORK                                                                          ║
-║  • [1-line description of biggest theme]                                           ║
-║  • [1-line description of second theme]                                            ║
-║  • [1-line description of third theme]                                             ║
-║                                                                                    ║
-║  Powered by gstack · github.com/garrytan/gstack                                   ║
-╚════════════════════════════════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════════
+║  [USER NAME] — Week of [date]
+╠═══════════════════════════════════════════════════════════════
+║
+║  [N] commits across [M] projects
+║  +[X]k LOC added · [Y]k LOC deleted · [Z]k net
+║  [N] AI coding sessions (CC: X, Codex: Y, Gemini: Z)
+║  [N]-day shipping streak 🔥
+║
+║  PROJECTS
+║  ─────────────────────────────────────────────────────────
+║  [repo_name_full]        [N] commits    +[X]k LOC    [solo/team]
+║  [repo_name_full]        [N] commits    +[X]k LOC    [solo/team]
+║  [repo_name_full]        [N] commits    +[X]k LOC    [solo/team]
+║
+║  SHIP OF THE WEEK
+║  [PR title] — [LOC] lines across [N] files
+║
+║  TOP WORK
+║  • [1-line description of biggest theme]
+║  • [1-line description of second theme]
+║  • [1-line description of third theme]
+║
+║  Powered by gstack · github.com/garrytan/gstack
+╚═══════════════════════════════════════════════════════════════
 ```
 
 **Rules for the personal card:**
