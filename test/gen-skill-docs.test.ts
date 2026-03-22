@@ -903,14 +903,40 @@ describe('setup script validation', () => {
     expect(fnBody).toContain('ln -snf "gstack/$skill_name"');
   });
 
-  test('setup supports --host auto|claude|codex', () => {
+  test('setup supports --host auto|claude|codex|kiro', () => {
     expect(setupContent).toContain('--host');
-    expect(setupContent).toContain('claude|codex|auto');
+    expect(setupContent).toContain('claude|codex|kiro|auto');
   });
 
-  test('auto mode detects claude and codex binaries', () => {
+  test('auto mode detects claude, codex, and kiro binaries', () => {
     expect(setupContent).toContain('command -v claude');
     expect(setupContent).toContain('command -v codex');
+    expect(setupContent).toContain('command -v kiro-cli');
+  });
+
+  // T1: Sidecar skip guard — prevents .agents/skills/gstack from being linked as a skill
+  test('link_codex_skill_dirs skips the gstack sidecar directory', () => {
+    const fnStart = setupContent.indexOf('link_codex_skill_dirs()');
+    const fnEnd = setupContent.indexOf('}', setupContent.indexOf('done', fnStart));
+    const fnBody = setupContent.slice(fnStart, fnEnd);
+    expect(fnBody).toContain('[ "$skill_name" = "gstack" ] && continue');
+  });
+
+  // T2: Dynamic $GSTACK_ROOT paths in generated Codex preambles
+  test('generated Codex preambles use dynamic GSTACK_ROOT paths', () => {
+    const codexSkillDir = path.join(ROOT, '.agents', 'skills', 'gstack-ship');
+    if (!fs.existsSync(codexSkillDir)) return; // skip if .agents/ not generated
+    const content = fs.readFileSync(path.join(codexSkillDir, 'SKILL.md'), 'utf-8');
+    expect(content).toContain('GSTACK_ROOT=');
+    expect(content).toContain('$GSTACK_BIN/');
+  });
+
+  // T3: Kiro host support in setup script
+  test('setup supports --host kiro with install section and sed rewrites', () => {
+    expect(setupContent).toContain('INSTALL_KIRO=');
+    expect(setupContent).toContain('kiro-cli');
+    expect(setupContent).toContain('KIRO_SKILLS=');
+    expect(setupContent).toContain('~/.kiro/skills/gstack');
   });
 
   test('create_agents_sidecar links runtime assets', () => {
