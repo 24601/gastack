@@ -265,34 +265,33 @@ export async function handleMetaCommand(
       return `RESUMED\n${snapshot}`;
     }
 
-    // ─── CDP Connect ────────────────────────────────────
+    // ─── Headed Mode ──────────────────────────────────────
     case 'connect': {
       // connect is handled as a pre-server command in cli.ts
       // If we get here, server is already running — tell the user
-      if (bm.getConnectionMode() === 'cdp') {
-        return 'Already connected to real browser via CDP.';
+      if (bm.getConnectionMode() === 'headed') {
+        return 'Already in headed mode with extension.';
       }
-      return 'The connect command must be run from the CLI (not sent to a running server). Run: $B connect [browser]';
+      return 'The connect command must be run from the CLI (not sent to a running server). Run: $B connect';
     }
 
     case 'disconnect': {
-      if (bm.getConnectionMode() !== 'cdp') {
-        return 'Not in CDP mode — nothing to disconnect.';
+      if (bm.getConnectionMode() !== 'headed') {
+        return 'Not in headed mode — nothing to disconnect.';
       }
       // Signal that we want a restart in headless mode
-      console.log('[browse] Disconnecting from real browser. Restarting in headless mode.');
+      console.log('[browse] Disconnecting headed browser. Restarting in headless mode.');
       await shutdown();
-      return 'Disconnected from real browser. Server will restart in headless mode on next command.';
+      return 'Disconnected. Server will restart in headless mode on next command.';
     }
 
     case 'focus': {
-      if (bm.getConnectionMode() !== 'cdp') {
-        return 'focus requires CDP mode. Run `$B connect` first.';
+      if (bm.getConnectionMode() !== 'headed') {
+        return 'focus requires headed mode. Run `$B connect` first.';
       }
       try {
         const { execSync } = await import('child_process');
-        // Detect which browser we're connected to from the CDP info
-        // For now, try common app names
+        // Try common Chromium-based browser app names to bring to foreground
         const appNames = ['Comet', 'Google Chrome', 'Arc', 'Brave Browser', 'Microsoft Edge'];
         let activated = false;
         for (const appName of appNames) {

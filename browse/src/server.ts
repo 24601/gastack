@@ -744,12 +744,11 @@ async function start() {
 
   const port = await findPort();
 
-  // Launch browser (headless or real Chrome)
-  const cdpUrl = process.env.BROWSE_CDP_URL;
-  const cdpPort = parseInt(process.env.BROWSE_CDP_PORT || '0', 10);
-  if (cdpUrl) {
-    await browserManager.connectCDP(cdpUrl, cdpPort);
-    console.log(`[browse] Launched real Chrome browser (headed)`);
+  // Launch browser (headless or headed with extension)
+  const headed = process.env.BROWSE_HEADED === '1';
+  if (headed) {
+    await browserManager.launchHeaded();
+    console.log(`[browse] Launched headed Chromium with extension`);
   } else {
     await browserManager.launch();
   }
@@ -1068,7 +1067,6 @@ async function start() {
     serverPath: path.resolve(import.meta.dir, 'server.ts'),
     binaryVersion: readVersionHash() || undefined,
     mode: browserManager.getConnectionMode(),
-    ...(cdpPort ? { cdpPort } : {}),
   };
   const tmpFile = config.stateFile + '.tmp';
   fs.writeFileSync(tmpFile, JSON.stringify(state, null, 2), { mode: 0o600 });

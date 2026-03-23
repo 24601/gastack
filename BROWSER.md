@@ -71,7 +71,6 @@ browse/
 │   ├── cookie-import-browser.ts  # Decrypt + import cookies from real Chromium browsers
 │   ├── cookie-picker-routes.ts   # HTTP routes for interactive cookie picker UI
 │   ├── cookie-picker-ui.ts       # Self-contained HTML/CSS/JS for cookie picker
-│   ├── chrome-launcher.ts  # Browser discovery, CDP probe, runtime detection
 │   ├── activity.ts         # Activity streaming (SSE) for Chrome extension
 │   └── buffers.ts          # CircularBuffer<T> + console/network/dialog capture
 ├── test/                   # Integration tests + HTML fixtures
@@ -346,7 +345,6 @@ Tests spin up a local HTTP server (`browse/test/test-server.ts`) serving HTML fi
 | `browse/src/cookie-import-browser.ts` | Decrypt Chromium cookies via macOS Keychain + PBKDF2/AES-128-CBC. Auto-detects installed browsers. |
 | `browse/src/cookie-picker-routes.ts` | HTTP routes for `/cookie-picker/*` — browser list, domain search, import, remove. |
 | `browse/src/cookie-picker-ui.ts` | Self-contained HTML generator for the interactive cookie picker (dark theme, no frameworks). |
-| `browse/src/chrome-launcher.ts` | Browser binary discovery, CDP port probe, runtime detection (Conductor/Claude Code/Codex/terminal). |
 | `browse/src/activity.ts` | Activity streaming — `ActivityEntry` type, `CircularBuffer`, privacy filtering, SSE subscriber management. |
 | `browse/src/buffers.ts` | `CircularBuffer<T>` (O(1) ring buffer) + console/network/dialog capture with async disk flush. |
 

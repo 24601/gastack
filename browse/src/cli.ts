@@ -83,8 +83,7 @@ interface ServerState {
   startedAt: string;
   serverPath: string;
   binaryVersion?: string;
-  mode?: 'launched' | 'cdp';
-  cdpPort?: number;
+  mode?: 'launched' | 'headed';
 }
 
 // ─── State File ────────────────────────────────────────────────
@@ -236,11 +235,11 @@ async function ensureServer(): Promise<ServerState> {
     }
   }
 
-  // Guard: never silently replace a CDP server with a headless one.
-  // CDP mode means a user-visible Chrome window is (or was) controlled.
+  // Guard: never silently replace a headed server with a headless one.
+  // Headed mode means a user-visible Chrome window is (or was) controlled.
   // Silently replacing it would be confusing — tell the user to reconnect.
-  if (state && state.mode === 'cdp' && isProcessAlive(state.pid)) {
-    console.error(`[browse] CDP server running (PID ${state.pid}) but not responding.`);
+  if (state && state.mode === 'headed' && isProcessAlive(state.pid)) {
+    console.error(`[browse] Headed server running (PID ${state.pid}) but not responding.`);
     console.error(`[browse] Run '$B connect' to restart.`);
     process.exit(1);
   }
@@ -353,23 +352,23 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
   const command = args[0];
   const commandArgs = args.slice(1);
 
-  // ─── CDP Connect (pre-server command) ───────────────────────
+  // ─── Headed Connect (pre-server command) ────────────────────
   // connect must be handled BEFORE ensureServer() because it needs
-  // to restart the server with real Chrome via Playwright channel:chrome.
+  // to restart the server in headed mode with the Chrome extension.
   if (command === 'connect') {
-    // Check if already in CDP mode and healthy
+    // Check if already in headed mode and healthy
     const existingState = readState();
-    if (existingState && existingState.mode === 'cdp' && isProcessAlive(existingState.pid)) {
+    if (existingState && existingState.mode === 'headed' && isProcessAlive(existingState.pid)) {
       try {
         const resp = await fetch(`http://127.0.0.1:${existingState.port}/health`, {
           signal: AbortSignal.timeout(2000),
         });
         if (resp.ok) {
-          console.log('Already connected to real browser.');
+          console.log('Already connected in headed mode.');
           process.exit(0);
         }
       } catch {
-        // CDP server alive but not responding — kill and restart
+        // Headed server alive but not responding — kill and restart
       }
     }
 
@@ -392,13 +391,12 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
     // Delete stale state file
     try { fs.unlinkSync(config.stateFile); } catch {}
 
-    console.log('Launching real Chrome browser...');
+    console.log('Launching headed Chromium with extension...');
     try {
-      // Start server with CDP flag — server.ts will use channel:chrome
+      // Start server in headed mode with extension auto-loaded
       // Use a well-known port so the Chrome extension auto-connects
       const newState = await startServer({
-        BROWSE_CDP_URL: 'channel:chrome',
-        BROWSE_CDP_PORT: '0',
+        BROWSE_HEADED: '1',
         BROWSE_PORT: '34567',
       });
 
@@ -446,13 +444,13 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
     process.exit(0);
   }
 
-  // ─── CDP Disconnect (pre-server command) ──────────────────
-  // disconnect must be handled BEFORE ensureServer() because the CDP
+  // ─── Headed Disconnect (pre-server command) ─────────────────
+  // disconnect must be handled BEFORE ensureServer() because the headed
   // guard blocks all commands when the server is unresponsive.
   if (command === 'disconnect') {
     const existingState = readState();
-    if (!existingState || existingState.mode !== 'cdp') {
-      console.log('Not in CDP mode — nothing to disconnect.');
+    if (!existingState || existingState.mode !== 'headed') {
+      console.log('Not in headed mode — nothing to disconnect.');
       process.exit(0);
     }
     // Try graceful shutdown via server

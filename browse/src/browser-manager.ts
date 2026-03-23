@@ -61,14 +61,11 @@ export class BrowserManager {
   private isHeaded: boolean = false;
   private consecutiveFailures: number = 0;
 
-  // ─── CDP State ────────────────────────────────────────────
-  private connectionMode: 'launched' | 'cdp' = 'launched';
-  private preExistingTabIds: Set<number> = new Set();
-  private cdpPort: number = 0;
+  // ─── Headed State ────────────────────────────────────────
+  private connectionMode: 'launched' | 'headed' = 'launched';
   private intentionalDisconnect = false;
-  private reconnecting = false;
 
-  getConnectionMode(): 'launched' | 'cdp' { return this.connectionMode; }
+  getConnectionMode(): 'launched' | 'headed' { return this.connectionMode; }
 
   /**
    * Find the gstack Chrome extension directory.
@@ -140,21 +137,19 @@ export class BrowserManager {
     await this.newTab();
   }
 
-  // ─── CDP Connect ────────────────────────────────────────────
+  // ─── Headed Mode ─────────────────────────────────────────────
   /**
-   * Launch the user's real Chrome browser via Playwright's channel: 'chrome'.
-   *
-   * Uses Playwright's native pipe protocol (not CDP WebSocket) to control
-   * the system Chrome binary. This avoids CDP protocol version mismatches
-   * between Playwright and recent Chrome versions.
+   * Launch Playwright's bundled Chromium in headed mode with the gstack
+   * Chrome extension auto-loaded. Uses launchPersistentContext() which
+   * is required for extension loading (launch() + newContext() can't
+   * load extensions).
    *
    * The browser launches headed with a visible window — the user sees
    * every action Claude takes in real time.
    */
-  async connectCDP(_wsUrl: string, _port: number): Promise<void> {
-    // Clear old state before repopulating (safe for reconnect)
+  async launchHeaded(): Promise<void> {
+    // Clear old state before repopulating
     this.pages.clear();
-    this.preExistingTabIds.clear();
     this.refMap.clear();
     this.nextTabId = 1;
 
@@ -186,7 +181,7 @@ export class BrowserManager {
       ],
     });
     this.browser = this.context.browser();
-    this.connectionMode = 'cdp';
+    this.connectionMode = 'headed';
     this.intentionalDisconnect = false;
 
     // Inject visual indicator — subtle top-edge amber gradient
@@ -252,46 +247,16 @@ export class BrowserManager {
       });
     }
 
-    // CDP-specific defaults
+    // Headed mode defaults
     this.dialogAutoAccept = false;  // Don't dismiss user's real dialogs
     this.isHeaded = true;
     this.consecutiveFailures = 0;
   }
 
-  /**
-   * Auto-reconnect after unexpected CDP disconnect (e.g., browser restart).
-   * Non-blocking recursive setTimeout — never overlaps or blocks commands.
-   */
-  private async attemptReconnect(remaining = 60): Promise<void> {
-    if (remaining <= 0 || this.reconnecting || this.intentionalDisconnect) {
-      if (remaining <= 0) {
-        console.log('[browse] CDP reconnect failed after 5 minutes. Run `$B connect` to reconnect.');
-      }
-      return;
-    }
-
-    this.reconnecting = true;
-    try {
-      const { isCdpAvailable } = await import('./chrome-launcher');
-      const result = await isCdpAvailable(this.cdpPort);
-      if (result.available && result.wsUrl) {
-        await this.connectCDP(result.wsUrl, this.cdpPort);
-        console.log('[browse] Reconnected to real browser');
-        return;
-      }
-    } catch {
-      // Probe failed — try again
-    } finally {
-      this.reconnecting = false;
-    }
-
-    setTimeout(() => this.attemptReconnect(remaining - 1), 5000);
-  }
-
   async close() {
-    if (this.browser || (this.connectionMode === 'cdp' && this.context)) {
-      if (this.connectionMode === 'cdp') {
-        // CDP/persistent context mode: close the context (which closes the browser)
+    if (this.browser || (this.connectionMode === 'headed' && this.context)) {
+      if (this.connectionMode === 'headed') {
+        // Headed/persistent context mode: close the context (which closes the browser)
         this.intentionalDisconnect = true;
         if (this.browser) this.browser.removeAllListeners('disconnected');
         await Promise.race([
@@ -354,11 +319,6 @@ export class BrowserManager {
     const tabId = id ?? this.activeTabId;
     const page = this.pages.get(tabId);
     if (!page) throw new Error(`Tab ${tabId} not found`);
-
-    // CDP mode: block closing pre-existing user tabs
-    if (this.connectionMode === 'cdp' && this.preExistingTabIds.has(tabId)) {
-      throw new Error("Cannot close user's pre-existing tab in real-browser mode. Only tabs created by gstack can be closed.");
-    }
 
     await page.close();
     this.pages.delete(tabId);
@@ -599,8 +559,8 @@ export class BrowserManager {
    * Falls back to a clean slate on any failure.
    */
   async recreateContext(): Promise<string | null> {
-    if (this.connectionMode === 'cdp') {
-      throw new Error('Cannot recreate context in real-browser mode. The browser context belongs to the user.');
+    if (this.connectionMode === 'headed') {
+      throw new Error('Cannot recreate context in headed mode. Use disconnect first.');
     }
     if (!this.browser || !this.context) {
       throw new Error('Browser not launched');
@@ -668,10 +628,7 @@ export class BrowserManager {
    *   If step 2 fails → return error, headless browser untouched
    */
   async handoff(message: string): Promise<string> {
-    if (this.connectionMode === 'cdp') {
-      return 'Already controlling real browser via CDP. No handoff needed.';
-    }
-    if (this.isHeaded) {
+    if (this.connectionMode === 'headed' || this.isHeaded) {
       return `HANDOFF: Already in headed mode at ${this.getCurrentUrl()}`;
     }
     if (!this.browser || !this.context) {
