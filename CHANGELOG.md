@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.6.0] - 2026-03-23 — CI Evals on Ubicloud
+
+### Added
+
+- **E2E evals now run in CI on every PR.** GitHub Actions workflow on Ubicloud runners ($0.006/run — 10x cheaper than GitHub standard). Uploads eval JSON as artifact, posts pass/fail + cost as a PR comment. Downloads previous eval from main for comparison.
+- **3x faster eval runs.** All E2E tests now run concurrently within files (`testConcurrentIfSelected`). Wall clock drops from ~18min to ~6min — limited by the longest single test, not the sequential sum.
+
+### Changed
+
+- **EVALS_CONCURRENCY default stays at 15 locally**, but CI uses 40 for maximum parallelism.
+- **"GitHub Actions eval upload" TODO marked complete** — the P2 item from TODOS.md is now shipped.
+
 ## [0.11.5.2] - 2026-03-22 — Outside Voice
 
 ### Added
