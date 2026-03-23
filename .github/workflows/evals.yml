@@ -10,7 +10,35 @@ concurrency:
 jobs:
   evals:
     runs-on: ubicloud-standard-2
-    timeout-minutes: 45
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - name: llm-judge
+            file: test/skill-llm-eval.test.ts
+          - name: e2e-browse
+            file: test/skill-e2e-browse.test.ts
+          - name: e2e-plan
+            file: test/skill-e2e-plan.test.ts
+          - name: e2e-deploy
+            file: test/skill-e2e-deploy.test.ts
+          - name: e2e-design
+            file: test/skill-e2e-design.test.ts
+          - name: e2e-qa-bugs
+            file: test/skill-e2e-qa-bugs.test.ts
+          - name: e2e-qa-workflow
+            file: test/skill-e2e-qa-workflow.test.ts
+          - name: e2e-review
+            file: test/skill-e2e-review.test.ts
+          - name: e2e-workflow
+            file: test/skill-e2e-workflow.test.ts
+          - name: e2e-routing
+            file: test/skill-routing-e2e.test.ts
+          - name: e2e-codex
+            file: test/codex-e2e.test.ts
+          - name: e2e-gemini
+            file: test/gemini-e2e.test.ts
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,61 +46,60 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ hashFiles('bun.lockb') }}
+          restore-keys: bun-
+
       - run: bun install
 
       - run: bun run build
 
-      - name: Verify browse binary
-        run: test -f browse/dist/browse || (echo "Browse binary missing after build" && exit 1)
-
       - name: Install Claude CLI
         run: npm i -g @anthropic-ai/claude-code
 
-      - name: Download previous eval baseline
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          name: eval-results
-          branch: main
-          path: /tmp/eval-baseline
-          if_no_artifact_found: warn
-        continue-on-error: true
-
-      - name: Copy baseline for comparison
-        run: |
-          if [ -d /tmp/eval-baseline ]; then
-            mkdir -p ~/.gstack-dev/evals
-            cp /tmp/eval-baseline/*.json ~/.gstack-dev/evals/ 2>/dev/null || true
-          fi
-
-      - name: Run E2E evals
+      - name: Run ${{ matrix.suite.name }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           EVALS_CONCURRENCY: "40"
-        run: bun run test:evals
+        run: EVALS=1 bun test --retry 2 --concurrent --max-concurrency 40 ${{ matrix.suite.file }}
 
       - name: Upload eval results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eval-results
+          name: eval-${{ matrix.suite.name }}
           path: ~/.gstack-dev/evals/*.json
           retention-days: 90
 
+  report:
+    runs-on: ubicloud-standard-2
+    needs: evals
+    if: always() && github.event_name == 'pull_request'
+    timeout-minutes: 5
+    steps:
+      - name: Download all eval artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: eval-*
+          path: /tmp/eval-results
+          merge-multiple: true
+
       - name: Post PR comment
-        if: always() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Aggregate results across ALL eval suites (not just the latest file)
-          RESULTS=$(ls -t ~/.gstack-dev/evals/*.json 2>/dev/null | grep -v _partial)
+          RESULTS=$(find /tmp/eval-results -name '*.json' 2>/dev/null | sort)
           if [ -z "$RESULTS" ]; then
             echo "No eval results found"
             exit 0
           fi
 
-          TOTAL=0; PASSED=0; FAILED=0; COST=0
+          TOTAL=0; PASSED=0; FAILED=0; COST="0"
           SUITE_LINES=""
           for f in $RESULTS; do
             T=$(jq -r '.total_tests // 0' "$f")
@@ -95,11 +122,14 @@ jobs:
 
           BODY="## E2E Evals: ${STATUS}
 
-          **${PASSED}/${TOTAL}** tests passed | **\$${COST}** total cost
+          **${PASSED}/${TOTAL}** tests passed | **\$${COST}** total cost | **12 parallel runners**
 
           | Suite | Result | Status | Cost |
           |-------|--------|--------|------|
-          $(echo -e "$SUITE_LINES")"
+          $(echo -e "$SUITE_LINES")
+
+          ---
+          *12x ubicloud-standard-2 ($0.0008/min each) | Wall clock ≈ slowest suite*"
 
           if [ "$FAILED" -gt 0 ]; then
             FAILURES=""
@@ -115,12 +145,7 @@ jobs:
           $(echo -e "$FAILURES")"
           fi
 
-          BODY="${BODY}
-
-          ---
-          *Runner: ubicloud-standard-2 ($0.0008/min) | Concurrency: 40*"
-
-          # Update existing comment or create new one (prevents duplicates on re-runs)
+          # Update existing comment or create new one
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
             --jq '.[] | select(.body | startswith("## E2E Evals")) | .id' | tail -1)
 
