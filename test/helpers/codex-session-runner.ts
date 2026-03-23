@@ -143,6 +143,7 @@ export async function runCodexSkill(opts: {
   cwd?: string;             // Working directory
   skillName?: string;       // Skill name for installation (default: dirname)
   sandbox?: string;         // Sandbox mode (default: 'read-only')
+  existingHome?: string;    // Pre-populated temp HOME (skips installSkillToTempHome)
 }): Promise<CodexResult> {
   const {
     skillDir,
@@ -151,6 +152,7 @@ export async function runCodexSkill(opts: {
     cwd,
     skillName,
     sandbox = 'read-only',
+    existingHome,
   } = opts;
 
   const startTime = Date.now();
@@ -172,12 +174,15 @@ export async function runCodexSkill(opts: {
     };
   }
 
-  // Set up temp HOME with skill installed
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-e2e-'));
+  // Set up temp HOME with skill installed (or use pre-populated one)
+  const ownedHome = !existingHome;
+  const tempHome = existingHome || fs.mkdtempSync(path.join(os.tmpdir(), 'codex-e2e-'));
   const realHome = os.homedir();
 
   try {
-    installSkillToTempHome(skillDir, name, tempHome);
+    if (ownedHome) {
+      installSkillToTempHome(skillDir, name, tempHome);
+    }
 
     // Symlink real Codex auth config so codex can authenticate from temp HOME.
     // Codex stores auth in ~/.codex/ — we need the config but not the skills
@@ -287,7 +292,9 @@ export async function runCodexSkill(opts: {
       stderr,
     };
   } finally {
-    // Clean up temp HOME
-    try { fs.rmSync(tempHome, { recursive: true, force: true }); } catch { /* non-fatal */ }
+    // Clean up temp HOME (only if we created it)
+    if (ownedHome) {
+      try { fs.rmSync(tempHome, { recursive: true, force: true }); } catch { /* non-fatal */ }
+    }
   }
 }

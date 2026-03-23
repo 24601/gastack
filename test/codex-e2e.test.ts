@@ -120,15 +120,36 @@ afterAll(async () => {
 describeCodex('Codex E2E', () => {
 
   testIfSelected('codex-discover-skill', async () => {
-    // Install gstack-review skill to a temp HOME and ask Codex to list skills
-    const skillDir = path.join(ROOT, '.agents', 'skills', 'gstack-review');
+    // ── Pre-flight: verify .agents/ has both SKILL.md and openai.yaml ──
+    const agentsDir = path.join(ROOT, '.agents', 'skills');
+    const skillDirs = fs.existsSync(agentsDir)
+      ? fs.readdirSync(agentsDir, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name)
+      : [];
+    expect(skillDirs.length).toBeGreaterThan(0); // .agents/ must be generated
+
+    const missingSkillMd: string[] = [];
+    const missingYaml: string[] = [];
+    for (const dir of skillDirs) {
+      if (!fs.existsSync(path.join(agentsDir, dir, 'SKILL.md'))) missingSkillMd.push(dir);
+      if (!fs.existsSync(path.join(agentsDir, dir, 'agents', 'openai.yaml'))) missingYaml.push(dir);
+    }
+    expect(missingSkillMd).toEqual([]); // Every skill dir must have SKILL.md
+    expect(missingYaml).toEqual([]);    // Every skill dir must have agents/openai.yaml
+
+    // ── Install ALL skills to temp HOME (like a real install) ──
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-e2e-all-'));
+    try {
+    for (const dir of skillDirs) {
+      installSkillToTempHome(path.join(agentsDir, dir), dir, tempHome);
+    }
 
     const result = await runCodexSkill({
-      skillDir,
-      prompt: 'List any skills or instructions you have available. Just list the names.',
-      timeoutMs: 60_000,
+      skillDir: path.join(agentsDir, 'gstack-review'),
+      prompt: 'List all skills or instructions you have available. List every skill name, one per line.',
+      timeoutMs: 120_000,
       cwd: ROOT,
       skillName: 'gstack-review',
+      existingHome: tempHome,
     });
 
     logCodexCost('codex-discover-skill', result);
@@ -139,14 +160,21 @@ describeCodex('Codex E2E', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.output.length).toBeGreaterThan(0);
-    // Skill loading errors mean our generated SKILL.md files are broken
-    expect(result.stderr).not.toContain('invalid');
+
+    // No skill loading warnings or errors in stderr
+    // (Codex CLI may emit its own PATH warnings in temp HOME — ignore those)
+    expect(result.stderr).not.toContain('invalid SKILL.md');
     expect(result.stderr).not.toContain('Skipped loading');
-    // The output should reference the skill name in some form
+    expect(result.stderr).not.toContain('invalid skill');
+
+    // The output should reference skills by name
     const outputLower = result.output.toLowerCase();
     expect(
       outputLower.includes('review') || outputLower.includes('gstack') || outputLower.includes('skill'),
     ).toBe(true);
+    } finally {
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
   }, 120_000);
 
   // Validates that Codex can invoke the gstack-review skill, run a diff-based
