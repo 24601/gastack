@@ -6,7 +6,7 @@ ALTER TABLE telemetry_events ADD COLUMN error_message TEXT;
 ALTER TABLE telemetry_events ADD COLUMN failed_step TEXT;
 
 -- Add columns to installations for backup + email + auth identity
-ALTER TABLE installations ADD COLUMN user_id UUID;
+ALTER TABLE installations ADD COLUMN user_id UUID UNIQUE;
 ALTER TABLE installations ADD COLUMN email TEXT;
 ALTER TABLE installations ADD COLUMN config_snapshot JSONB;
 ALTER TABLE installations ADD COLUMN analytics_snapshot JSONB;

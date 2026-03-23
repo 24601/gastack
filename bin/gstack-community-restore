@@ -110,8 +110,8 @@ if [ -n "$ANALYTICS_DATA" ] && [ "$ANALYTICS_DATA" != "null" ] && [ "$ANALYTICS_
     if [ "$DRY_RUN" = "false" ]; then
       mkdir -p "$ANALYTICS_DIR"
       # Extract recent_events array and write as JSONL
-      # This is a simplified restore — recent events from backup become local history
-      echo "  Restoring recent events from backup..."
+      echo "$ANALYTICS_DATA" | jq -r '.recent_events[] | tojson' > "$JSONL_FILE" 2>/dev/null
+      echo "  Restored $(wc -l < "$JSONL_FILE" | tr -d ' ') recent events from backup."
     fi
   fi
   echo ""
@@ -123,7 +123,15 @@ RETRO_DATA="$(echo "$BACKUP" | grep -o '"retro_history":\[.*\]' | sed 's/"retro_
 if [ -n "$RETRO_DATA" ] && [ "$RETRO_DATA" != "null" ] && [ "$RETRO_DATA" != "[]" ]; then
   echo "Retro history found in backup."
   if [ "$DRY_RUN" = "false" ]; then
-    echo "  Retro history will be merged with local data."
+    # Merge: each retro in the array is a JSON object. Write as retro-restored-N.json
+    echo "$RETRO_DATA" | jq -c '.[]' | while read -r RETRO; do
+      [ -z "$RETRO" ] && continue
+      TS="$(echo "$RETRO" | jq -r .ts 2>/dev/null | tr -d ':-')"
+      [ -z "$TS" ] && TS="$(date +%s)"
+      RNAME="retro-restored-${TS}-$RANDOM.json"
+      echo "$RETRO" > "$STATE_DIR/$RNAME"
+    done
+    echo "  Retro history merged with local data ($(echo "$RETRO_DATA" | jq 'length') entries restored)."
   fi
   echo ""
 fi

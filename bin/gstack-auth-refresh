@@ -29,7 +29,7 @@ AUTH_URL="${SUPABASE_URL}/auth/v1"
 json_field() {
   local json="$1"
   local field="$2"
-  echo "$json" | grep -o "\"${field}\":[^,}]*" | head -1 | sed "s/\"${field}\"://;s/\"//g;s/ //g"
+  echo "$json" | jq -r ".${field}" 2>/dev/null | sed 's/null//'
 }
 
 # ─── Check auth file exists ─────────────────────────────────

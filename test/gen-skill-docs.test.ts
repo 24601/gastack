@@ -1391,7 +1391,7 @@ describe('telemetry', () => {
   test('generated SKILL.md contains telemetry opt-in prompt', () => {
     const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
     expect(content).toContain('.telemetry-prompted');
-    expect(content).toContain('Help gstack get better');
+    expect(content).toContain('gstack can share usage data');
     expect(content).toContain('gstack-config set telemetry community');
     expect(content).toContain('gstack-config set telemetry anonymous');
     expect(content).toContain('gstack-config set telemetry off');

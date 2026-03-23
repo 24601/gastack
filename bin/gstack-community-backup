@@ -56,16 +56,9 @@ EMAIL="$(echo "$AUTH_JSON" | grep -o '"email":"[^"]*"' | head -1 | sed 's/"email
 # ─── Build config snapshot ───────────────────────────────────
 CONFIG_SNAPSHOT="{}"
 if [ -f "$STATE_DIR/config.yaml" ]; then
-  # Convert YAML-like config to JSON
-  CONFIG_SNAPSHOT="{"
-  FIRST=true
-  while IFS=': ' read -r KEY VALUE; do
-    [ -z "$KEY" ] && continue
-    [ -z "$VALUE" ] && continue
-    if [ "$FIRST" = "true" ]; then FIRST=false; else CONFIG_SNAPSHOT="$CONFIG_SNAPSHOT,"; fi
-    CONFIG_SNAPSHOT="$CONFIG_SNAPSHOT\"$KEY\":\"$VALUE\""
-  done < "$STATE_DIR/config.yaml"
-  CONFIG_SNAPSHOT="$CONFIG_SNAPSHOT}"
+  # Convert YAML-like config to JSON safely using jq
+  CONFIG_SNAPSHOT="$(grep -v '^#' "$STATE_DIR/config.yaml" | grep ':' | \
+    jq -R 'split(": ") | {(.[0]): .[1]}' | jq -s 'add' || echo "{}")"
 fi
 
 # ─── Build analytics summary ────────────────────────────────
@@ -73,23 +66,18 @@ fi
 ANALYTICS_SNAPSHOT="{\"skills\":{},\"recent_events\":[]}"
 if [ -f "$JSONL_FILE" ]; then
   # Count per-skill totals
-  SKILL_COUNTS="$(grep -o '"skill":"[^"]*"' "$JSONL_FILE" 2>/dev/null | awk -F'"' '{print $4}' | sort | uniq -c | sort -rn | head -20)"
-
-  SKILLS_JSON="{"
-  FIRST=true
-  while read -r COUNT SKILL; do
-    [ -z "$SKILL" ] && continue
-    if [ "$FIRST" = "true" ]; then FIRST=false; else SKILLS_JSON="$SKILLS_JSON,"; fi
-    SKILLS_JSON="$SKILLS_JSON\"$SKILL\":{\"total_runs\":$COUNT}"
-  done <<< "$SKILL_COUNTS"
-  SKILLS_JSON="$SKILLS_JSON}"
+  SKILL_COUNTS_JSON="$(grep -o '"skill":"[^"]*"' "$JSONL_FILE" 2>/dev/null | \
+    awk -F'"' '{print $4}' | sort | uniq -c | sort -rn | head -20 | \
+    jq -R 'capture("\\s+(?<count>\\d+)\\s+(?<skill>.+)") | {(.skill): {total_runs: (.count|tonumber)}}' | jq -s 'add')"
 
   # Last 100 events (strip local-only fields)
-  RECENT="$(tail -100 "$JSONL_FILE" 2>/dev/null | sed \
-    -e 's/,"_repo_slug":"[^"]*"//g' \
-    -e 's/,"_branch":"[^"]*"//g' | tr '\n' ',' | sed 's/,$//')"
+  RECENT_JSON="$(tail -100 "$JSONL_FILE" 2>/dev/null | \
+    jq -c 'del(._repo_slug, ._branch)' | jq -s -c '.')"
 
-  ANALYTICS_SNAPSHOT="{\"skills\":${SKILLS_JSON},\"recent_events\":[${RECENT}]}"
+  ANALYTICS_SNAPSHOT="$(jq -n \
+    --argjson skills "${SKILL_COUNTS_JSON:-{}}" \
+    --argjson recent "${RECENT_JSON:-[]}" \
+    '{"skills": $skills, "recent_events": $recent}')"
 fi
 
 # ─── Build retro history snapshot ────────────────────────────
@@ -101,16 +89,7 @@ if [ -d "$STATE_DIR" ]; then
 fi
 
 if [ -n "$RETRO_FILES" ]; then
-  RETRO_SNAPSHOT="["
-  FIRST=true
-  while IFS= read -r RFILE; do
-    [ -f "$RFILE" ] || continue
-    CONTENT="$(cat "$RFILE" 2>/dev/null || true)"
-    [ -z "$CONTENT" ] && continue
-    if [ "$FIRST" = "true" ]; then FIRST=false; else RETRO_SNAPSHOT="$RETRO_SNAPSHOT,"; fi
-    RETRO_SNAPSHOT="$RETRO_SNAPSHOT$CONTENT"
-  done <<< "$RETRO_FILES"
-  RETRO_SNAPSHOT="$RETRO_SNAPSHOT]"
+  RETRO_SNAPSHOT="$(cat $RETRO_FILES 2>/dev/null | jq -s -c '.' || echo "[]")"
 fi
 
 # ─── Upsert to installations table ──────────────────────────
@@ -118,20 +97,27 @@ GSTACK_VERSION="$(cat "$GSTACK_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || e
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# Escape JSON strings that might contain special characters
-# Config and retro snapshots are already JSON, analytics too
-PAYLOAD="{
-  \"installation_id\": \"${USER_ID}\",
-  \"user_id\": \"${USER_ID}\",
-  \"email\": \"${EMAIL}\",
-  \"gstack_version\": \"${GSTACK_VERSION}\",
-  \"os\": \"${OS}\",
-  \"config_snapshot\": ${CONFIG_SNAPSHOT},
-  \"analytics_snapshot\": ${ANALYTICS_SNAPSHOT},
-  \"retro_history\": ${RETRO_SNAPSHOT},
-  \"last_backup_at\": \"${NOW_ISO}\",
-  \"last_seen\": \"${NOW_ISO}\"
-}"
+PAYLOAD="$(jq -n \
+  --arg id "$USER_ID" \
+  --arg email "$EMAIL" \
+  --arg version "$GSTACK_VERSION" \
+  --arg os "$OS" \
+  --argjson config "${CONFIG_SNAPSHOT:-{}}" \
+  --argjson analytics "${ANALYTICS_SNAPSHOT:-{}}" \
+  --argjson retro "${RETRO_SNAPSHOT:-[]}" \
+  --arg last_backup "$NOW_ISO" \
+  '{
+    installation_id: $id,
+    user_id: $id,
+    email: $email,
+    gstack_version: $version,
+    os: $os,
+    config_snapshot: $config,
+    analytics_snapshot: $analytics,
+    retro_history: $retro,
+    last_backup_at: $last_backup,
+    last_seen: $last_backup
+  }')"
 
 # Upsert (POST with Prefer: resolution=merge-duplicates)
 HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
