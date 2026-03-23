@@ -71,7 +71,7 @@ jobs:
           - name: llm-judge
             file: test/skill-llm-eval.test.ts
           - name: e2e-browse
-            file: test/skill-e2e-browse.test.ts
+            file: test/skill-e2e-bws.test.ts
             runner: ubicloud-standard-8
           - name: e2e-plan
             file: test/skill-e2e-plan.test.ts
