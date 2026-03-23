@@ -8,6 +8,7 @@ bin/gstack-global-discover
 .context/
 /tmp/
 *.log
+supabase/.temp/
 bun.lock
 *.bun-build
 .env
