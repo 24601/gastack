@@ -75,7 +75,7 @@ IMPORTANT:
       timeout: 300_000,
     });
 
-    logCost(result);
+    logCost('cso', result);
 
     // Should detect hardcoded API key
     const output = result.output.toLowerCase();
@@ -101,7 +101,7 @@ IMPORTANT:
       expect(reports.length).toBeGreaterThanOrEqual(1);
     }
 
-    recordE2E(evalCollector, 'cso-full-audit', result);
+    recordE2E(evalCollector, 'cso-full-audit', 'e2e-cso', result);
   }, 300_000);
 });
 
@@ -162,7 +162,7 @@ IMPORTANT:
       timeout: 240_000,
     });
 
-    logCost(result);
+    logCost('cso', result);
 
     const output = result.output.toLowerCase();
     // Should mention webhook and missing signature verification
@@ -170,7 +170,7 @@ IMPORTANT:
       output.includes('webhook') && (output.includes('signature') || output.includes('verify'))
     ).toBe(true);
 
-    recordE2E(evalCollector, 'cso-diff-mode', result);
+    recordE2E(evalCollector, 'cso-diff-mode', 'e2e-cso', result);
   }, 240_000);
 });
 
@@ -235,7 +235,7 @@ IMPORTANT:
       timeout: 240_000,
     });
 
-    logCost(result);
+    logCost('cso', result);
 
     const output = result.output.toLowerCase();
     // Should mention unpinned action or Dockerfile issues
@@ -244,6 +244,6 @@ IMPORTANT:
       output.includes('user directive') || output.includes('root')
     ).toBe(true);
 
-    recordE2E(evalCollector, 'cso-infra-scope', result);
+    recordE2E(evalCollector, 'cso-infra-scope', 'e2e-cso', result);
   }, 240_000);
 });
