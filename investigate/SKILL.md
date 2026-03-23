@@ -56,8 +56,18 @@ _TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || tr
 _TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
 _TEL_START=$(date +%s)
 _SESSION_ID="$$-$(date +%s)"
+echo $_TEL_START > ~/.gstack/analytics/.tel-start-$PPID
+echo $_SESSION_ID > ~/.gstack/analytics/.tel-session-$PPID
 echo "TELEMETRY: ${_TEL:-off}"
 echo "TEL_PROMPTED: $_TEL_PROMPTED"
+echo "TEL_START: $_TEL_START"
+echo "SESSION_ID: $_SESSION_ID"
+_EMAIL=$(~/.claude/skills/gstack/bin/gstack-config get email 2>/dev/null || true)
+_COMM_PROMPTED=$([ -f ~/.gstack/.community-prompted ] && echo "yes" || echo "no")
+_AUTH_OK=$(~/.claude/skills/gstack/bin/gstack-auth-refresh --check 2>/dev/null && echo "yes" || echo "no")
+echo "EMAIL: ${_EMAIL:-none}"
+echo "COMM_PROMPTED: $_COMM_PROMPTED"
+echo "AUTH: $_AUTH_OK"
 mkdir -p ~/.gstack/analytics
 echo '{"skill":"investigate","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
 # zsh-compatible: use find instead of glob to avoid NOMATCH error
@@ -84,28 +94,31 @@ Only run `open` if the user says yes. Always run `touch` to mark as seen. This o
 If `TEL_PROMPTED` is `no` AND `LAKE_INTRO` is `yes`: After the lake intro is handled,
 ask the user about telemetry. Use AskUserQuestion:
 
-> Help gstack get better! Community mode shares usage data (which skills you use, how long
-> they take, crash info) with a stable device ID so we can track trends and fix bugs faster.
-> No code, file paths, or repo names are ever sent.
+> gstack can share usage data (which skills you use, how long they take, crash info)
+> to help improve the project. No code, file paths, or repo names are ever sent.
+>
+> The **community tier** unlocks extra features:
+> - **Cloud backup** of your gstack config + history (restore on new machines)
+> - **Benchmarks**: see how your usage compares to other builders
+> - **Skill recommendations** based on community patterns
+>
 > Change anytime with `gstack-config set telemetry off`.
 
 Options:
-- A) Help gstack get better! (recommended)
-- B) No thanks
+- A) Community — share data + email for backup, benchmarks & recommendations (recommended)
+- B) Anonymous — share data only, no account
+- C) No thanks
 
-If A: run `~/.claude/skills/gstack/bin/gstack-config set telemetry community`
+If A: ask for their email via a follow-up AskUserQuestion, then run:
+```bash
+~/.claude/skills/gstack/bin/gstack-config set telemetry community
+~/.claude/skills/gstack/bin/gstack-auth <user-provided-email>
+```
+The auth script will send a verification code to their email. Wait for them to enter the 6-digit code.
+If auth succeeds, continue with the skill. If it fails, fall back to anonymous tier.
 
-If B: ask a follow-up AskUserQuestion:
-
-> How about anonymous mode? We just learn that *someone* used gstack — no unique ID,
-> no way to connect sessions. Just a counter that helps us know if anyone's out there.
-
-Options:
-- A) Sure, anonymous is fine
-- B) No thanks, fully off
-
-If B→A: run `~/.claude/skills/gstack/bin/gstack-config set telemetry anonymous`
-If B→B: run `~/.claude/skills/gstack/bin/gstack-config set telemetry off`
+If B: run `~/.claude/skills/gstack/bin/gstack-config set telemetry anonymous`
+If C: run `~/.claude/skills/gstack/bin/gstack-config set telemetry off`
 
 Always run:
 ```bash
@@ -113,6 +126,33 @@ touch ~/.gstack/.telemetry-prompted
 ```
 
 This only happens once. If `TEL_PROMPTED` is `yes`, skip this entirely.
+
+If `TELEMETRY` is `anonymous` AND `COMM_PROMPTED` is `no`: After the main skill workflow
+begins (not during preamble), offer the community tier upgrade once. Use AskUserQuestion:
+
+> You're already sharing anonymous usage data — nice! Want to unlock more?
+>
+> The **community tier** adds:
+> - Cloud backup of your gstack config (restore on new machines)
+> - Benchmarks: see how your /qa times compare to the community
+> - Skill recommendations based on what other builders use
+>
+> Just needs your email (verified via a one-time code).
+
+Options:
+- A) Yes, join community (enter email)
+- B) Not now
+
+If A: ask for their email, then run `~/.claude/skills/gstack/bin/gstack-auth <email>`.
+Wait for the verification code. On success, run `~/.claude/skills/gstack/bin/gstack-config set telemetry community`.
+If B: do nothing.
+
+Always run:
+```bash
+touch ~/.gstack/.community-prompted
+```
+
+This only happens once. If `COMM_PROMPTED` is `yes`, skip this entirely.
 
 ## AskUserQuestion Format
 
@@ -252,6 +292,16 @@ Determine the skill name from the `name:` field in this file's YAML frontmatter.
 Determine the outcome from the workflow result (success if completed normally, error
 if it failed, abort if the user interrupted).
 
+**For errors:** Also determine:
+- `ERROR_CLASS`: a short category — one of: `timeout`, `test_failure`, `build_failure`,
+  `git_error`, `auth_error`, `network_error`, `browse_error`, `lint_error`,
+  `merge_conflict`, `permission_error`, `unknown_error`. Pick the most specific match.
+- `ERROR_MESSAGE`: a one-line summary of what went wrong (max 200 chars). Include the
+  command that failed and the key error text. Example: `"bun test: 3 tests failed in
+  auth.test.ts — expected 200 got 401"`. Never include file paths, secrets, or PII.
+- `FAILED_STEP`: which step in the skill workflow failed. Example: `"run_tests"`,
+  `"create_pr"`, `"merge_base"`, `"build"`, `"qa_browse"`. Use snake_case, max 30 chars.
+
 **PLAN MODE EXCEPTION — ALWAYS RUN:** This command writes telemetry to
 `~/.gstack/analytics/` (user config directory, not project files). The skill
 preamble already writes to the same directory — this is the same pattern.
@@ -260,17 +310,25 @@ Skipping this command loses session duration and outcome data.
 Run this bash:
 
 ```bash
+_TEL_START=$(cat ~/.gstack/analytics/.tel-start-$PPID 2>/dev/null || echo 0)
+_SESSION_ID=$(cat ~/.gstack/analytics/.tel-session-$PPID 2>/dev/null || echo "")
 _TEL_END=$(date +%s)
 _TEL_DUR=$(( _TEL_END - _TEL_START ))
+rm -f ~/.gstack/analytics/.tel-start-$PPID ~/.gstack/analytics/.tel-session-$PPID 2>/dev/null || true
 rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 ~/.claude/skills/gstack/bin/gstack-telemetry-log \
   --skill "SKILL_NAME" --duration "$_TEL_DUR" --outcome "OUTCOME" \
-  --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" 2>/dev/null &
+  --source "${GSTACK_TELEMETRY_SOURCE:-live}" \
+  --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" \
+  --error-class "ERROR_CLASS" --error-message "ERROR_MESSAGE" \
+  --failed-step "FAILED_STEP" 2>/dev/null &
 ```
 
 Replace `SKILL_NAME` with the actual skill name from frontmatter, `OUTCOME` with
 success/error/abort, and `USED_BROWSE` with true/false based on whether `$B` was used.
-If you cannot determine the outcome, use "unknown". This runs in the background and
+For `ERROR_CLASS`, `ERROR_MESSAGE`, and `FAILED_STEP`: use empty string `""` if the
+outcome is not error. If the outcome is error but you cannot determine the details,
+use `"unknown_error"`, `""`, and `""` respectively. This runs in the background and
 never blocks the user.
 
 ## Plan Status Footer
