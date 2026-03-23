@@ -288,6 +288,8 @@ commandInput.addEventListener('keydown', (e) => {
 sendBtn.addEventListener('click', sendMessage);
 
 // Poll for new chat messages
+let initialLoadDone = false;
+
 async function pollChat() {
   if (!serverUrl || !serverToken) return;
   try {
@@ -297,7 +299,21 @@ async function pollChat() {
     });
     if (!resp.ok) return;
     const data = await resp.json();
+
+    // First successful poll — hide loading spinner
+    if (!initialLoadDone) {
+      initialLoadDone = true;
+      const loading = document.getElementById('chat-loading');
+      const welcome = document.getElementById('chat-welcome');
+      if (loading) loading.style.display = 'none';
+      // Show welcome only if no chat history
+      if (data.total === 0 && welcome) welcome.style.display = '';
+    }
+
     if (data.entries && data.entries.length > 0) {
+      // Hide welcome on first real entry
+      const welcome = document.getElementById('chat-welcome');
+      if (welcome) welcome.style.display = 'none';
       for (const entry of data.entries) {
         addChatEntry(entry);
       }
@@ -319,7 +335,7 @@ document.getElementById('clear-chat').addEventListener('click', async () => {
   agentTextEl = null;
   agentText = '';
   chatMessages.innerHTML = `
-    <div class="chat-welcome">
+    <div class="chat-welcome" id="chat-welcome">
       <div class="chat-welcome-icon">G</div>
       <p>Send a message to Claude Code.</p>
       <p class="muted">Your agent will see it and act on it.</p>

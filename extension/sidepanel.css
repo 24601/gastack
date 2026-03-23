@@ -158,6 +158,28 @@ body::after {
   flex-direction: column;
   gap: 8px;
 }
+.chat-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--text-meta);
+  gap: 12px;
+  font-size: 13px;
+}
+.chat-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--amber-500);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 .chat-welcome {
   display: flex;
   flex-direction: column;

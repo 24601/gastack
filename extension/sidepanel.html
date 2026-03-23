@@ -17,7 +17,11 @@
   <!-- Chat Tab (default, full height) -->
   <main id="tab-chat" class="tab-content active">
     <div class="chat-messages" id="chat-messages">
-      <div class="chat-welcome">
+      <div class="chat-loading" id="chat-loading">
+        <div class="chat-loading-spinner"></div>
+        <p>Connecting...</p>
+      </div>
+      <div class="chat-welcome" id="chat-welcome" style="display:none">
         <div class="chat-welcome-icon">G</div>
         <p>Send a message to Claude Code.</p>
         <p class="muted">Your agent will see it and act on it.</p>
