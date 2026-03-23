@@ -21,6 +21,7 @@ Deno.serve(async () => {
       .from("telemetry_events")
       .select("skill, duration_s, outcome")
       .eq("event_type", "skill_run")
+      .eq("source", "live")
       .not("duration_s", "is", null)
       .not("skill", "is", null)
       .gte("event_timestamp", thirtyDaysAgo)

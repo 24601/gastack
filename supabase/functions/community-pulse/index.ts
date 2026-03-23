@@ -15,34 +15,38 @@ Deno.serve(async () => {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
-    // This week's active (update_checks)
-    const { count: thisWeekChecks } = await supabase
+    // This week's unique installs (by install_fingerprint, filtered to source=live)
+    const { data: thisWeekData } = await supabase
       .from("update_checks")
-      .select("*", { count: "exact", head: true })
+      .select("install_fingerprint")
+      .eq("source", "live")
       .gte("checked_at", weekAgo);
 
-    // Last week's active (for change %)
-    const { count: lastWeekChecks } = await supabase
+    // Last week's unique installs (for change %)
+    const { data: lastWeekData } = await supabase
       .from("update_checks")
-      .select("*", { count: "exact", head: true })
+      .select("install_fingerprint")
+      .eq("source", "live")
       .gte("checked_at", twoWeeksAgo)
       .lt("checked_at", weekAgo);
 
-    let current = thisWeekChecks ?? 0;
-    let previous = lastWeekChecks ?? 0;
+    let current = new Set((thisWeekData ?? []).map((e: { install_fingerprint: string }) => e.install_fingerprint).filter(Boolean)).size;
+    let previous = new Set((lastWeekData ?? []).map((e: { install_fingerprint: string }) => e.install_fingerprint).filter(Boolean)).size;
 
-    // Fallback: if update_checks is empty, count distinct sessions from telemetry_events
+    // Fallback: if no fingerprinted data, count distinct sessions from telemetry_events
     if (current === 0) {
       const { data: thisWeekSessions } = await supabase
         .from("telemetry_events")
         .select("session_id")
         .eq("event_type", "skill_run")
+        .eq("source", "live")
         .gte("event_timestamp", weekAgo);
 
       const { data: lastWeekSessions } = await supabase
         .from("telemetry_events")
         .select("session_id")
         .eq("event_type", "skill_run")
+        .eq("source", "live")
         .gte("event_timestamp", twoWeeksAgo)
         .lt("event_timestamp", weekAgo);
 
