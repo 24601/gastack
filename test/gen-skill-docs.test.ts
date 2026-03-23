@@ -753,11 +753,6 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
     expect(content).toContain('design direction');
   });
 
-  test('codex host produces empty outside voices', () => {
-    const codexContent = fs.readFileSync(path.join(ROOT, '.agents', 'skills', 'gstack-design-review', 'SKILL.md'), 'utf-8');
-    expect(codexContent).not.toContain('Design Outside Voices');
-  });
-
   test('branches correctly per skillName — different prompts', () => {
     const planContent = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
     const consultContent = fs.readFileSync(path.join(ROOT, 'design-consultation', 'SKILL.md'), 'utf-8');
@@ -844,16 +839,17 @@ describe('DESIGN_REVIEW_LITE extended with Codex', () => {
     expect(content).toContain('SCOPE_FRONTEND');
   });
 
-  test('codex host does not include Codex design block', () => {
-    const codexContent = fs.readFileSync(path.join(ROOT, '.agents', 'skills', 'gstack-ship', 'SKILL.md'), 'utf-8');
-    expect(codexContent).not.toContain('Codex design voice');
-  });
 });
 
 // ─── Codex Generation Tests ─────────────────────────────────
 
 describe('Codex generation (--host codex)', () => {
   const AGENTS_DIR = path.join(ROOT, '.agents', 'skills');
+
+  // .agents/ is gitignored (v0.11.2.0) — generate on demand for tests
+  Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'codex'], {
+    cwd: ROOT, stdout: 'pipe', stderr: 'pipe',
+  });
 
   // Dynamic discovery of expected Codex skills: all templates except /codex
   const CODEX_SKILLS = (() => {
@@ -1105,6 +1101,18 @@ describe('Codex generation (--host codex)', () => {
         expect(content).not.toContain('.agents/skills');
       }
     }
+  });
+
+  // ─── Design outside voices: Codex host guard ─────────────────
+
+  test('codex host produces empty outside voices in design-review', () => {
+    const codexContent = fs.readFileSync(path.join(AGENTS_DIR, 'gstack-design-review', 'SKILL.md'), 'utf-8');
+    expect(codexContent).not.toContain('Design Outside Voices');
+  });
+
+  test('codex host does not include Codex design block in ship', () => {
+    const codexContent = fs.readFileSync(path.join(AGENTS_DIR, 'gstack-ship', 'SKILL.md'), 'utf-8');
+    expect(codexContent).not.toContain('Codex design voice');
   });
 });
 
