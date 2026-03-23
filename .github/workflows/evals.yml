@@ -2,6 +2,7 @@ name: E2E Evals
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: evals-${{ github.head_ref }}
