@@ -142,13 +142,24 @@ function findBrowseBin(): string {
 const BROWSE_BIN = findBrowseBin();
 
 function findClaudeBin(): string | null {
+  const home = process.env.HOME || '';
   const candidates = [
-    path.join(process.env.HOME || '', '.local', 'bin', 'claude'),
-    path.join(process.env.HOME || '', '.local', 'share', 'claude', 'versions', 'latest'),
+    // Conductor app bundled binary (not a symlink — works reliably)
+    path.join(home, 'Library', 'Application Support', 'com.conductor.app', 'bin', 'claude'),
+    // Direct versioned binary (not a symlink)
+    ...(() => {
+      try {
+        const versionsDir = path.join(home, '.local', 'share', 'claude', 'versions');
+        const entries = fs.readdirSync(versionsDir).filter(e => /^\d/.test(e)).sort().reverse();
+        return entries.map(e => path.join(versionsDir, e));
+      } catch { return []; }
+    })(),
+    // Standard install (symlink — resolve it)
+    path.join(home, '.local', 'bin', 'claude'),
     '/usr/local/bin/claude',
     '/opt/homebrew/bin/claude',
   ];
-  // Also check if 'claude' is in current PATH (works when spawned from shell)
+  // Also check if 'claude' is in current PATH
   try {
     const proc = Bun.spawnSync(['which', 'claude'], { stdout: 'pipe', stderr: 'pipe', timeout: 2000 });
     if (proc.exitCode === 0) {
@@ -157,7 +168,11 @@ function findClaudeBin(): string | null {
     }
   } catch {}
   for (const c of candidates) {
-    try { if (fs.existsSync(c)) return c; } catch {}
+    try {
+      if (!fs.existsSync(c)) continue;
+      // Resolve symlinks — posix_spawn can fail on symlinks in compiled bun binaries
+      return fs.realpathSync(c);
+    } catch {}
   }
   return null;
 }
