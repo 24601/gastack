@@ -172,6 +172,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  // Open side panel from content script pill click
+  if (msg.type === 'openSidePanel') {
+    if (chrome.sidePanel?.open && sender.tab) {
+      chrome.sidePanel.open({ tabId: sender.tab.id }).catch(() => {});
+    }
+    return;
+  }
+
   // Sidebar → browse server command proxy
   if (msg.type === 'command') {
     executeCommand(msg.command, msg.args).then(result => sendResponse(result));
@@ -206,6 +214,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 }
+
+// Auto-open side panel on install/update — zero friction
+chrome.runtime.onInstalled.addListener(async () => {
+  // Small delay to let the browser window fully initialize
+  setTimeout(async () => {
+    try {
+      const [win] = await chrome.windows.getAll({ windowTypes: ['normal'] });
+      if (win && chrome.sidePanel?.open) {
+        await chrome.sidePanel.open({ windowId: win.id });
+      }
+    } catch {}
+  }, 1000);
+});
 
 // ─── Startup ────────────────────────────────────────────────────
 

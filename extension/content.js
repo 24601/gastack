@@ -19,6 +19,11 @@ function showStatusPill(connected, refs) {
   if (!statusPill) {
     statusPill = document.createElement('div');
     statusPill.id = 'gstack-status-pill';
+    statusPill.style.cursor = 'pointer';
+    statusPill.addEventListener('click', () => {
+      // Ask background to open the side panel
+      chrome.runtime.sendMessage({ type: 'openSidePanel' });
+    });
     document.body.appendChild(statusPill);
   }
 
