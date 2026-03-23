@@ -262,6 +262,9 @@ async function ensureServer(): Promise<ServerState> {
     }
   }
 
+  // Ensure state directory exists before lock acquisition (lock file lives there)
+  ensureStateDir(config);
+
   // Acquire lock to prevent concurrent restart races (TOCTOU)
   const releaseLock = acquireServerLock();
   if (!releaseLock) {
