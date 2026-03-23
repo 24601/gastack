@@ -2972,7 +2972,7 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
   // Adds explicit trigger criteria so Claude Code doesn't auto-fire skills
   // based on semantic similarity. Preserves existing "Use when" and
   // "Proactively suggest" text (both are tested in skill-validation.test.ts).
-  const triggerGuard = `  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /${skillName} in their message.\n  Do not auto-trigger this skill from semantic similarity alone.\n`;
+  const triggerGuard = `  MANUAL TRIGGER ONLY: invoke only when user types /${skillName}.\n`;
   const descMatch = content.match(/^(description:\s*\|?\s*\n)/m);
   if (descMatch && descMatch.index !== undefined) {
     const insertAt = descMatch.index + descMatch[0].length;

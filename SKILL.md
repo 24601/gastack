@@ -2,8 +2,7 @@
 name: gstack
 version: 1.1.0
 description: |
-  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /gstack in their message.
-  Do not auto-trigger this skill from semantic similarity alone.
+  MANUAL TRIGGER ONLY: invoke only when user types /gstack.
   Fast headless browser for QA testing and site dogfooding. Navigate pages, interact with
   elements, verify state, diff before/after, take annotated screenshots, test responsive
   layouts, forms, uploads, dialogs, and capture bug evidence. Use when asked to open or

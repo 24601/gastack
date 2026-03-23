@@ -2,8 +2,7 @@
 name: ship
 version: 1.0.0
 description: |
-  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /ship in their message.
-  Do not auto-trigger this skill from semantic similarity alone.
+  MANUAL TRIGGER ONLY: invoke only when user types /ship.
   Ship workflow: detect + merge base branch, run tests, review diff, bump VERSION, update CHANGELOG, commit, push, create PR. Use when asked to "ship", "deploy", "push to main", "create a PR", or "merge and push".
   Proactively suggest when the user says code is ready or asks about deploying.
 allowed-tools:

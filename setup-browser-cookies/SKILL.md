@@ -2,8 +2,7 @@
 name: setup-browser-cookies
 version: 1.0.0
 description: |
-  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /setup-browser-cookies in their message.
-  Do not auto-trigger this skill from semantic similarity alone.
+  MANUAL TRIGGER ONLY: invoke only when user types /setup-browser-cookies.
   Import cookies from your real Chromium browser into the headless browse session.
   Opens an interactive picker UI where you select which cookie domains to import.
   Use before QA testing authenticated pages. Use when asked to "import cookies",

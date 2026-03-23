@@ -2,8 +2,7 @@
 name: autoplan
 version: 1.0.0
 description: |
-  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /autoplan in their message.
-  Do not auto-trigger this skill from semantic similarity alone.
+  MANUAL TRIGGER ONLY: invoke only when user types /autoplan.
   Auto-review pipeline — reads the full CEO, design, and eng review skills from disk
   and runs them sequentially with auto-decisions using 6 decision principles. Surfaces
   taste decisions (close approaches, borderline scope, codex disagreements) at a final

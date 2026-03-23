@@ -2,8 +2,7 @@
 name: freeze
 version: 0.1.0
 description: |
-  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /freeze in their message.
-  Do not auto-trigger this skill from semantic similarity alone.
+  MANUAL TRIGGER ONLY: invoke only when user types /freeze.
   Restrict file edits to a specific directory for the session. Blocks Edit and
   Write outside the allowed path. Use when debugging to prevent accidentally
   "fixing" unrelated code, or when you want to scope changes to one module.

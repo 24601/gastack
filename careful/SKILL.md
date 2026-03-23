@@ -2,8 +2,7 @@
 name: careful
 version: 0.1.0
 description: |
-  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /careful in their message.
-  Do not auto-trigger this skill from semantic similarity alone.
+  MANUAL TRIGGER ONLY: invoke only when user types /careful.
   Safety guardrails for destructive commands. Warns before rm -rf, DROP TABLE,
   force-push, git reset --hard, kubectl delete, and similar destructive operations.
   User can override each warning. Use when touching prod, debugging live systems,

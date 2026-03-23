@@ -2,8 +2,7 @@
 name: cso
 version: 1.0.0
 description: |
-  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /cso in their message.
-  Do not auto-trigger this skill from semantic similarity alone.
+  MANUAL TRIGGER ONLY: invoke only when user types /cso.
   Chief Security Officer mode. Performs OWASP Top 10 audit, STRIDE threat modeling,
   attack surface analysis, auth flow verification, secret detection, dependency CVE
   scanning, supply chain risk assessment, and data classification review.

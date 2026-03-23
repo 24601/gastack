@@ -2,8 +2,7 @@
 name: benchmark
 version: 1.0.0
 description: |
-  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /benchmark in their message.
-  Do not auto-trigger this skill from semantic similarity alone.
+  MANUAL TRIGGER ONLY: invoke only when user types /benchmark.
   Performance regression detection using the browse daemon. Establishes
   baselines for page load times, Core Web Vitals, and resource sizes.
   Compares before/after on every PR. Tracks performance trends over time.
