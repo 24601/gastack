@@ -11,6 +11,7 @@
 
 import { COMMAND_DESCRIPTIONS } from '../browse/src/commands';
 import { SNAPSHOT_FLAGS } from '../browse/src/snapshot';
+import { discoverTemplates } from './discover-skills';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -3004,16 +3005,7 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
 // ─── Main ───────────────────────────────────────────────────
 
 function findTemplates(): string[] {
-  const templates: string[] = [];
-  const rootTmpl = path.join(ROOT, 'SKILL.md.tmpl');
-  if (fs.existsSync(rootTmpl)) templates.push(rootTmpl);
-
-  for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
-    const tmpl = path.join(ROOT, entry.name, 'SKILL.md.tmpl');
-    if (fs.existsSync(tmpl)) templates.push(tmpl);
-  }
-  return templates;
+  return discoverTemplates(ROOT).map(t => path.join(ROOT, t.tmpl));
 }
 
 let hasChanges = false;
