@@ -131,43 +131,29 @@
 **Effort:** L
 **Priority:** P4
 
-### CDP mode — SHIPPED (Phase 1)
+### Headed mode with Chrome extension — SHIPPED
 
-`$B connect` connects to real Chrome/Comet via CDP. All existing browse commands work unchanged. Chrome extension with Side Panel activity feed. See `browse/src/chrome-launcher.ts`.
+`$B connect` launches Playwright's bundled Chromium in headed mode with the gstack Chrome extension auto-loaded. `$B handoff` now produces the same result (extension + side panel). Sidebar chat gated behind `--chat` flag.
 
-### `$B watch` — passive observation mode
+### `$B watch` — SHIPPED
 
-**What:** Claude observes your browsing without interacting. Captures snapshots, console logs, network requests as you navigate. "Watch me do this, then you do the same."
+Claude observes user browsing in passive read-only mode with periodic snapshots. `$B watch stop` exits with summary. Mutation commands blocked during watch.
 
-**Why:** Bridges the gap between "Claude controls my browser" and "Claude learns from me." Enables flow recording for QA regression tests.
+### Sidebar scout / file drop relay — SHIPPED
 
-**Context:** Requires CDP connect (shipped). Would add a new browse command that enters read-only mode with periodic snapshot capture. User demonstrates a flow, Claude records it, then can reproduce.
-
-**Effort:** M (human: ~1 week / CC: ~30 min)
-**Priority:** P2
-**Depends on:** CDP connect (shipped)
+Sidebar agent writes structured messages to `.context/sidebar-inbox/`. Workspace agent reads via `$B inbox`. Message format: `{type, timestamp, page, userMessage, sidebarSessionId}`.
 
 ### Multi-agent tab isolation
 
-**What:** Two Claude sessions connect to the same Chrome, each operating on different tabs. No cross-contamination.
+**What:** Two Claude sessions connect to the same browser, each operating on different tabs. No cross-contamination.
 
 **Why:** Enables parallel /qa + /design-review on different tabs in the same browser.
 
-**Context:** Requires tab ownership model for concurrent CDP connections. Playwright may not cleanly support two `connectOverCDP` sessions to the same browser. Needs investigation.
+**Context:** Requires tab ownership model for concurrent headed connections. Playwright may not cleanly support two persistent contexts. Needs investigation.
 
 **Effort:** L (human: ~2 weeks / CC: ~2 hours)
 **Priority:** P3
-**Depends on:** CDP connect (shipped)
-
-### Cross-platform CDP browser discovery
-
-**What:** Extend browser discovery algorithm to Windows (`where chrome`, registry lookup) and Linux (`which google-chrome`, XDG paths). Focus command via wmctrl (Linux) and PowerShell (Windows).
-
-**Why:** gstack already has Windows support (Node.js fallback). CDP connect should follow.
-
-**Effort:** M (human: ~1 week / CC: ~30 min)
-**Priority:** P3
-**Depends on:** CDP connect (shipped)
+**Depends on:** Headed mode (shipped)
 
 ### Chrome Web Store publishing
 
