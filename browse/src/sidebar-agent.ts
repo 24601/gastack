@@ -162,9 +162,13 @@ async function askClaude(queueEntry: any): Promise<void> {
     let claudeArgs = ['-p', prompt, '--output-format', 'stream-json', '--verbose',
       '--allowedTools', 'Bash,Read,Glob,Grep'];
 
+    // Validate cwd exists — queue may reference a stale worktree
+    let effectiveCwd = cwd || process.cwd();
+    try { fs.accessSync(effectiveCwd); } catch { effectiveCwd = process.cwd(); }
+
     const proc = spawn('claude', claudeArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      cwd: cwd || process.cwd(),
+      cwd: effectiveCwd,
       env: { ...process.env, BROWSE_STATE_FILE: stateFile || '' },
     });
 
