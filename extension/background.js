@@ -46,7 +46,8 @@ async function checkHealth() {
     if (data.status === 'healthy') {
       // Capture auth token from health response
       if (data.token) authToken = data.token;
-      setConnected(data);
+      // Forward chatEnabled so sidepanel can show/hide chat tab
+      setConnected({ ...data, chatEnabled: !!data.chatEnabled });
     } else {
       setDisconnected();
     }

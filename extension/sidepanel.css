@@ -684,6 +684,19 @@ footer {
 }
 .port-input:focus { border-color: var(--amber-500); }
 
+/* ─── Experimental Banner ─────────────────────────────── */
+.experimental-banner {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #F59E0B;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 8px 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 /* ─── Accessibility ───────────────────────────────────── */
 :focus-visible {
   outline: 2px solid var(--amber-500);

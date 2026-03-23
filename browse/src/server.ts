@@ -36,6 +36,7 @@ ensureStateDir(config);
 const AUTH_TOKEN = crypto.randomUUID();
 const BROWSE_PORT = parseInt(process.env.BROWSE_PORT || '0', 10);
 const IDLE_TIMEOUT_MS = parseInt(process.env.BROWSE_IDLE_TIMEOUT || '1800000', 10); // 30 min
+const chatEnabled = process.env.BROWSE_SIDEBAR_CHAT === '1';
 
 function validateAuth(req: Request): boolean {
   const header = req.headers.get('authorization');
@@ -775,6 +776,7 @@ async function start() {
           tabs: browserManager.getTabCount(),
           currentUrl: browserManager.getCurrentUrl(),
           token: AUTH_TOKEN,  // Extension uses this for Bearer auth
+          chatEnabled,
           agent: {
             status: agentStatus,
             runningFor: agentStartTime ? Date.now() - agentStartTime : null,
@@ -872,6 +874,14 @@ async function start() {
       }
 
       // ─── Sidebar endpoints (auth required — token from /health) ────
+
+      // Gate all sidebar/chat routes behind --chat flag
+      if (!chatEnabled && url.pathname.startsWith('/sidebar')) {
+        return new Response(JSON.stringify({ error: 'Chat not enabled. Use: $B connect --chat' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
 
       // Sidebar chat history — read from in-memory buffer
       if (url.pathname === '/sidebar-chat') {

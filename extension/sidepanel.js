@@ -612,6 +612,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (msg.data) {
       const url = `http://127.0.0.1:${msg.data.port || 34567}`;
       updateConnection(url, msg.data.token);
+      applyChatEnabled(!!msg.data.chatEnabled);
     } else {
       updateConnection(null);
     }
@@ -622,3 +623,39 @@ chrome.runtime.onMessage.addListener((msg) => {
     }
   }
 });
+
+// ─── Chat Gate ──────────────────────────────────────────────────
+// Show/hide Chat tab + command bar based on chatEnabled from server
+
+function applyChatEnabled(enabled) {
+  const commandBar = document.querySelector('.command-bar');
+  const chatTab = document.getElementById('tab-chat');
+  const banner = document.getElementById('experimental-banner');
+  const clearBtn = document.getElementById('clear-chat');
+
+  if (enabled) {
+    // Chat is enabled: show command bar, chat tab, experimental banner
+    if (commandBar) commandBar.style.display = '';
+    if (chatTab) chatTab.style.display = '';
+    if (banner) banner.style.display = '';
+    if (clearBtn) clearBtn.style.display = '';
+  } else {
+    // Chat disabled: hide command bar, chat content, clear button
+    if (commandBar) commandBar.style.display = 'none';
+    if (banner) banner.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'none';
+    // If currently on chat tab, switch to activity
+    if (chatTab && chatTab.classList.contains('active')) {
+      chatTab.classList.remove('active');
+      // Open debug tabs and show activity
+      const debugToggle = document.getElementById('debug-toggle');
+      const debugTabs = document.getElementById('debug-tabs');
+      if (debugToggle) debugToggle.classList.add('active');
+      if (debugTabs) debugTabs.style.display = 'flex';
+      const activityTab = document.getElementById('tab-activity');
+      if (activityTab) activityTab.classList.add('active');
+      const activityBtn = document.querySelector('.tab[data-tab="activity"]');
+      if (activityBtn) activityBtn.classList.add('active');
+    }
+  }
+}
