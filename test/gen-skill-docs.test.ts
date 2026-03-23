@@ -967,7 +967,10 @@ describe('Codex generation (--host codex)', () => {
     for (const skill of ALL_SKILLS) {
       const content = fs.readFileSync(path.join(ROOT, skill.dir, 'SKILL.md'), 'utf-8');
       expect(content).not.toContain('~/.codex/');
-      expect(content).not.toContain('.agents/skills');
+      // gstack-upgrade legitimately references .agents/skills for cross-platform detection
+      if (skill.dir !== 'gstack-upgrade') {
+        expect(content).not.toContain('.agents/skills');
+      }
     }
   });
 });
