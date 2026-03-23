@@ -59,8 +59,12 @@ function installSkills(tmpDir: string) {
     const srcPath = path.join(ROOT, skill, 'SKILL.md');
     if (!fs.existsSync(srcPath)) continue;
 
+    // Install skills at TOP level of .claude/skills/ so Claude Code discovers
+    // each as a separate invocable skill. Nesting under .claude/skills/gstack/
+    // only works for personal skills (~/.claude/skills/) — project-level skills
+    // need to be top-level for discovery.
     const destDir = skill
-      ? path.join(tmpDir, '.claude', 'skills', 'gstack', skill)
+      ? path.join(tmpDir, '.claude', 'skills', skill)
       : path.join(tmpDir, '.claude', 'skills', 'gstack');
     fs.mkdirSync(destDir, { recursive: true });
     fs.copyFileSync(srcPath, path.join(destDir, 'SKILL.md'));
