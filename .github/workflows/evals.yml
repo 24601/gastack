@@ -7,11 +7,60 @@ concurrency:
   group: evals-${{ github.head_ref }}
   cancel-in-progress: true
 
+env:
+  IMAGE: ghcr.io/${{ github.repository }}/ci
+
 jobs:
+  # Build Docker image with pre-baked toolchain (cached — only rebuilds on Dockerfile/lockfile change)
+  build-image:
+    runs-on: ubicloud-standard-2
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "tag=${{ env.IMAGE }}:${{ hashFiles('.github/docker/Dockerfile.ci', 'bun.lockb', 'package.json') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if image exists
+        id: check
+        run: |
+          if docker manifest inspect ${{ steps.meta.outputs.tag }} > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          DOCKER_CLI_EXPERIMENTAL: enabled
+
+      - if: steps.check.outputs.exists == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - if: steps.check.outputs.exists == 'false'
+        run: cp bun.lockb package.json .github/docker/
+
+      - if: steps.check.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .github/docker
+          file: .github/docker/Dockerfile.ci
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE }}:latest
+
   evals:
     runs-on: ubicloud-standard-2
+    needs: build-image
     container:
-      image: ghcr.io/${{ github.repository }}/ci:latest
+      image: ${{ needs.build-image.outputs.image-tag }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -79,11 +128,6 @@ jobs:
 
   report:
     runs-on: ubicloud-standard-2
-    container:
-      image: ghcr.io/${{ github.repository }}/ci:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     needs: evals
     if: always() && github.event_name == 'pull_request'
     timeout-minutes: 5

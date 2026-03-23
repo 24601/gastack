@@ -10,6 +10,13 @@ on:
       - '.github/docker/Dockerfile.ci'
       - 'bun.lockb'
       - 'package.json'
+  # Build on PRs that change the image (so first PR run has it)
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/docker/Dockerfile.ci'
+      - 'bun.lockb'
+      - 'package.json'
   # Manual trigger
   workflow_dispatch:
 
