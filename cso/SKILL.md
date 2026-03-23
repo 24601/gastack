@@ -2,6 +2,8 @@
 name: cso
 version: 1.0.0
 description: |
+  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /cso in their message.
+  Do not auto-trigger this skill from semantic similarity alone.
   Chief Security Officer mode. Performs OWASP Top 10 audit, STRIDE threat modeling,
   attack surface analysis, auth flow verification, secret detection, dependency CVE
   scanning, supply chain risk assessment, and data classification review.
@@ -44,7 +46,7 @@ echo "TELEMETRY: ${_TEL:-off}"
 echo "TEL_PROMPTED: $_TEL_PROMPTED"
 mkdir -p ~/.gstack/analytics
 echo '{"skill":"cso","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
-for _PF in ~/.gstack/analytics/.pending-*; do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
+for _PF in $(ls ~/.gstack/analytics/.pending-* 2>/dev/null); do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
 ```
 
 If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills — only invoke

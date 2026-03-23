@@ -2,6 +2,8 @@
 name: land-and-deploy
 version: 1.0.0
 description: |
+  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /land-and-deploy in their message.
+  Do not auto-trigger this skill from semantic similarity alone.
   Land and deploy workflow. Merges the PR, waits for CI and deploy,
   verifies production health via canary checks. Takes over after /ship
   creates the PR. Use when: "merge", "land", "deploy", "merge and verify",
@@ -43,7 +45,7 @@ echo "TELEMETRY: ${_TEL:-off}"
 echo "TEL_PROMPTED: $_TEL_PROMPTED"
 mkdir -p ~/.gstack/analytics
 echo '{"skill":"land-and-deploy","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
-for _PF in ~/.gstack/analytics/.pending-*; do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
+for _PF in $(ls ~/.gstack/analytics/.pending-* 2>/dev/null); do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
 ```
 
 If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills — only invoke

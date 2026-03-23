@@ -2,6 +2,8 @@
 name: guard
 version: 0.1.0
 description: |
+  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /guard in their message.
+  Do not auto-trigger this skill from semantic similarity alone.
   Full safety mode: destructive command warnings + directory-scoped edits.
   Combines /careful (warns before rm -rf, DROP TABLE, force-push, etc.) with
   /freeze (blocks edits outside a specified directory). Use for maximum safety

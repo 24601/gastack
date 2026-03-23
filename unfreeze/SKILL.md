@@ -2,6 +2,8 @@
 name: unfreeze
 version: 0.1.0
 description: |
+  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /unfreeze in their message.
+  Do not auto-trigger this skill from semantic similarity alone.
   Clear the freeze boundary set by /freeze, allowing edits to all directories
   again. Use when you want to widen edit scope without ending the session.
   Use when asked to "unfreeze", "unlock edits", "remove freeze", or

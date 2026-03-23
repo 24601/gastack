@@ -2,6 +2,8 @@
 name: investigate
 version: 1.0.0
 description: |
+  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /investigate in their message.
+  Do not auto-trigger this skill from semantic similarity alone.
   Systematic debugging with root cause investigation. Four phases: investigate,
   analyze, hypothesize, implement. Iron Law: no fixes without root cause.
   Use when asked to "debug this", "fix this bug", "why is this broken",
