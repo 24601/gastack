@@ -61,11 +61,43 @@ export class BrowserManager {
   private isHeaded: boolean = false;
   private consecutiveFailures: number = 0;
 
+  // ─── Watch Mode ─────────────────────────────────────────
+  private watching = false;
+  public watchInterval: ReturnType<typeof setInterval> | null = null;
+  private watchSnapshots: string[] = [];
+  private watchStartTime: number = 0;
+
   // ─── Headed State ────────────────────────────────────────
   private connectionMode: 'launched' | 'headed' = 'launched';
   private intentionalDisconnect = false;
 
   getConnectionMode(): 'launched' | 'headed' { return this.connectionMode; }
+
+  // ─── Watch Mode Methods ─────────────────────────────────
+  isWatching(): boolean { return this.watching; }
+
+  startWatch(): void {
+    this.watching = true;
+    this.watchSnapshots = [];
+    this.watchStartTime = Date.now();
+  }
+
+  stopWatch(): { snapshots: string[]; duration: number } {
+    this.watching = false;
+    if (this.watchInterval) {
+      clearInterval(this.watchInterval);
+      this.watchInterval = null;
+    }
+    const snapshots = this.watchSnapshots;
+    const duration = Date.now() - this.watchStartTime;
+    this.watchSnapshots = [];
+    this.watchStartTime = 0;
+    return { snapshots, duration };
+  }
+
+  addWatchSnapshot(snapshot: string): void {
+    this.watchSnapshots.push(snapshot);
+  }
 
   /**
    * Find the gstack Chrome extension directory.

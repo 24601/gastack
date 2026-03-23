@@ -19,7 +19,7 @@ import { handleWriteCommand } from './write-commands';
 import { handleMetaCommand } from './meta-commands';
 import { handleCookiePickerRoute } from './cookie-picker-routes';
 import { COMMAND_DESCRIPTIONS } from './commands';
-import { SNAPSHOT_FLAGS } from './snapshot';
+import { handleSnapshot, SNAPSHOT_FLAGS } from './snapshot';
 import { resolveConfig, ensureStateDir, readVersionHash } from './config';
 import { emitActivity, subscribe, getActivityAfter, getActivityHistory, getSubscriberCount } from './activity';
 // Bun.spawn used instead of child_process.spawn (compiled bun binaries
@@ -599,6 +599,16 @@ async function handleCommand(body: any): Promise<Response> {
     });
   }
 
+  // Block mutation commands while watching (read-only observation mode)
+  if (browserManager.isWatching() && WRITE_COMMANDS.has(command)) {
+    return new Response(JSON.stringify({
+      error: 'Cannot run mutation commands while watching. Run `$B watch stop` first.',
+    }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   // Activity: emit command_start
   const startTime = Date.now();
   emitActivity({
@@ -619,6 +629,22 @@ async function handleCommand(body: any): Promise<Response> {
       result = await handleWriteCommand(command, args, browserManager);
     } else if (META_COMMANDS.has(command)) {
       result = await handleMetaCommand(command, args, browserManager, shutdown);
+      // Start periodic snapshot interval when watch mode begins
+      if (command === 'watch' && args[0] !== 'stop' && browserManager.isWatching()) {
+        const watchInterval = setInterval(async () => {
+          if (!browserManager.isWatching()) {
+            clearInterval(watchInterval);
+            return;
+          }
+          try {
+            const snapshot = await handleSnapshot(['-i'], browserManager);
+            browserManager.addWatchSnapshot(snapshot);
+          } catch {
+            // Page may be navigating — skip this snapshot
+          }
+        }, 5000);
+        browserManager.watchInterval = watchInterval;
+      }
     } else if (command === 'help') {
       const helpText = generateHelpText();
       return new Response(helpText, {
@@ -683,6 +709,8 @@ async function shutdown() {
   isShuttingDown = true;
 
   console.log('[browse] Shutting down...');
+  // Stop watch mode if active
+  if (browserManager.isWatching()) browserManager.stopWatch();
   killAgent();
   messageQueue = [];
   saveSession(); // Persist chat history before exit

@@ -33,6 +33,7 @@ export const META_COMMANDS = new Set([
   'handoff', 'resume',
   'connect', 'disconnect', 'focus',
   'inbox',
+  'watch',
 ]);
 
 export const ALL_COMMANDS = new Set([...READ_COMMANDS, ...WRITE_COMMANDS, ...META_COMMANDS]);
@@ -106,6 +107,8 @@ export const COMMAND_DESCRIPTIONS: Record<string, { category: string; descriptio
   'focus':   { category: 'Server', description: 'Bring headed browser window to foreground (macOS)', usage: 'focus [@ref]' },
   // Inbox
   'inbox':   { category: 'Meta', description: 'List messages from sidebar scout inbox', usage: 'inbox [--clear]' },
+  // Watch
+  'watch':   { category: 'Meta', description: 'Passive observation — periodic snapshots while user browses', usage: 'watch [stop]' },
 };
 
 // Load-time validation: descriptions must cover exactly the command sets

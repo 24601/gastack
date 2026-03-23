@@ -592,6 +592,7 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 |---------|-------------|
 | `chain` | Run commands from JSON stdin. Format: [["cmd","arg1",...],...] |
 | `inbox [--clear]` | List messages from sidebar scout inbox |
+| `watch [stop]` | Passive observation — periodic snapshots while user browses |
 
 ### Tabs
 | Command | Description |

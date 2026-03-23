@@ -327,6 +327,29 @@ export async function handleMetaCommand(
       }
     }
 
+    // ─── Watch ──────────────────────────────────────────
+    case 'watch': {
+      if (args[0] === 'stop') {
+        if (!bm.isWatching()) return 'Not currently watching.';
+        const result = bm.stopWatch();
+        const durationSec = Math.round(result.duration / 1000);
+        return [
+          `WATCH STOPPED (${durationSec}s, ${result.snapshots.length} snapshots)`,
+          '',
+          'Last snapshot:',
+          result.snapshots.length > 0 ? result.snapshots[result.snapshots.length - 1] : '(none)',
+        ].join('\n');
+      }
+
+      if (bm.isWatching()) return 'Already watching. Run `$B watch stop` to stop.';
+      if (bm.getConnectionMode() !== 'headed') {
+        return 'watch requires headed mode. Run `$B connect` first.';
+      }
+
+      bm.startWatch();
+      return 'WATCHING — observing user browsing. Periodic snapshots every 5s.\nRun `$B watch stop` to stop and get summary.';
+    }
+
     // ─── Inbox ──────────────────────────────────────────
     case 'inbox': {
       const { execSync } = await import('child_process');
