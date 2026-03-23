@@ -206,14 +206,14 @@ describe('gen-skill-docs', () => {
     expect(content).toContain('~/.gstack/analytics');
   });
 
-  test('preamble .pending-* glob is zsh-safe (guarded by ls check)', () => {
+  test('preamble .pending-* glob is zsh-safe (uses find, not shell glob)', () => {
     for (const skill of ALL_SKILLS) {
       const content = fs.readFileSync(path.join(ROOT, skill.dir, 'SKILL.md'), 'utf-8');
       if (!content.includes('.pending-')) continue;
-      // Must NOT have a bare "for _PF in .../.pending-*" without the ls guard
-      expect(content).not.toMatch(/(?<!ls [^\n]*)\bfor _PF in [^\n]*\.pending-\*/);
-      // Must have the zsh-compatible ls guard
-      expect(content).toContain('$(ls ~/.gstack/analytics/.pending-* 2>/dev/null)');
+      // Must NOT have a bare shell glob ".pending-*" outside of find's -name argument
+      expect(content).not.toMatch(/for _PF in [^\n]*\/\.pending-\*/);
+      // Must use find to avoid zsh NOMATCH error on glob expansion
+      expect(content).toContain("find ~/.gstack/analytics -maxdepth 1 -name '.pending-*'");
     }
   });
 
