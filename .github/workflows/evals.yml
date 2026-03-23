@@ -107,6 +107,14 @@ jobs:
 
       - run: bun run build
 
+      - name: Debug claude CLI
+        run: |
+          echo "=== claude version ===" && claude --version || true
+          echo "=== claude smoke test ===" && echo "say hello" | claude -p --output-format text --dangerously-skip-permissions 2>&1 | head -5 || true
+          echo "=== bun version ===" && bun --version
+          echo "=== HOME ===" && echo $HOME
+          echo "=== whoami ===" && whoami || true
+
       - name: Run ${{ matrix.suite.name }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
