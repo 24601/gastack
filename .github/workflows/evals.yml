@@ -95,12 +95,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Restore pre-installed node_modules from Docker image (~1s vs ~15s install)
+      # Restore pre-installed node_modules from Docker image via symlink (~0s vs ~15s install)
       # If package.json changed since image was built, fall back to fresh install
       - name: Restore deps
         run: |
           if [ -d /opt/node_modules_cache ] && diff -q /opt/node_modules_cache/.package.json package.json >/dev/null 2>&1; then
-            cp -al /opt/node_modules_cache node_modules
+            ln -s /opt/node_modules_cache node_modules
           else
             bun install
           fi
