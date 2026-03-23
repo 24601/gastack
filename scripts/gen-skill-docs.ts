@@ -2968,6 +2968,17 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
     throw new Error(`Unresolved placeholders in ${relTmplPath}: ${remaining.join(', ')}`);
   }
 
+  // Inject auto-trigger guard into skill descriptions.
+  // Adds explicit trigger criteria so Claude Code doesn't auto-fire skills
+  // based on semantic similarity. Preserves existing "Use when" and
+  // "Proactively suggest" text (both are tested in skill-validation.test.ts).
+  const triggerGuard = `  MANUAL TRIGGER ONLY: only run this skill when the user explicitly types /${skillName} in their message.\n  Do not auto-trigger this skill from semantic similarity alone.\n`;
+  const descMatch = content.match(/^(description:\s*\|?\s*\n)/m);
+  if (descMatch && descMatch.index !== undefined) {
+    const insertAt = descMatch.index + descMatch[0].length;
+    content = content.slice(0, insertAt) + triggerGuard + content.slice(insertAt);
+  }
+
   // For codex host: transform frontmatter and replace Claude-specific paths
   if (host === 'codex') {
     // Extract hook safety prose BEFORE transforming frontmatter (which strips hooks)
