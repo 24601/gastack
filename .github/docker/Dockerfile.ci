@@ -30,7 +30,6 @@ RUN curl -fsSL https://bun.sh/install | bash
 RUN npm i -g @anthropic-ai/claude-code
 
 # Playwright system deps (Chromium) — needed for browse E2E tests
-# Install deps first (large layer, changes rarely), then Playwright + browser
 RUN npx playwright install-deps chromium
 
 # Pre-install dependencies (cached layer — only rebuilds when package.json changes)
@@ -38,8 +37,10 @@ COPY package.json /workspace/
 WORKDIR /workspace
 RUN bun install && rm -rf /tmp/*
 
-# Install Playwright Chromium browser (uses deps installed above)
-RUN npx playwright install chromium
+# Install Playwright Chromium to a shared location accessible by all users
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+RUN npx playwright install chromium \
+    && chmod -R a+rX /opt/playwright-browsers
 
 # Verify everything works
 RUN bun --version && node --version && claude --version && jq --version && gh --version \
@@ -55,4 +56,5 @@ RUN mv /workspace/node_modules /opt/node_modules_cache \
 # Create a non-root user for eval runs (GH Actions overrides USER, so
 # the workflow must set options.user or use gosu/su-exec at runtime).
 RUN useradd -m -s /bin/bash runner \
-    && chmod -R a+rX /opt/node_modules_cache
+    && chmod -R a+rX /opt/node_modules_cache \
+    && mkdir -p /home/runner/.gstack && chown -R runner:runner /home/runner/.gstack
