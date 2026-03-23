@@ -414,6 +414,31 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
       });
       const status = await resp.text();
       console.log(`Connected to real Chrome\n${status}`);
+
+      // Auto-start sidebar agent (non-compiled bun process)
+      const agentScript = path.resolve(__dirname, 'sidebar-agent.ts');
+      const agentLogFile = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-agent.log');
+      try {
+        // Clear old agent queue
+        const agentQueue = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-agent-queue.jsonl');
+        try { fs.writeFileSync(agentQueue, ''); } catch {}
+
+        const agentProc = Bun.spawn(['bun', 'run', agentScript], {
+          cwd: config.projectDir,
+          env: {
+            ...process.env,
+            BROWSE_BIN: path.resolve(__dirname, '..', 'dist', 'browse'),
+            BROWSE_STATE_FILE: config.stateFile,
+            BROWSE_SERVER_PORT: String(newState.port),
+          },
+          stdio: ['ignore', 'ignore', 'ignore'],
+        });
+        agentProc.unref();
+        console.log(`[browse] Sidebar agent started (PID: ${agentProc.pid})`);
+      } catch (err: any) {
+        console.error(`[browse] Sidebar agent failed to start: ${err.message}`);
+        console.error(`[browse] Run manually: bun run ${agentScript}`);
+      }
     } catch (err: any) {
       console.error(`[browse] Connect failed: ${err.message}`);
       process.exit(1);

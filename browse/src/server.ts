@@ -22,7 +22,8 @@ import { COMMAND_DESCRIPTIONS } from './commands';
 import { SNAPSHOT_FLAGS } from './snapshot';
 import { resolveConfig, ensureStateDir, readVersionHash } from './config';
 import { emitActivity, subscribe, getActivityAfter, getActivityHistory, getSubscriberCount } from './activity';
-import { spawn, type ChildProcess } from 'child_process';
+// Bun.spawn used instead of child_process.spawn (compiled bun binaries
+// fail posix_spawn on all executables including /bin/bash)
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -365,7 +366,7 @@ function processAgentEvent(event: any): void {
   }
 
   if (event.type === 'result') {
-    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'result', text: event.result || '' });
+    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'result', text: event.text || event.result || '' });
   }
 }
 
@@ -398,68 +399,34 @@ function spawnClaude(userMessage: string): void {
 
   addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_start' });
 
-  // Resolve claude binary — daemon process may not have user's PATH
-  const claudeBin = findClaudeBin();
-  if (!claudeBin) {
-    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_error', error: 'Claude CLI not found. Install: npm install -g @anthropic-ai/claude-code' });
+  // Compiled bun binaries CANNOT spawn external processes (posix_spawn
+  // fails with ENOENT on everything, including /bin/bash). Instead,
+  // write the command to a queue file that the sidebar-agent process
+  // (running as non-compiled bun) picks up and spawns claude.
+  const gstackDir = path.join(process.env.HOME || '/tmp', '.gstack');
+  const agentQueue = path.join(gstackDir, 'sidebar-agent-queue.jsonl');
+  const entry = JSON.stringify({
+    ts: new Date().toISOString(),
+    message: userMessage,
+    prompt,
+    args,
+    stateFile: config.stateFile,
+    cwd: (sidebarSession as any)?.worktreePath || process.cwd(),
+    sessionId: sidebarSession?.claudeSessionId || null,
+  });
+  try {
+    fs.mkdirSync(gstackDir, { recursive: true });
+    fs.appendFileSync(agentQueue, entry + '\n');
+  } catch (err: any) {
+    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_error', error: `Failed to queue: ${err.message}` });
     agentStatus = 'idle';
     agentStartTime = null;
     currentMessage = null;
     return;
   }
-
-  const proc = spawn(claudeBin, args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    cwd: (sidebarSession as any)?.worktreePath || process.cwd(),
-    env: { ...process.env, BROWSE_STATE_FILE: config.stateFile },
-  } as any);
-  proc.stdin?.end();
-  agentProcess = proc;
-
-  let buffer = '';
-
-  proc.stdout?.on('data', (data: Buffer) => {
-    buffer += data.toString();
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try { processAgentEvent(JSON.parse(line)); } catch {}
-    }
-  });
-
-  proc.stderr?.on('data', () => {}); // Claude logs to stderr, ignore
-
-  proc.on('close', () => {
-    if (buffer.trim()) {
-      try { processAgentEvent(JSON.parse(buffer)); } catch {}
-    }
-    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_done' });
-    agentProcess = null;
-    agentStartTime = null;
-    currentMessage = null;
-
-    // Process next queued message (set status synchronously first — race condition guard)
-    if (messageQueue.length > 0) {
-      const next = messageQueue.shift()!;
-      spawnClaude(next.message);
-    } else {
-      agentStatus = 'idle';
-    }
-  });
-
-  proc.on('error', (err) => {
-    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_error', error: err.message });
-    agentProcess = null;
-    agentStartTime = null;
-    currentMessage = null;
-    agentStatus = 'idle';
-    // Try next in queue even after error
-    if (messageQueue.length > 0) {
-      const next = messageQueue.shift()!;
-      spawnClaude(next.message);
-    }
-  });
+  // The sidebar-agent.ts process polls this file and spawns claude.
+  // It POST events back via /sidebar-event which processAgentEvent handles.
+  // Agent status transitions happen when we receive agent_done/agent_error events.
 }
 
 function killAgent(): void {
@@ -1040,6 +1007,37 @@ async function start() {
         return new Response(JSON.stringify({ sessions: listSessions(), activeId: sidebarSession?.id }), {
           status: 200, headers: { 'Content-Type': 'application/json' },
         });
+      }
+
+      // Agent event relay — sidebar-agent.ts POSTs events here
+      if (url.pathname === '/sidebar-agent/event' && req.method === 'POST') {
+        if (!validateAuth(req)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        const body = await req.json();
+        processAgentEvent(body);
+        // Handle agent lifecycle events
+        if (body.type === 'agent_done' || body.type === 'agent_error') {
+          agentProcess = null;
+          agentStartTime = null;
+          currentMessage = null;
+          if (body.type === 'agent_done') {
+            addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_done' });
+          }
+          // Process next queued message
+          if (messageQueue.length > 0) {
+            const next = messageQueue.shift()!;
+            spawnClaude(next.message);
+          } else {
+            agentStatus = 'idle';
+          }
+        }
+        // Capture claude session ID for --resume
+        if (body.claudeSessionId && sidebarSession && !sidebarSession.claudeSessionId) {
+          sidebarSession.claudeSessionId = body.claudeSessionId;
+          saveSession();
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
 
       // ─── Auth-required endpoints ──────────────────────────────────
