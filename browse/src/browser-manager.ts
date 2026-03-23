@@ -69,6 +69,13 @@ export class BrowserManager {
     const launchArgs: string[] = [];
     let useHeadless = true;
 
+    // Docker/CI: Chromium sandbox requires unprivileged user namespaces which
+    // are typically disabled in containers. Detect container environment and
+    // add --no-sandbox automatically.
+    if (process.env.CI || process.env.CONTAINER) {
+      launchArgs.push('--no-sandbox');
+    }
+
     if (extensionsDir) {
       launchArgs.push(
         `--disable-extensions-except=${extensionsDir}`,
