@@ -149,6 +149,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # shellcheck disable=SC2086
           RESULTS=$(find /tmp/eval-results -name '*.json' 2>/dev/null | sort)
           if [ -z "$RESULTS" ]; then
             echo "No eval results found"
@@ -157,7 +158,6 @@ jobs:
 
           TOTAL=0; PASSED=0; FAILED=0; COST="0"
           SUITE_LINES=""
-          # shellcheck disable=SC2086  # intentional word splitting
           for f in $RESULTS; do
             T=$(jq -r '.total_tests // 0' "$f")
             P=$(jq -r '.passed // 0' "$f")
