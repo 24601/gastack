@@ -1,11 +1,19 @@
 # Changelog
 
-## [0.11.3.1] - 2026-03-23 — Inline Office Hours
+## [0.11.4.1] - 2026-03-23 — Inline Office Hours
 
 ### Changed
 
 - **No more "open another window" for /office-hours.** When `/plan-ceo-review` or `/plan-eng-review` offer to run `/office-hours` first, it now runs inline in the same conversation. The review picks up right where it left off after the design doc is ready. Same for mid-session detection when you're still figuring out what to build.
 - **Handoff note infrastructure removed.** The handoff notes that bridged the old "go to another window" flow are no longer written. Existing notes from prior sessions are still read for backward compatibility.
+
+## [0.11.4.0] - 2026-03-22 — Codex in Office Hours
+
+### Added
+
+- **Your brainstorming now gets a second opinion.** After premise challenge in `/office-hours`, you can opt in to a Codex cold read — a completely independent AI that hasn't seen the conversation reviews your problem, answers, and premises. It steelmans your idea, identifies the most revealing thing you said, challenges one premise, and proposes a 48-hour prototype. Two different AI models seeing different things catches blind spots neither would find alone.
+- **Cross-Model Perspective in design docs.** When you use the second opinion, the design doc automatically includes a `## Cross-Model Perspective` section capturing what Codex said — so the independent view is preserved for downstream reviews.
+- **New founder signal: defended premise with reasoning.** When Codex challenges one of your premises and you keep it with articulated reasoning (not just dismissal), that's tracked as a positive signal of conviction.
 
 ## [0.11.3.0] - 2026-03-23 — Design Outside Voices
 
