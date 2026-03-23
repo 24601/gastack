@@ -62,7 +62,13 @@ export class BrowserManager {
   private consecutiveFailures: number = 0;
 
   async launch() {
-    this.browser = await chromium.launch({ headless: true });
+    this.browser = await chromium.launch({
+      headless: true,
+      // On Windows, Chromium's sandbox fails when the server is spawned through
+      // the Bun→Node process chain (GitHub #276). Disable it — local daemon
+      // browsing user-specified URLs has marginal sandbox benefit.
+      chromiumSandbox: process.platform !== 'win32',
+    });
 
     // Chromium crash → exit with clear message
     this.browser.on('disconnected', () => {
@@ -464,7 +470,11 @@ export class BrowserManager {
     // 2. Launch new headed browser (try-catch — if this fails, headless stays running)
     let newBrowser: Browser;
     try {
-      newBrowser = await chromium.launch({ headless: false, timeout: 15000 });
+      newBrowser = await chromium.launch({
+        headless: false,
+        timeout: 15000,
+        chromiumSandbox: process.platform !== 'win32',
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return `ERROR: Cannot open headed browser — ${msg}. Headless browser still running.`;
