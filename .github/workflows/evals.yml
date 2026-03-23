@@ -157,6 +157,7 @@ jobs:
 
           TOTAL=0; PASSED=0; FAILED=0; COST="0"
           SUITE_LINES=""
+          # shellcheck disable=SC2086  # intentional word splitting
           for f in $RESULTS; do
             T=$(jq -r '.total_tests // 0' "$f")
             P=$(jq -r '.passed // 0' "$f")
