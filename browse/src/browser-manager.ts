@@ -639,49 +639,68 @@ export class BrowserManager {
     const state = await this.saveState();
     const currentUrl = this.getCurrentUrl();
 
-    // 2. Launch new headed browser (try-catch — if this fails, headless stays running)
-    let newBrowser: Browser;
+    // 2. Launch new headed browser with extension (same as launchHeaded)
+    //    Uses launchPersistentContext so the extension auto-loads.
+    let newContext: BrowserContext;
     try {
-      newBrowser = await chromium.launch({ headless: false, timeout: 15000 });
+      const fs = require('fs');
+      const path = require('path');
+      const extensionPath = this.findExtensionPath();
+      const launchArgs = ['--hide-crash-restore-bubble'];
+      if (extensionPath) {
+        launchArgs.push(`--disable-extensions-except=${extensionPath}`);
+        launchArgs.push(`--load-extension=${extensionPath}`);
+        console.log(`[browse] Handoff: loading extension from ${extensionPath}`);
+      } else {
+        console.log('[browse] Handoff: extension not found — headed mode without side panel');
+      }
+
+      const userDataDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
+      fs.mkdirSync(userDataDir, { recursive: true });
+
+      newContext = await chromium.launchPersistentContext(userDataDir, {
+        headless: false,
+        args: launchArgs,
+        viewport: null,
+        ignoreDefaultArgs: [
+          '--disable-extensions',
+          '--disable-component-extensions-with-background-pages',
+        ],
+        timeout: 15000,
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return `ERROR: Cannot open headed browser — ${msg}. Headless browser still running.`;
     }
 
-    // 3. Create context and restore state into new headed browser
+    // 3. Restore state into new headed browser
     try {
-      const contextOptions: BrowserContextOptions = {
-        viewport: { width: 1280, height: 720 },
-      };
-      if (this.customUserAgent) {
-        contextOptions.userAgent = this.customUserAgent;
-      }
-      const newContext = await newBrowser.newContext(contextOptions);
+      // Swap to new browser/context before restoreState (it uses this.context)
+      const oldBrowser = this.browser;
+
+      this.context = newContext;
+      this.browser = newContext.browser();
+      this.pages.clear();
+      this.connectionMode = 'headed';
 
       if (Object.keys(this.extraHeaders).length > 0) {
         await newContext.setExtraHTTPHeaders(this.extraHeaders);
       }
 
-      // Swap to new browser/context before restoreState (it uses this.context)
-      const oldBrowser = this.browser;
-      const oldContext = this.context;
-
-      this.browser = newBrowser;
-      this.context = newContext;
-      this.pages.clear();
-
       // Register crash handler on new browser
-      this.browser.on('disconnected', () => {
-        console.error('[browse] FATAL: Chromium process crashed or was killed. Server exiting.');
-        console.error('[browse] Console/network logs flushed to .gstack/browse-*.log');
-        process.exit(1);
-      });
+      if (this.browser) {
+        this.browser.on('disconnected', () => {
+          if (this.intentionalDisconnect) return;
+          console.error('[browse] FATAL: Chromium process crashed or was killed. Server exiting.');
+          process.exit(1);
+        });
+      }
 
       await this.restoreState(state);
       this.isHeaded = true;
+      this.dialogAutoAccept = false;  // User controls dialogs in headed mode
 
-      // 4. Close old headless browser (fire-and-forget — close() can hang
-      // when another Playwright instance is active, so we don't await it)
+      // 4. Close old headless browser (fire-and-forget)
       oldBrowser.removeAllListeners('disconnected');
       oldBrowser.close().catch(() => {});
 
@@ -691,8 +710,8 @@ export class BrowserManager {
         `STATUS: Waiting for user. Run 'resume' when done.`,
       ].join('\n');
     } catch (err: unknown) {
-      // Restore failed — close the new browser, keep old one
-      await newBrowser.close().catch(() => {});
+      // Restore failed — close the new context, keep old state
+      await newContext.close().catch(() => {});
       const msg = err instanceof Error ? err.message : String(err);
       return `ERROR: Handoff failed during state restore — ${msg}. Headless browser still running.`;
     }
