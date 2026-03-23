@@ -44,7 +44,8 @@ if (evalsEnabled && !process.env.EVALS_ALL) {
 
 // --- Helper functions ---
 
-/** Copy all SKILL.md files into tmpDir/.claude/skills/gstack/ for auto-discovery */
+/** Copy all SKILL.md files into tmpDir/.claude/skills/gstack/ for auto-discovery,
+ *  plus CLAUDE.md so Claude has project context for routing decisions. */
 function installSkills(tmpDir: string) {
   const skillDirs = [
     '', // root gstack SKILL.md
@@ -63,6 +64,14 @@ function installSkills(tmpDir: string) {
       : path.join(tmpDir, '.claude', 'skills', 'gstack');
     fs.mkdirSync(destDir, { recursive: true });
     fs.copyFileSync(srcPath, path.join(destDir, 'SKILL.md'));
+  }
+
+  // Copy CLAUDE.md so Claude has project context for skill routing.
+  // Without this, Claude in containerized environments lacks the context
+  // that guides it to invoke specific skills vs answering directly.
+  const claudeMdSrc = path.join(ROOT, 'CLAUDE.md');
+  if (fs.existsSync(claudeMdSrc)) {
+    fs.copyFileSync(claudeMdSrc, path.join(tmpDir, 'CLAUDE.md'));
   }
 }
 
