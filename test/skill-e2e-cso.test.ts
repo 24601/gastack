@@ -227,11 +227,14 @@ Run /cso --infra on this repo. This should run infrastructure-only phases (0-6, 
 
 IMPORTANT:
 - Do NOT use AskUserQuestion — skip any interactive prompts.
-- This repo has a Dockerfile without USER directive and an unpinned third-party GitHub Action.
-- Focus on infrastructure findings, NOT code-level OWASP scanning.`,
+- This is a TINY repo with only 3 files: .github/workflows/ci.yml, Dockerfile, and package.json. Do NOT waste turns exploring — just read those files directly and audit them.
+- The Dockerfile has no USER directive (runs as root). The CI workflow uses an unpinned third-party GitHub Action (some-third-party/action@main).
+- Focus on infrastructure findings, NOT code-level OWASP scanning.
+- Skip the preamble (gstack-update-check, telemetry, etc.) — go straight to the audit.
+- Do NOT use the Agent tool for exploration or verification — read the files yourself. This repo is too small to need subagents.`,
       workingDirectory: csoInfraDir,
-      maxTurns: 60,
-      allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Grep', 'Glob', 'Agent'],
+      maxTurns: 30,
+      allowedTools: ['Bash', 'Read', 'Write', 'Edit', 'Grep', 'Glob'],
       timeout: 360_000,
     });
 
