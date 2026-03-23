@@ -1,0 +1,43 @@
+# gstack CI eval runner — pre-baked toolchain + deps
+# Rebuild weekly via ci-image.yml, on Dockerfile changes, or on lockfile changes
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl unzip ca-certificates jq bc gpg \
+    && rm -rf /var/lib/apt/lists/*
+
+# GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22 LTS (needed for claude CLI)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bun
+RUN curl -fsSL https://bun.sh/install | bash
+ENV BUN_INSTALL="/root/.bun"
+ENV PATH="$BUN_INSTALL/bin:$PATH"
+
+# Claude CLI
+RUN npm i -g @anthropic-ai/claude-code
+
+# Pre-install dependencies (cached layer — only rebuilds when lockfile changes)
+COPY bun.lockb package.json /workspace/
+WORKDIR /workspace
+RUN bun install --frozen-lockfile && rm -rf /tmp/*
+
+# Verify everything works
+RUN bun --version && node --version && claude --version && jq --version && gh --version
+
+# At runtime: checkout overwrites /workspace, but node_modules persists
+# if we move it out of the way and symlink back
+RUN mv /workspace/node_modules /opt/node_modules_cache
