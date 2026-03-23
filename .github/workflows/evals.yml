@@ -10,7 +10,7 @@ concurrency:
 jobs:
   evals:
     runs-on: ubicloud-standard-2
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,29 +65,68 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RESULT=$(ls -t ~/.gstack-dev/evals/*.json 2>/dev/null | grep -v _partial | head -1)
-          if [ -z "$RESULT" ]; then
+          # Aggregate results across ALL eval suites (not just the latest file)
+          RESULTS=$(ls -t ~/.gstack-dev/evals/*.json 2>/dev/null | grep -v _partial)
+          if [ -z "$RESULTS" ]; then
             echo "No eval results found"
             exit 0
           fi
 
-          TOTAL=$(jq .total_tests "$RESULT")
-          PASSED=$(jq .passed "$RESULT")
-          FAILED=$(jq .failed "$RESULT")
-          COST=$(jq .total_cost_usd "$RESULT")
-          WALL=$(jq '.wall_clock_ms // 0 | . / 1000 | floor' "$RESULT")
+          TOTAL=0; PASSED=0; FAILED=0; COST=0
+          SUITE_LINES=""
+          for f in $RESULTS; do
+            T=$(jq -r '.total_tests // 0' "$f")
+            P=$(jq -r '.passed // 0' "$f")
+            F=$(jq -r '.failed // 0' "$f")
+            C=$(jq -r '.total_cost_usd // 0' "$f")
+            TIER=$(jq -r '.tier // "unknown"' "$f")
+            [ "$T" -eq 0 ] && continue
+            TOTAL=$((TOTAL + T))
+            PASSED=$((PASSED + P))
+            FAILED=$((FAILED + F))
+            COST=$(echo "$COST + $C" | bc)
+            STATUS_ICON="✅"
+            [ "$F" -gt 0 ] && STATUS_ICON="❌"
+            SUITE_LINES="${SUITE_LINES}| ${TIER} | ${P}/${T} | ${STATUS_ICON} | \$${C} |\n"
+          done
 
-          STATUS="pass"
-          [ "$FAILED" -gt 0 ] && STATUS="FAIL"
+          STATUS="✅ PASS"
+          [ "$FAILED" -gt 0 ] && STATUS="❌ FAIL"
 
-          BODY="**E2E Evals:** ${STATUS} ${PASSED}/${TOTAL} passed | \$${COST} | ${WALL}s wall clock"
+          BODY="## E2E Evals: ${STATUS}
+
+          **${PASSED}/${TOTAL}** tests passed | **\$${COST}** total cost
+
+          | Suite | Result | Status | Cost |
+          |-------|--------|--------|------|
+          $(echo -e "$SUITE_LINES")"
 
           if [ "$FAILED" -gt 0 ]; then
-            FAILURES=$(jq -r '.tests[] | select(.passed == false) | "- FAIL \(.name): \(.exit_reason // "unknown")"' "$RESULT")
+            FAILURES=""
+            for f in $RESULTS; do
+              F=$(jq -r '.failed // 0' "$f")
+              [ "$F" -eq 0 ] && continue
+              FAILS=$(jq -r '.tests[] | select(.passed == false) | "- ❌ \(.name): \(.exit_reason // "unknown")"' "$f")
+              FAILURES="${FAILURES}${FAILS}\n"
+            done
             BODY="${BODY}
 
-          Failures:
-          ${FAILURES}"
+          ### Failures
+          $(echo -e "$FAILURES")"
           fi
 
-          gh pr comment ${{ github.event.pull_request.number }} --body "$BODY"
+          BODY="${BODY}
+
+          ---
+          *Runner: ubicloud-standard-2 ($0.0008/min) | Concurrency: 40*"
+
+          # Update existing comment or create new one (prevents duplicates on re-runs)
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq '.[] | select(.body | startswith("## E2E Evals")) | .id' | tail -1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+              -X PATCH -f body="$BODY"
+          else
+            gh pr comment ${{ github.event.pull_request.number }} --body "$BODY"
+          fi
