@@ -43,3 +43,9 @@ RUN bun --version && node --version && claude --version && jq --version && gh --
 # Save node_modules + package.json snapshot for cache validation at runtime
 RUN mv /workspace/node_modules /opt/node_modules_cache \
     && cp /workspace/package.json /opt/node_modules_cache/.package.json
+
+# Claude CLI refuses --dangerously-skip-permissions as root.
+# Create a non-root user for eval runs (GH Actions overrides USER, so
+# the workflow must set options.user or use gosu/su-exec at runtime).
+RUN useradd -m -s /bin/bash runner \
+    && chmod -R a+rX /opt/node_modules_cache
