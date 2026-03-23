@@ -29,13 +29,21 @@ RUN curl -fsSL https://bun.sh/install | bash
 # Claude CLI
 RUN npm i -g @anthropic-ai/claude-code
 
+# Playwright system deps (Chromium) — needed for browse E2E tests
+# Install deps first (large layer, changes rarely), then Playwright + browser
+RUN npx playwright install-deps chromium
+
 # Pre-install dependencies (cached layer — only rebuilds when package.json changes)
 COPY package.json /workspace/
 WORKDIR /workspace
 RUN bun install && rm -rf /tmp/*
 
+# Install Playwright Chromium browser (uses deps installed above)
+RUN npx playwright install chromium
+
 # Verify everything works
-RUN bun --version && node --version && claude --version && jq --version && gh --version
+RUN bun --version && node --version && claude --version && jq --version && gh --version \
+    && npx playwright --version
 
 # At runtime: checkout overwrites /workspace, but node_modules persists
 # if we move it out of the way and symlink back
