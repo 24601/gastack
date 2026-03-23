@@ -31,9 +31,9 @@ ENV PATH="$BUN_INSTALL/bin:$PATH"
 RUN npm i -g @anthropic-ai/claude-code
 
 # Pre-install dependencies (cached layer — only rebuilds when lockfile changes)
-COPY bun.lockb package.json /workspace/
+COPY bun.lock package.json /workspace/
 WORKDIR /workspace
-RUN bun install --frozen-lockfile && rm -rf /tmp/*
+RUN bun install && rm -rf /tmp/*
 
 # Verify everything works
 RUN bun --version && node --version && claude --version && jq --version && gh --version
