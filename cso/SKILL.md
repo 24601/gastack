@@ -421,9 +421,9 @@ Scan git history for leaked credentials, check tracked `.env` files, find CI con
 ```bash
 git log -p --all -S "AKIA" --diff-filter=A -- "*.env" "*.yml" "*.yaml" "*.json" "*.toml" 2>/dev/null
 git log -p --all -S "sk-" --diff-filter=A -- "*.env" "*.yml" "*.json" "*.ts" "*.js" "*.py" 2>/dev/null
-git log -p --all -S "ghp_\|gho_\|github_pat_" 2>/dev/null
-git log -p --all -S "xoxb-\|xoxp-\|xapp-" 2>/dev/null
-git log -p --all -S "password\|secret\|token\|api_key" -- "*.env" "*.yml" "*.json" "*.conf" 2>/dev/null
+git log -p --all -G "ghp_|gho_|github_pat_" 2>/dev/null
+git log -p --all -G "xoxb-|xoxp-|xapp-" 2>/dev/null
+git log -p --all -G "password|secret|token|api_key" -- "*.env" "*.yml" "*.json" "*.conf" 2>/dev/null
 ```
 
 **.env files tracked by git:**
@@ -670,12 +670,12 @@ Before producing findings, run every candidate through this filter.
 
 **Hard exclusions — automatically discard findings matching these:**
 
-1. Denial of Service (DOS), resource exhaustion, or rate limiting issues
+1. Denial of Service (DOS), resource exhaustion, or rate limiting issues — **EXCEPTION:** LLM cost/spend amplification findings from Phase 7 (unbounded LLM calls, missing cost caps) are NOT DoS — they are financial risk and must NOT be auto-discarded under this rule.
 2. Secrets or credentials stored on disk if otherwise secured (encrypted, permissioned)
 3. Memory consumption, CPU exhaustion, or file descriptor leaks
 4. Input validation concerns on non-security-critical fields without proven impact
-5. GitHub Action workflow issues unless clearly triggerable via untrusted input
-6. Missing hardening measures — flag concrete vulnerabilities, not absent best practices
+5. GitHub Action workflow issues unless clearly triggerable via untrusted input — **EXCEPTION:** Never auto-discard CI/CD pipeline findings from Phase 4 (unpinned actions, `pull_request_target`, script injection, secrets exposure) when `--infra` is active or when Phase 4 produced findings. Phase 4 exists specifically to surface these.
+6. Missing hardening measures — flag concrete vulnerabilities, not absent best practices. **EXCEPTION:** Unpinned third-party actions and missing CODEOWNERS on workflow files ARE concrete risks, not merely "missing hardening" — do not discard Phase 4 findings under this rule.
 7. Race conditions or timing attacks unless concretely exploitable with a specific path
 8. Vulnerabilities in outdated third-party libraries (handled by Phase 3, not individual findings)
 9. Memory safety issues in memory-safe languages (Rust, Go, Java, C#)
@@ -684,7 +684,7 @@ Before producing findings, run every candidate through this filter.
 12. SSRF where attacker only controls the path, not the host or protocol
 13. User content in the user-message position of an AI conversation (NOT prompt injection)
 14. Regex complexity in code that does not process untrusted input (ReDoS on user strings IS real)
-15. Security concerns in documentation files (*.md)
+15. Security concerns in documentation files (*.md) — **EXCEPTION:** SKILL.md files are NOT documentation. They are executable prompt code (skill definitions) that control AI agent behavior. Findings from Phase 8 (Skill Supply Chain) in SKILL.md files must NEVER be excluded under this rule.
 16. Missing audit logs — absence of logging is not a vulnerability
 17. Insecure randomness in non-security contexts (e.g., UI element IDs)
 18. Git history secrets committed AND removed in the same initial-setup PR

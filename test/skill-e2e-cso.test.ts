@@ -12,6 +12,10 @@ import * as os from 'os';
 
 const evalCollector = createEvalCollector('e2e-cso');
 
+afterAll(() => {
+  finalizeEvalCollector(evalCollector);
+});
+
 // --- CSO v2 E2E Tests ---
 
 describeIfSelected('CSO v2 — full audit', ['cso-full-audit'], () => {
@@ -55,7 +59,6 @@ app.listen(3000);
 
   afterAll(() => {
     try { fs.rmSync(csoDir, { recursive: true, force: true }); } catch {}
-    finalizeEvalCollector(evalCollector);
   });
 
   test('/cso finds planted vulnerabilities', async () => {
@@ -76,6 +79,7 @@ IMPORTANT:
     });
 
     logCost('cso', result);
+    expect(result.exitReason).toBe('success');
 
     // Should detect hardcoded API key
     const output = result.output.toLowerCase();
@@ -163,6 +167,7 @@ IMPORTANT:
     });
 
     logCost('cso', result);
+    expect(result.exitReason).toBe('success');
 
     const output = result.output.toLowerCase();
     // Should mention webhook and missing signature verification
@@ -239,6 +244,7 @@ IMPORTANT:
     });
 
     logCost('cso', result);
+    expect(result.exitReason).toBe('success');
 
     const output = result.output.toLowerCase();
     // Should mention unpinned action or Dockerfile issues
