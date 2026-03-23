@@ -42,9 +42,13 @@ Fork it. Improve it. Make it yours. And if you want to hate on free open source 
 
 **Requirements:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Git](https://git-scm.com/), [Bun](https://bun.sh/) v1.0+, [Node.js](https://nodejs.org/) (Windows only)
 
-### Step 1: Install on your machine
+### One-liner install
 
-Open Claude Code and paste this. Claude does the rest.
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/garrytan/gstack/main/install.sh)
+```
+
+Or paste this into Claude Code — Claude does the rest:
 
 > Install gstack: run **`git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack && cd ~/.claude/skills/gstack && ./setup`** then add a "gstack" section to CLAUDE.md that says to use the /browse skill from gstack for all web browsing, never use mcp\_\_claude-in-chrome\_\_\* tools, and lists the available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /review, /ship, /land-and-deploy, /canary, /benchmark, /browse, /qa, /qa-only, /design-review, /setup-browser-cookies, /setup-deploy, /retro, /investigate, /document-release, /codex, /cso, /autoplan, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade. Then ask the user if they also want to add gstack to the current project so teammates get it.
 

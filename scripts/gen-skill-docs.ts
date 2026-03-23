@@ -262,6 +262,10 @@ ask the user about telemetry. Use AskUserQuestion:
 > - **Skill recommendations** based on community patterns
 >
 > Change anytime with \`gstack-config set telemetry off\`.
+>
+> **Note:** gstack checks for updates by pinging our server with your version number,
+> OS, and a random device ID. This happens regardless of your telemetry setting —
+> it's equivalent to what GitHub sees when downloading VERSION. No usage data is sent.
 
 Options:
 - A) Community — share data + email for backup, benchmarks & recommendations (recommended)
