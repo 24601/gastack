@@ -165,6 +165,17 @@ describe('gen-skill-docs', () => {
     expect(content).toContain('~/.gstack/analytics');
   });
 
+  test('preamble .pending-* glob is zsh-safe (guarded by ls check)', () => {
+    for (const skill of ALL_SKILLS) {
+      const content = fs.readFileSync(path.join(ROOT, skill.dir, 'SKILL.md'), 'utf-8');
+      if (!content.includes('.pending-')) continue;
+      // Must NOT have a bare "for _PF in .../.pending-*" without the ls guard
+      expect(content).not.toMatch(/(?<!ls [^\n]*)\bfor _PF in [^\n]*\.pending-\*/);
+      // Must have the zsh-compatible ls guard
+      expect(content).toContain('$(ls ~/.gstack/analytics/.pending-* 2>/dev/null)');
+    }
+  });
+
   test('preamble-using skills have correct skill name in telemetry', () => {
     const PREAMBLE_SKILLS = [
       { dir: '.', name: 'gstack' },
