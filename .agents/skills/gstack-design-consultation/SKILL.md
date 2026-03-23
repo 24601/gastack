@@ -413,6 +413,8 @@ If the user said no research, skip entirely and proceed to Phase 3 using your bu
 
 ---
 
+
+
 ## Phase 3: The Complete Proposal
 
 This is the soul of the skill. Propose EVERYTHING as one coherent package.
