@@ -141,6 +141,27 @@ function findBrowseBin(): string {
 
 const BROWSE_BIN = findBrowseBin();
 
+function findClaudeBin(): string | null {
+  const candidates = [
+    path.join(process.env.HOME || '', '.local', 'bin', 'claude'),
+    path.join(process.env.HOME || '', '.local', 'share', 'claude', 'versions', 'latest'),
+    '/usr/local/bin/claude',
+    '/opt/homebrew/bin/claude',
+  ];
+  // Also check if 'claude' is in current PATH (works when spawned from shell)
+  try {
+    const proc = Bun.spawnSync(['which', 'claude'], { stdout: 'pipe', stderr: 'pipe', timeout: 2000 });
+    if (proc.exitCode === 0) {
+      const p = proc.stdout.toString().trim();
+      if (p) candidates.unshift(p);
+    }
+  } catch {}
+  for (const c of candidates) {
+    try { if (fs.existsSync(c)) return c; } catch {}
+  }
+  return null;
+}
+
 function shortenPath(str: string): string {
   return str
     .replace(new RegExp(BROWSE_BIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '$B')
@@ -362,9 +383,19 @@ function spawnClaude(userMessage: string): void {
 
   addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_start' });
 
-  const proc = spawn('claude', args, {
+  // Resolve claude binary — daemon process may not have user's PATH
+  const claudeBin = findClaudeBin();
+  if (!claudeBin) {
+    addChatEntry({ ts: new Date().toISOString(), role: 'agent', type: 'agent_error', error: 'Claude CLI not found. Install: npm install -g @anthropic-ai/claude-code' });
+    agentStatus = 'idle';
+    agentStartTime = null;
+    currentMessage = null;
+    return;
+  }
+
+  const proc = spawn(claudeBin, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
-    cwd: sidebarSession?.worktreePath || process.cwd(),
+    cwd: (sidebarSession as any)?.worktreePath || process.cwd(),
     env: { ...process.env, BROWSE_STATE_FILE: config.stateFile },
   } as any);
   proc.stdin?.end();
