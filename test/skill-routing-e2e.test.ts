@@ -44,8 +44,11 @@ if (evalsEnabled && !process.env.EVALS_ALL) {
 
 // --- Helper functions ---
 
-/** Copy all SKILL.md files into tmpDir/.claude/skills/gstack/ for auto-discovery,
- *  plus CLAUDE.md so Claude has project context for routing decisions. */
+/** Copy all SKILL.md files for auto-discovery.
+ *  Install to BOTH project-level (.claude/skills/) AND user-level (~/.claude/skills/)
+ *  because Claude Code discovers skills from both locations. In CI containers,
+ *  $HOME may differ from the working directory, so we need both paths to ensure
+ *  the Skill tool appears in Claude's available tools list. */
 function installSkills(tmpDir: string) {
   const skillDirs = [
     '', // root gstack SKILL.md
@@ -55,24 +58,27 @@ function installSkills(tmpDir: string) {
     'gstack-upgrade', 'humanizer',
   ];
 
+  // Install to both project-level and user-level skill directories
+  const homeDir = process.env.HOME || os.homedir();
+  const installTargets = [
+    path.join(tmpDir, '.claude', 'skills'),        // project-level
+    path.join(homeDir, '.claude', 'skills'),        // user-level (~/.claude/skills/)
+  ];
+
   for (const skill of skillDirs) {
     const srcPath = path.join(ROOT, skill, 'SKILL.md');
     if (!fs.existsSync(srcPath)) continue;
 
-    // Install skills at TOP level of .claude/skills/ so Claude Code discovers
-    // each as a separate invocable skill. Nesting under .claude/skills/gstack/
-    // only works for personal skills (~/.claude/skills/) — project-level skills
-    // need to be top-level for discovery.
-    const destDir = skill
-      ? path.join(tmpDir, '.claude', 'skills', skill)
-      : path.join(tmpDir, '.claude', 'skills', 'gstack');
-    fs.mkdirSync(destDir, { recursive: true });
-    fs.copyFileSync(srcPath, path.join(destDir, 'SKILL.md'));
+    const skillName = skill || 'gstack';
+
+    for (const targetBase of installTargets) {
+      const destDir = path.join(targetBase, skillName);
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.copyFileSync(srcPath, path.join(destDir, 'SKILL.md'));
+    }
   }
 
   // Copy CLAUDE.md so Claude has project context for skill routing.
-  // Without this, Claude in containerized environments lacks the context
-  // that guides it to invoke specific skills vs answering directly.
   const claudeMdSrc = path.join(ROOT, 'CLAUDE.md');
   if (fs.existsSync(claudeMdSrc)) {
     fs.copyFileSync(claudeMdSrc, path.join(tmpDir, 'CLAUDE.md'));
