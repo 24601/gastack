@@ -62,7 +62,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --tmpfs /tmp:exec -e HOME=/home/runner
+      options: --tmpfs /tmp:exec
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -98,13 +98,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Bun needs a writable tmpdir — GH Actions container maps HOME=/github/home
-      # and the runner user can't write to the default /tmp in some container configs.
+      # Bun needs a writable tmpdir — set to /tmp which is a tmpfs mount
       - name: Fix temp dirs
         run: |
-          mkdir -p "$HOME/tmp"
-          echo "TMPDIR=$HOME/tmp" >> "$GITHUB_ENV"
-          echo "BUN_TMPDIR=$HOME/tmp" >> "$GITHUB_ENV"
+          echo "TMPDIR=/tmp" >> "$GITHUB_ENV"
+          echo "BUN_TMPDIR=/tmp" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=/tmp/.cache" >> "$GITHUB_ENV"
+          mkdir -p /tmp/.cache
 
       # Restore pre-installed node_modules from Docker image via symlink (~0s vs ~15s install)
       # If package.json changed since image was built, fall back to fresh install
@@ -123,10 +123,8 @@ jobs:
       - name: Verify Chromium
         if: matrix.suite.name == 'e2e-browse'
         run: |
-          # shellcheck disable=SC2012
           echo "whoami=$(whoami) HOME=$HOME TMPDIR=${TMPDIR:-unset}"
-          stat /tmp
-          touch /tmp/.bun-write-test && rm /tmp/.bun-write-test && echo "/tmp writable"
+          touch /tmp/.bun-test && rm /tmp/.bun-test && echo "/tmp writable"
           bun -e "import {chromium} from 'playwright';const b=await chromium.launch({args:['--no-sandbox']});console.log('Chromium OK');await b.close()"
 
       - name: Run ${{ matrix.suite.name }}
