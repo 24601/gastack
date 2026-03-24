@@ -1,12 +1,19 @@
 # Changelog
 
-## [0.11.16.0] - 2026-03-24 — Smarter CI: 2-Tier E2E Test System
+## [0.11.16.0] - 2026-03-24 — Smarter CI + Telemetry Security
 
 ### Changed
 
 - **CI runs only gate tests by default — periodic tests run weekly.** Every E2E test is now classified as `gate` (blocks PRs) or `periodic` (weekly cron + on-demand). Gate tests cover functional correctness and safety guardrails. Periodic tests cover expensive Opus quality benchmarks, non-deterministic routing tests, and tests requiring external services (Codex, Gemini). CI feedback is faster and cheaper while quality benchmarks still run weekly.
 - **Global touchfiles are now granular.** Previously, changing `gen-skill-docs.ts` triggered all 56 E2E tests. Now only the ~27 tests that actually depend on it run. Same for `llm-judge.ts`, `test-server.ts`, `worktree.ts`, and the Codex/Gemini session runners. The truly global list is down to 3 files (session-runner, eval-store, touchfiles.ts itself).
 - **New `test:gate` and `test:periodic` scripts** replace `test:e2e:fast`. Use `EVALS_TIER=gate` or `EVALS_TIER=periodic` to filter tests by tier.
+- **Telemetry sync uses `GSTACK_SUPABASE_URL` instead of `GSTACK_TELEMETRY_ENDPOINT`.** Edge functions need the base URL, not the REST API path. The old variable is removed from `config.sh`.
+- **Cursor advancement is now safe.** The sync script checks the edge function's `inserted` count before advancing — if zero events were inserted, the cursor holds and retries next run.
+
+### Fixed
+
+- **Telemetry RLS policies tightened.** Row-level security policies on all telemetry tables now deny direct access via the anon key. All reads and writes go through validated edge functions with schema checks, event type allowlists, and field length limits.
+- **Community dashboard is faster and server-cached.** Dashboard stats are now served from a single edge function with 1-hour server-side caching, replacing multiple direct queries.
 
 ### For contributors
 
@@ -14,6 +21,10 @@
 - `EVALS_FAST` / `FAST_EXCLUDED_TESTS` removed in favor of `EVALS_TIER`
 - `allow_failure` removed from CI matrix (gate tests should be reliable)
 - New `.github/workflows/evals-periodic.yml` runs periodic tests Monday 6 AM UTC
+- New migration: `supabase/migrations/002_tighten_rls.sql`
+- New smoke test: `supabase/verify-rls.sh` (9 checks: 5 reads + 4 writes)
+- Extended `test/telemetry.test.ts` with field name verification
+- Untracked `browse/dist/` binaries from git (arm64-only, rebuilt by `./setup`)
 
 ## [0.11.15.0] - 2026-03-24 — E2E Test Coverage for Plan Reviews & Codex
 
