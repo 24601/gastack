@@ -2877,6 +2877,8 @@ function extractNameAndDescription(content: string): { name: string; description
   return { name, description };
 }
 
+const OPENAI_SHORT_DESCRIPTION_LIMIT = 120;
+
 function condenseOpenAIShortDescription(description: string): string {
   const firstParagraph = description.split(/\n\s*\n/)[0] || description;
   const collapsed = firstParagraph.replace(/\s+/g, ' ').trim();
