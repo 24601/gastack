@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.11.12.1] - 2026-03-24
+
+### Changed
+
+- **One decision per question — everywhere.** Every skill now enforces "one decision per AskUserQuestion call" as a universal baseline. Previously only the three plan-review skills had this rule; now all 23+ skills present focused, individual decisions instead of combining multiple choices into wall-of-text questions.
+
 ## [0.11.12.0] - 2026-03-24 — Triple-Voice Autoplan
 
 Every `/autoplan` phase now gets two independent second opinions — one from Codex (OpenAI's frontier model) and one from a fresh Claude subagent. Three AI reviewers looking at your plan from different angles, each phase building on the last.
