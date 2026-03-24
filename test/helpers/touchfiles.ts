@@ -80,9 +80,6 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'ship-base-branch': ['ship/**', 'bin/gstack-repo-mode'],
   'ship-local-workflow': ['ship/**', 'scripts/gen-skill-docs.ts'],
 
-  // Setup browser cookies
-  'setup-cookies-detect': ['setup-browser-cookies/**'],
-
   // Retro
   'retro':             ['retro/**'],
   'retro-base-branch': ['retro/**'],
@@ -206,9 +203,6 @@ export const E2E_TIERS: Record<string, 'gate' | 'periodic'> = {
   'ship-local-workflow': 'gate',
   'ship-coverage-audit': 'gate',
   'ship-triage': 'gate',
-
-  // Setup browser cookies
-  'setup-cookies-detect': 'gate',
 
   // Retro — gate for cheap branch detection, periodic for full Opus retro
   'retro': 'periodic',
