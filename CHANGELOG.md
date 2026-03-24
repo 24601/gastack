@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.11.14.1] - 2026-03-24
+
+### Changed
+
+- **One decision per question — everywhere.** Every skill now presents decisions one at a time, each with its own focused question, recommendation, and options. No more wall-of-text questions that bundle unrelated choices together. This was already enforced in the three plan-review skills; now it's a universal rule across all 23+ skills.
+
 ## [0.11.14.0] - 2026-03-24 — Windows Browse Fix
 
 ### Fixed
