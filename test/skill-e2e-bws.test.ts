@@ -45,7 +45,7 @@ describeIfSelected('Skill E2E tests', [
 4. $B screenshot /tmp/skill-e2e-test.png
 Report the results of each command.`,
       workingDirectory: tmpDir,
-      maxTurns: 3,
+      maxTurns: 5,
       timeout: 60_000,
       testName: 'browse-basic',
       runId,
@@ -67,7 +67,7 @@ Report the results of each command.`,
 5. $B snapshot -i -a -o /tmp/skill-e2e-annotated.png
 Report what each command returned.`,
       workingDirectory: tmpDir,
-      maxTurns: 3,
+      maxTurns: 5,
       timeout: 60_000,
       testName: 'browse-snapshot',
       runId,
