@@ -26,9 +26,10 @@ describeIfSelected('Skill E2E tests', [
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-'));
     setupBrowseShims(tmpDir);
 
-    // Pre-warm the browse server so Chromium is already launched for tests
+    // Pre-warm the browse server so Chromium is already launched for tests.
+    // In CI, Chromium can take 10-20s to launch (Docker + --no-sandbox).
     spawnSync(browseBin, ['goto', testServer.url], { cwd: tmpDir, timeout: 30000, stdio: 'pipe' });
-  });
+  }, 45_000);
 
   afterAll(() => {
     testServer?.server?.stop();
