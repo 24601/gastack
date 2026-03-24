@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.12.0.0] - 2026-03-23 — Community Mode + Trustworthy Telemetry
+
+### Added
+
+- **You can now count real users.** Every gstack install gets a random UUID fingerprint (`~/.gstack/.install-id`). Update-check pings — which send only your version, OS, and this random ID — now fire for all users (not just opted-in). The community dashboard shows unique weekly users for the first time.
+- **One-liner installer.** `bash <(curl -fsSL https://raw.githubusercontent.com/garrytan/gstack/main/install.sh)` — checks prereqs, clones, runs setup, handles upgrades if already installed.
+- **Community tier with email auth.** Opt in for cloud backup of your gstack config, benchmarks comparing your usage to other builders, and skill recommendations based on community patterns.
+- **Growth funnel metrics.** New SQL views track install → activate (first skill run within 24h) → retain (return pings in week 2). Dashboard shows the full funnel.
+- **Version adoption velocity.** Materialized view shows how fast users upgrade after each release.
+- **Anomaly detection views.** Daily active installs and version adoption materialized views, ready for alert edge functions.
+
+### Fixed
+
+- **Telemetry data is now trustworthy.** E2E test events were polluting production Supabase (~230 of 232 events were test noise). Source field (`live`/`test`/`dev`) tags every event. All dashboard and edge function queries filter `source=live`. E2E test runner sets `GSTACK_TELEMETRY_SOURCE=test`.
+- **56-year skill durations are gone.** The `_TEL_START` shell variable was lost between bash blocks, producing epoch-time durations. Now persisted to `~/.gstack/analytics/.tel-start-$PPID` and read back in the epilogue. Duration capped at 86,400s (24h) with a CHECK constraint in the schema.
+- **Session ID persistence across bash blocks.** Same `$PPID` file pattern as duration fix — epilogue reads session ID from file instead of relying on shell variable scope.
+- **Dashboard shows filtered data.** Weekly active installs, skill popularity, and error reports all filter `source=eq.live`. Community-pulse edge function uses `COUNT(DISTINCT install_fingerprint)` instead of raw count.
+- **Benchmarks and recommendations no longer include test data.** Source filter added to both edge functions. `skill_sequences` and `crash_clusters` views recreated with source filter.
+
+### Changed
+
+- **Identity model simplified.** Replaced SHA-256(hostname+user) `installation_id` (community-only) with random UUID `install_fingerprint` (all tiers). Expand-contract migration preserves backward compat — old clients still work via a trigger that copies `installation_id` → `install_fingerprint`.
+- **Update-check pings ungated from telemetry.** These pings send only version + OS + random UUID — equivalent to what GitHub sees in access logs. Transparency note added to the telemetry prompt.
+- **Dead code removed.** Deleted the unused `telemetry-ingest` edge function — `telemetry-sync` POSTs directly to Supabase REST API.
+
+### For contributors
+
+- Migration 003 adds source columns, install_fingerprint, duration CHECK constraint, 4 indexes, recreated views, growth funnel view, and materialized views
+- Deployment requires running Phase 4A cleanup SQL before migration, Phase 4B backfill after
+- Expand-contract pattern: old `installation_id` column kept for backward compat with a trigger
+- Homebrew tap deferred to TODOS.md (P2)
+- 8 new telemetry tests (source field, duration caps, fingerprint persistence)
+
 ## [0.11.10.0] - 2026-03-23 — CI Evals on Ubicloud
 
 ### Added
