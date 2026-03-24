@@ -1,5 +1,6 @@
 ---
 name: plan-design-review
+preamble-tier: 3
 version: 2.0.0
 description: |
   MANUAL TRIGGER ONLY: invoke only when user types /plan-design-review.

@@ -1,5 +1,6 @@
 ---
 name: land-and-deploy
+preamble-tier: 4
 version: 1.0.0
 description: |
   MANUAL TRIGGER ONLY: invoke only when user types /land-and-deploy.

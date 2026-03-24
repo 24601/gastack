@@ -1,5 +1,6 @@
 ---
 name: design-review
+preamble-tier: 4
 version: 2.0.0
 description: |
   MANUAL TRIGGER ONLY: invoke only when user types /design-review.

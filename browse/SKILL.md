@@ -1,5 +1,6 @@
 ---
 name: browse
+preamble-tier: 1
 version: 1.1.0
 description: |
   MANUAL TRIGGER ONLY: invoke only when user types /browse.

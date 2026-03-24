@@ -1,5 +1,6 @@
 ---
 name: plan-eng-review
+preamble-tier: 3
 version: 1.0.0
 description: |
   MANUAL TRIGGER ONLY: invoke only when user types /plan-eng-review.

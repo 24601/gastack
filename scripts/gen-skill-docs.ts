@@ -14,14 +14,15 @@ import { SNAPSHOT_FLAGS } from '../browse/src/snapshot';
 import { discoverTemplates } from './discover-skills';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { Host, TemplateContext } from './resolvers/types';
+import { HOST_PATHS } from './resolvers/types';
+import { RESOLVERS } from './resolvers/index';
+import { codexSkillName, transformFrontmatter, extractHookSafetyProse, extractNameAndDescription, condenseOpenAIShortDescription, generateOpenAIYaml } from './resolvers/codex-helpers';
 
 const ROOT = path.resolve(import.meta.dir, '..');
 const DRY_RUN = process.argv.includes('--dry-run');
 
-// ─── Template Context ───────────────────────────────────────
-
-type Host = 'claude' | 'codex';
-const OPENAI_SHORT_DESCRIPTION_LIMIT = 120;
+// ─── Host Detection ─────────────────────────────────────────
 
 const HOST_ARG = process.argv.find(a => a.startsWith('--host'));
 const HOST: Host = (() => {
@@ -2966,10 +2967,11 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
   const tmplContent = fs.readFileSync(tmplPath, 'utf-8');
   const relTmplPath = path.relative(ROOT, tmplPath);
   let outputPath = tmplPath.replace(/\.tmpl$/, '');
-  let outputDir: string | null = null;
 
   // Determine skill directory relative to ROOT
   const skillDir = path.relative(ROOT, path.dirname(tmplPath));
+
+  let outputDir: string | null = null;
 
   // For codex host, route output to .agents/skills/{codexSkillName}/SKILL.md
   if (host === 'codex') {
@@ -2989,7 +2991,11 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
     ? benefitsMatch[1].split(',').map(s => s.trim()).filter(Boolean)
     : undefined;
 
-  const ctx: TemplateContext = { skillName, tmplPath, benefitsFrom, host, paths: HOST_PATHS[host] };
+  // Extract preamble-tier from frontmatter (1-4, controls which preamble sections are included)
+  const tierMatch = tmplContent.match(/^preamble-tier:\s*(\d+)$/m);
+  const preambleTier = tierMatch ? parseInt(tierMatch[1], 10) : undefined;
+
+  const ctx: TemplateContext = { skillName, tmplPath, benefitsFrom, host, paths: HOST_PATHS[host], preambleTier };
 
   // Replace placeholders
   let content = tmplContent.replace(/\{\{(\w+)\}\}/g, (match, name) => {
@@ -3065,6 +3071,7 @@ function findTemplates(): string[] {
 }
 
 let hasChanges = false;
+const tokenBudget: Array<{ skill: string; lines: number; tokens: number }> = [];
 
 for (const tmplPath of findTemplates()) {
   // Skip /codex skill for codex host (self-referential — it's a Claude wrapper around codex exec)
@@ -3088,9 +3095,32 @@ for (const tmplPath of findTemplates()) {
     fs.writeFileSync(outputPath, content);
     console.log(`GENERATED: ${relOutput}`);
   }
+
+  // Track token budget
+  const lines = content.split('\n').length;
+  const tokens = Math.round(content.length / 4); // ~4 chars per token
+  tokenBudget.push({ skill: relOutput, lines, tokens });
 }
 
 if (DRY_RUN && hasChanges) {
   console.error('\nGenerated SKILL.md files are stale. Run: bun run gen:skill-docs');
   process.exit(1);
+}
+
+// Print token budget summary
+if (!DRY_RUN && tokenBudget.length > 0) {
+  tokenBudget.sort((a, b) => b.lines - a.lines);
+  const totalLines = tokenBudget.reduce((s, t) => s + t.lines, 0);
+  const totalTokens = tokenBudget.reduce((s, t) => s + t.tokens, 0);
+
+  console.log('');
+  console.log(`Token Budget (${HOST} host)`);
+  console.log('═'.repeat(60));
+  for (const t of tokenBudget) {
+    const name = t.skill.replace(/\/SKILL\.md$/, '').replace(/^\.agents\/skills\//, '');
+    console.log(`  ${name.padEnd(30)} ${String(t.lines).padStart(5)} lines  ~${String(t.tokens).padStart(6)} tokens`);
+  }
+  console.log('─'.repeat(60));
+  console.log(`  ${'TOTAL'.padEnd(30)} ${String(totalLines).padStart(5)} lines  ~${String(totalTokens).padStart(6)} tokens`);
+  console.log('');
 }

@@ -1,5 +1,6 @@
 ---
 name: codex
+preamble-tier: 3
 version: 1.0.0
 description: |
   MANUAL TRIGGER ONLY: invoke only when user types /codex.

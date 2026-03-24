@@ -1,5 +1,6 @@
 ---
 name: setup-browser-cookies
+preamble-tier: 1
 version: 1.0.0
 description: |
   MANUAL TRIGGER ONLY: invoke only when user types /setup-browser-cookies.

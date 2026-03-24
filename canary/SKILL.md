@@ -1,5 +1,6 @@
 ---
 name: canary
+preamble-tier: 2
 version: 1.0.0
 description: |
   MANUAL TRIGGER ONLY: invoke only when user types /canary.
