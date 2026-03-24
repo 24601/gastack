@@ -80,6 +80,13 @@ export interface EvalTestEntry {
   missed_bugs?: string[];
 
   error?: string;
+
+  // Worktree harvest data
+  harvest?: {
+    filesChanged: number;
+    patchPath: string;
+    isDuplicate: boolean;
+  };
 }
 
 export interface EvalResult {
