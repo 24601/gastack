@@ -62,6 +62,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user runner
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -97,9 +98,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Bun creates root-owned temp dirs during Docker build. GH Actions runs as
+      # runner user with HOME=/github/home. Redirect bun's cache to a writable dir.
+      - name: Fix bun temp
+        run: |
+          mkdir -p /home/runner/.cache/bun
+          echo "BUN_INSTALL_CACHE_DIR=/home/runner/.cache/bun" >> "$GITHUB_ENV"
+          echo "BUN_TMPDIR=/home/runner/.cache/bun" >> "$GITHUB_ENV"
+          echo "TMPDIR=/home/runner/.cache" >> "$GITHUB_ENV"
+
       # Restore pre-installed node_modules from Docker image via symlink (~0s vs ~15s install)
-      # If package.json changed since image was built, fall back to fresh install
-      # Note: GITHUB_ENV vars from previous step are now active
       - name: Restore deps
         run: |
           if [ -d /opt/node_modules_cache ] && diff -q /opt/node_modules_cache/.package.json package.json >/dev/null 2>&1; then
