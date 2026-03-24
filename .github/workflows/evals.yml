@@ -98,6 +98,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Ensure temp directories are writable (GH Actions container user may not own /tmp)
+      - name: Fix temp dirs
+        run: |
+          mkdir -p /tmp/bun-cache /tmp/playwright-tmp
+          chmod 1777 /tmp/bun-cache /tmp/playwright-tmp 2>/dev/null || true
+          # If /tmp isn't writable, use home dir
+          if ! touch /tmp/.write-test 2>/dev/null; then
+            export TMPDIR="$HOME/tmp"
+            mkdir -p "$TMPDIR"
+            echo "TMPDIR=$TMPDIR" >> "$GITHUB_ENV"
+          else
+            rm -f /tmp/.write-test
+          fi
+
       # Restore pre-installed node_modules from Docker image via symlink (~0s vs ~15s install)
       # If package.json changed since image was built, fall back to fresh install
       - name: Restore deps

@@ -57,4 +57,5 @@ RUN mv /workspace/node_modules /opt/node_modules_cache \
 # the workflow must set options.user or use gosu/su-exec at runtime).
 RUN useradd -m -s /bin/bash runner \
     && chmod -R a+rX /opt/node_modules_cache \
-    && mkdir -p /home/runner/.gstack && chown -R runner:runner /home/runner/.gstack
+    && mkdir -p /home/runner/.gstack && chown -R runner:runner /home/runner/.gstack \
+    && mkdir -p /tmp/bun-cache && chmod 1777 /tmp/bun-cache
