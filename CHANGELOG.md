@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.11.14.0] - 2026-03-24 — Ship With Teeth
+## [0.11.15.0] - 2026-03-24 — Ship With Teeth
 
 `/ship` and `/review` now actually enforce the quality gates they've been talking about. Coverage audit becomes a real gate (not just a diagram), plan completion gets verified against the diff, and verification steps from your plan run automatically.
 
@@ -14,6 +14,19 @@
 - **Shared plan file discovery.** Conversation context first, content-based grep fallback second. Used by plan completion, plan review reports, and verification.
 - **Ship metrics logging.** Coverage %, plan completion ratio, and verification results are logged to review JSONL for /retro to track trends.
 - **Plan completion in /retro.** Weekly retros now show plan completion rates across shipped branches.
+
+## [0.11.14.0] - 2026-03-24 — Windows Browse Fix
+
+### Fixed
+
+- **Browse engine now works on Windows.** Three compounding bugs blocked all Windows `/browse` users: the server process died when the CLI exited (Bun's `unref()` doesn't truly detach on Windows), the health check never ran because `process.kill(pid, 0)` is broken in Bun binaries on Windows, and Chromium's sandbox failed when spawned through the Bun→Node process chain. All three are now fixed. Credits to @fqueiro (PR #191) for identifying the `detached: true` approach.
+- **Health check runs first on all platforms.** `ensureServer()` now tries an HTTP health check before falling back to PID-based detection — more reliable on every OS, not just Windows.
+- **Startup errors are logged to disk.** When the server fails to start, errors are written to `~/.gstack/browse-startup-error.log` so Windows users (who lose stderr due to process detachment) can debug.
+- **Chromium sandbox disabled on Windows.** Chromium's sandbox requires elevated privileges when spawned through the Bun→Node chain — now disabled on Windows only.
+
+### For contributors
+
+- New tests for `isServerHealthy()` and startup error logging in `browse/test/config.test.ts`
 
 ## [0.11.13.0] - 2026-03-24 — Worktree Isolation + Infrastructure Elegance
 
