@@ -68,6 +68,13 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'plan-ceo-review-benefits':  ['plan-ceo-review/**', 'scripts/gen-skill-docs.ts'],
   'plan-eng-review':           ['plan-eng-review/**'],
   'plan-eng-review-artifact':  ['plan-eng-review/**'],
+  'plan-review-report':        ['plan-eng-review/**', 'scripts/gen-skill-docs.ts'],
+
+  // Codex offering verification
+  'codex-offered-office-hours':  ['office-hours/**', 'scripts/gen-skill-docs.ts'],
+  'codex-offered-ceo-review':    ['plan-ceo-review/**', 'scripts/gen-skill-docs.ts'],
+  'codex-offered-design-review': ['plan-design-review/**', 'scripts/gen-skill-docs.ts'],
+  'codex-offered-eng-review':    ['plan-eng-review/**', 'scripts/gen-skill-docs.ts'],
 
   // Ship
   'ship-base-branch': ['ship/**', 'bin/gstack-repo-mode'],
@@ -186,6 +193,13 @@ export const E2E_TIERS: Record<string, 'gate' | 'periodic'> = {
   'plan-eng-review': 'periodic',
   'plan-eng-review-artifact': 'periodic',
   'plan-eng-coverage-audit': 'gate',
+  'plan-review-report': 'gate',
+
+  // Codex offering verification
+  'codex-offered-office-hours': 'gate',
+  'codex-offered-ceo-review': 'gate',
+  'codex-offered-design-review': 'gate',
+  'codex-offered-eng-review': 'gate',
 
   // Ship — gate (end-to-end ship path)
   'ship-base-branch': 'gate',
