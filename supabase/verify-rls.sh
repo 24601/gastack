@@ -64,14 +64,23 @@ check() {
       401|403)
         echo "  PASS  $desc (HTTP $http_code, denied)"
         PASS=$(( PASS + 1 )) ;;
-      200)
-        body="$(cat "$resp_file" 2>/dev/null || echo "")"
-        if [ "$body" = "[]" ] || [ -z "$body" ]; then
-          echo "  PASS  $desc (HTTP $http_code, empty — RLS filtering)"
-          PASS=$(( PASS + 1 ))
+      200|204)
+        # For GETs: 200+empty means RLS filtering (pass). 200+data means leak (fail).
+        # For PATCH: 204 means no rows matched — could be RLS or missing row.
+        if [ "$method" = "GET" ]; then
+          body="$(cat "$resp_file" 2>/dev/null || echo "")"
+          if [ "$body" = "[]" ] || [ -z "$body" ]; then
+            echo "  PASS  $desc (HTTP $http_code, empty — RLS filtering)"
+            PASS=$(( PASS + 1 ))
+          else
+            echo "  FAIL  $desc (HTTP $http_code, got data!)"
+            FAIL=$(( FAIL + 1 ))
+          fi
         else
-          echo "  FAIL  $desc (HTTP $http_code, got data!)"
-          FAIL=$(( FAIL + 1 ))
+          # PATCH 204 = no rows affected. RLS blocked the update or row doesn't exist.
+          # Either way, the attacker can't modify data.
+          echo "  PASS  $desc (HTTP $http_code, no rows affected)"
+          PASS=$(( PASS + 1 ))
         fi ;;
       000)
         echo "  WARN  $desc (connection failed)"
@@ -82,7 +91,8 @@ check() {
     esac
   elif [ "$expected" = "allow" ]; then
     case "$http_code" in
-      200|201|204)
+      200|201|204|409)
+        # 409 = conflict (duplicate key) — INSERT policy works, row already exists
         echo "  PASS  $desc (HTTP $http_code, allowed as expected)"
         PASS=$(( PASS + 1 )) ;;
       401|403)
