@@ -213,10 +213,18 @@ describe('gen-skill-docs', () => {
     expect(content).toContain('git branch --show-current');
   });
 
-  test('generated SKILL.md contains ELI16 simplification rules', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
+  test('tier 2+ skills contain ELI16 simplification rules (AskUserQuestion format)', () => {
+    // Root SKILL.md is tier 1 (no AskUserQuestion format). Check a tier 2+ skill instead.
+    const content = fs.readFileSync(path.join(ROOT, 'cso', 'SKILL.md'), 'utf-8');
     expect(content).toContain('No raw function names');
     expect(content).toContain('plain English');
+  });
+
+  test('tier 1 skills do NOT contain AskUserQuestion format', () => {
+    // Use benchmark (tier 1) instead of root — root SKILL.md gets overwritten by Codex test setup
+    const content = fs.readFileSync(path.join(ROOT, 'benchmark', 'SKILL.md'), 'utf-8');
+    expect(content).not.toContain('## AskUserQuestion Format');
+    expect(content).not.toContain('## Completeness Principle');
   });
 
   test('generated SKILL.md contains telemetry line', () => {
@@ -798,24 +806,24 @@ describe('Ship metrics logging', () => {
 // --- Plan file discovery shared helper ---
 
 describe('Plan file discovery shared helper', () => {
-  // The shared helper should appear in plan-ceo-review (via PLAN_FILE_REVIEW_REPORT)
-  // and in ship (via PLAN_COMPLETION_AUDIT_SHIP)
-  const ceoSkill = fs.readFileSync(path.join(ROOT, 'plan-ceo-review', 'SKILL.md'), 'utf-8');
+  // The shared helper should appear in ship (via PLAN_COMPLETION_AUDIT_SHIP)
+  // and in review (via PLAN_COMPLETION_AUDIT_REVIEW)
   const shipSkill = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md'), 'utf-8');
+  const reviewSkill = fs.readFileSync(path.join(ROOT, 'review', 'SKILL.md'), 'utf-8');
 
-  test('plan file discovery appears in both plan-ceo-review and ship', () => {
-    expect(ceoSkill).toContain('Plan File Discovery');
+  test('plan file discovery appears in both ship and review', () => {
     expect(shipSkill).toContain('Plan File Discovery');
+    expect(reviewSkill).toContain('Plan File Discovery');
   });
 
   test('both include conversation context first', () => {
-    expect(ceoSkill).toContain('Conversation context (primary)');
     expect(shipSkill).toContain('Conversation context (primary)');
+    expect(reviewSkill).toContain('Conversation context (primary)');
   });
 
   test('both include content-based fallback', () => {
-    expect(ceoSkill).toContain('Content-based search (fallback)');
     expect(shipSkill).toContain('Content-based search (fallback)');
+    expect(reviewSkill).toContain('Content-based search (fallback)');
   });
 });
 

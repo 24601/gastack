@@ -205,6 +205,7 @@ export const GLOBAL_TOUCHFILES = [
   'scripts/gen-skill-docs.ts',
   'test/helpers/touchfiles.ts',
   'browse/test/test-server.ts',
+  'lib/worktree.ts',
 ];
 
 // --- Base branch detection ---
