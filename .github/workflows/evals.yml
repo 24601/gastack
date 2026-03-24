@@ -103,9 +103,11 @@ jobs:
       - name: Fix bun temp
         run: |
           mkdir -p /home/runner/.cache/bun
-          echo "BUN_INSTALL_CACHE_DIR=/home/runner/.cache/bun" >> "$GITHUB_ENV"
-          echo "BUN_TMPDIR=/home/runner/.cache/bun" >> "$GITHUB_ENV"
-          echo "TMPDIR=/home/runner/.cache" >> "$GITHUB_ENV"
+          {
+            echo "BUN_INSTALL_CACHE_DIR=/home/runner/.cache/bun"
+            echo "BUN_TMPDIR=/home/runner/.cache/bun"
+            echo "TMPDIR=/home/runner/.cache"
+          } >> "$GITHUB_ENV"
 
       # Restore pre-installed node_modules from Docker image via symlink (~0s vs ~15s install)
       - name: Restore deps
