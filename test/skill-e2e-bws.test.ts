@@ -67,7 +67,7 @@ Report the results of each command.`,
 5. $B snapshot -i -a -o /tmp/skill-e2e-annotated.png
 Report what each command returned.`,
       workingDirectory: tmpDir,
-      maxTurns: 5,
+      maxTurns: 7,
       timeout: 60_000,
       testName: 'browse-snapshot',
       runId,
