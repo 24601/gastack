@@ -1,10 +1,43 @@
 # Changelog
 
-## [0.11.14.1] - 2026-03-24
+## [0.11.16.1] - 2026-03-24 — Installation ID Privacy Fix
+
+### Fixed
+
+- **Installation IDs are now random UUIDs instead of hostname hashes.** The old `SHA-256(hostname+username)` approach meant anyone who knew your machine identity could compute your installation ID. Now uses a random UUID stored in `~/.gstack/installation-id` — not derivable from any public input, rotatable by deleting the file.
+- **RLS verification script handles edge cases.** `verify-rls.sh` now correctly treats INSERT success as expected (kept for old client compat), handles 409 conflicts and 204 no-ops.
+
+## [0.11.16.0] - 2026-03-24 — Telemetry Security Hardening
+
+### Fixed
+
+- **Telemetry RLS policies tightened.** Row-level security policies on all telemetry tables now deny direct access via the anon key. All reads and writes go through validated edge functions with schema checks, event type allowlists, and field length limits.
+- **Community dashboard is faster and server-cached.** Dashboard stats are now served from a single edge function with 1-hour server-side caching, replacing multiple direct queries.
 
 ### Changed
 
-- **One decision per question — everywhere.** Every skill now presents decisions one at a time, each with its own focused question, recommendation, and options. No more wall-of-text questions that bundle unrelated choices together. This was already enforced in the three plan-review skills; now it's a universal rule across all 23+ skills.
+- **Telemetry sync uses `GSTACK_SUPABASE_URL` instead of `GSTACK_TELEMETRY_ENDPOINT`.** Edge functions need the base URL, not the REST API path. The old variable is removed from `config.sh`.
+- **Cursor advancement is now safe.** The sync script checks the edge function's `inserted` count before advancing — if zero events were inserted, the cursor holds and retries next run.
+
+### For contributors
+
+- New migration: `supabase/migrations/002_tighten_rls.sql`
+- New smoke test: `supabase/verify-rls.sh` (9 checks: 5 reads + 4 writes)
+- Extended `test/telemetry.test.ts` with field name verification
+- Untracked `browse/dist/` binaries from git (arm64-only, rebuilt by `./setup`)
+
+## [0.11.15.0] - 2026-03-24 — E2E Test Coverage for Plan Reviews & Codex
+
+### Added
+
+- **E2E tests verify plan review reports appear at the bottom of plans.** The `/plan-eng-review` review report is now tested end-to-end — if it stops writing `## GSTACK REVIEW REPORT` to the plan file, the test catches it.
+- **E2E tests verify Codex is offered in every plan skill.** Four new lightweight tests confirm that `/office-hours`, `/plan-ceo-review`, `/plan-design-review`, and `/plan-eng-review` all check for Codex availability, prompt the user, and handle the fallback when Codex is unavailable.
+
+### For contributors
+
+- New E2E tests in `test/skill-e2e-plan.test.ts`: `plan-review-report`, `codex-offered-eng-review`, `codex-offered-ceo-review`, `codex-offered-office-hours`, `codex-offered-design-review`
+- Updated touchfile mappings and selection count assertions
+- Added `touchfiles` to the documented global touchfile list in CLAUDE.md
 
 ## [0.11.14.0] - 2026-03-24 — Windows Browse Fix
 

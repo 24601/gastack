@@ -29,7 +29,7 @@ against the previous run.
 **Diff-based test selection:** `test:evals` and `test:e2e` auto-select tests based
 on `git diff` against the base branch. Each test declares its file dependencies in
 `test/helpers/touchfiles.ts`. Changes to global touchfiles (session-runner, eval-store,
-llm-judge, gen-skill-docs) trigger all tests. Use `EVALS_ALL=1` or the `:all` script
+llm-judge, gen-skill-docs, touchfiles) trigger all tests. Use `EVALS_ALL=1` or the `:all` script
 variants to force all tests. Run `eval:select` to preview which tests would run.
 
 ## Testing
@@ -164,6 +164,19 @@ symlink or a real copy. If it's a symlink to your working directory, be aware th
 **For plan reviews:** When reviewing plans that modify skill templates or the
 gen-skill-docs pipeline, consider whether the changes should be tested in isolation
 before going live (especially if the user is actively using gstack in other windows).
+
+## Compiled binaries — NEVER commit browse/dist/
+
+The `browse/dist/` directory contains compiled Bun binaries (`browse`, `find-browse`,
+~58MB each). These are Mach-O arm64 only — they do NOT work on Linux, Windows, or
+Intel Macs. The `./setup` script already builds from source for every platform, so
+the checked-in binaries are redundant. They are tracked by git due to a historical
+mistake and should eventually be removed with `git rm --cached`.
+
+**NEVER stage or commit these files.** They show up as modified in `git status`
+because they're tracked despite `.gitignore` — ignore them. When staging files,
+always use specific filenames (`git add file1 file2`) — never `git add .` or
+`git add -A`, which will accidentally include the binaries.
 
 ## Commit style
 
