@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.11.15.0] - 2026-03-24 — E2E Test Coverage for Plan Reviews & Codex
+
+### Added
+
+- **E2E tests verify plan review reports appear at the bottom of plans.** The `/plan-eng-review` review report is now tested end-to-end — if it stops writing `## GSTACK REVIEW REPORT` to the plan file, the test catches it.
+- **E2E tests verify Codex is offered in every plan skill.** Four new lightweight tests confirm that `/office-hours`, `/plan-ceo-review`, `/plan-design-review`, and `/plan-eng-review` all check for Codex availability, prompt the user, and handle the fallback when Codex is unavailable.
+
+### For contributors
+
+- New E2E tests in `test/skill-e2e-plan.test.ts`: `plan-review-report`, `codex-offered-eng-review`, `codex-offered-ceo-review`, `codex-offered-office-hours`, `codex-offered-design-review`
+- Updated touchfile mappings and selection count assertions
+- Added `touchfiles` to the documented global touchfile list in CLAUDE.md
+
+## [0.11.14.0] - 2026-03-24 — Windows Browse Fix
+
+### Fixed
+
+- **Browse engine now works on Windows.** Three compounding bugs blocked all Windows `/browse` users: the server process died when the CLI exited (Bun's `unref()` doesn't truly detach on Windows), the health check never ran because `process.kill(pid, 0)` is broken in Bun binaries on Windows, and Chromium's sandbox failed when spawned through the Bun→Node process chain. All three are now fixed. Credits to @fqueiro (PR #191) for identifying the `detached: true` approach.
+- **Health check runs first on all platforms.** `ensureServer()` now tries an HTTP health check before falling back to PID-based detection — more reliable on every OS, not just Windows.
+- **Startup errors are logged to disk.** When the server fails to start, errors are written to `~/.gstack/browse-startup-error.log` so Windows users (who lose stderr due to process detachment) can debug.
+- **Chromium sandbox disabled on Windows.** Chromium's sandbox requires elevated privileges when spawned through the Bun→Node chain — now disabled on Windows only.
+
+### For contributors
+
+- New tests for `isServerHealthy()` and startup error logging in `browse/test/config.test.ts`
+
 ## [0.11.13.0] - 2026-03-24 — Worktree Isolation + Infrastructure Elegance
 
 ### Added
