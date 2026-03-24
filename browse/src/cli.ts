@@ -15,7 +15,7 @@ import { resolveConfig, ensureStateDir, readVersionHash } from './config';
 
 const config = resolveConfig();
 const IS_WINDOWS = process.platform === 'win32';
-const MAX_START_WAIT = IS_WINDOWS ? 15000 : 8000; // Node+Chromium takes longer on Windows
+const MAX_START_WAIT = IS_WINDOWS ? 15000 : (process.env.CI ? 30000 : 8000); // Node+Chromium takes longer on Windows
 
 export function resolveServerScript(
   env: Record<string, string | undefined> = process.env,

@@ -25,6 +25,9 @@ describeIfSelected('Skill E2E tests', [
     testServer = startTestServer();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-e2e-'));
     setupBrowseShims(tmpDir);
+
+    // Pre-warm the browse server so Chromium is already launched for tests
+    spawnSync(browseBin, ['goto', testServer.url], { cwd: tmpDir, timeout: 30000, stdio: 'pipe' });
   });
 
   afterAll(() => {
@@ -41,7 +44,7 @@ describeIfSelected('Skill E2E tests', [
 4. $B screenshot /tmp/skill-e2e-test.png
 Report the results of each command.`,
       workingDirectory: tmpDir,
-      maxTurns: 10,
+      maxTurns: 3,
       timeout: 60_000,
       testName: 'browse-basic',
       runId,
@@ -63,7 +66,7 @@ Report the results of each command.`,
 5. $B snapshot -i -a -o /tmp/skill-e2e-annotated.png
 Report what each command returned.`,
       workingDirectory: tmpDir,
-      maxTurns: 10,
+      maxTurns: 3,
       timeout: 60_000,
       testName: 'browse-snapshot',
       runId,
