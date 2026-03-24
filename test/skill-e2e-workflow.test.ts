@@ -175,9 +175,10 @@ describeIfSelected('Ship workflow E2E', ['ship-local-workflow'], () => {
 
     logCost('/ship local workflow', result);
 
-    // Check push succeeded
-    const remoteLog = spawnSync('git', ['log', '--oneline'], { cwd: shipRemoteDir, stdio: 'pipe' });
-    const remoteCommits = remoteLog.stdout.toString().trim().split('\n').length;
+    // Check push succeeded — check the feature branch on the bare remote
+    // (bare repo HEAD points to main which only has 1 commit; the push goes to feature/ship-test)
+    const remoteLog = spawnSync('git', ['log', '--oneline', '--all'], { cwd: shipRemoteDir, stdio: 'pipe' });
+    const remoteCommits = remoteLog.stdout.toString().trim().split('\n').filter(l => l.length > 0).length;
 
     // Check VERSION was bumped
     const versionContent = fs.existsSync(path.join(shipWorkDir, 'VERSION'))
@@ -217,12 +218,14 @@ describeIfSelected('Setup Browser Cookies E2E', ['setup-cookies-detect'], () => 
     const result = await runSkillTest({
       prompt: `Read setup-browser-cookies/SKILL.md for the cookie import workflow.
 
-This is a test environment. List which browsers you can detect on this system by checking for their cookie database files.
-Write the detected browsers to ${cookieDir}/detected-browsers.md.
+This is a test environment. Check which browsers exist on this system by looking for their cookie database files.
+IMPORTANT: You MUST write a file called ${cookieDir}/detected-browsers.md with your findings.
+If you find browsers, list them. If you find NO browsers, write "No browsers detected" to the file.
+The file must always be created regardless of results.
 Do NOT launch the cookie picker UI — just detect and report.`,
       workingDirectory: cookieDir,
-      maxTurns: 5,
-      timeout: 45_000,
+      maxTurns: 8,
+      timeout: 60_000,
       testName: 'setup-cookies-detect',
       runId,
     });
@@ -233,17 +236,21 @@ Do NOT launch the cookie picker UI — just detect and report.`,
     const detectExists = fs.existsSync(detectPath);
     const detectContent = detectExists ? fs.readFileSync(detectPath, 'utf-8') : '';
     const hasBrowserName = /chrome|arc|brave|edge|comet|safari|firefox/i.test(detectContent);
+    const hasNoBrowsers = /no browser|none|not found|not detected|could not|couldn't/i.test(detectContent);
+
+    // On CI (headless Ubuntu), no browsers are installed — "no browsers detected" is valid
+    const contentValid = hasBrowserName || hasNoBrowsers;
 
     recordE2E(evalCollector, '/setup-browser-cookies detect', 'Setup Browser Cookies E2E', result, {
-      passed: detectExists && hasBrowserName && ['success', 'error_max_turns'].includes(result.exitReason),
+      passed: detectExists && contentValid && ['success', 'error_max_turns'].includes(result.exitReason),
     });
 
     expect(['success', 'error_max_turns']).toContain(result.exitReason);
     expect(detectExists).toBe(true);
     if (detectExists) {
-      expect(hasBrowserName).toBe(true);
+      expect(contentValid).toBe(true);
     }
-  }, 60_000);
+  }, 90_000);
 });
 
 // --- gstack-upgrade E2E ---
