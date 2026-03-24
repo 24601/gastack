@@ -59,10 +59,11 @@ echo "────────────────────────"
 # Parse top_skills array from JSON
 SKILLS="$(echo "$DATA" | grep -o '"top_skills":\[[^]]*\]' || echo "")"
 if [ -n "$SKILLS" ] && [ "$SKILLS" != '"top_skills":[]' ]; then
-  echo "$SKILLS" | grep -o '"skill":"[^"]*","count":[0-9]*' | while read -r ENTRY; do
-    SKILL="$(echo "$ENTRY" | grep -o '"skill":"[^"]*"' | awk -F'"' '{print $4}')"
-    COUNT="$(echo "$ENTRY" | grep -o '"count":[0-9]*' | grep -o '[0-9]*')"
-    printf "  /%-20s %s runs\n" "$SKILL" "$COUNT"
+  # Parse each object — handle any key order (JSONB doesn't preserve order)
+  echo "$SKILLS" | grep -o '{[^}]*}' | while read -r OBJ; do
+    SKILL="$(echo "$OBJ" | grep -o '"skill":"[^"]*"' | awk -F'"' '{print $4}')"
+    COUNT="$(echo "$OBJ" | grep -o '"count":[0-9]*' | grep -o '[0-9]*')"
+    [ -n "$SKILL" ] && [ -n "$COUNT" ] && printf "  /%-20s %s runs\n" "$SKILL" "$COUNT"
   done
 else
   echo "  No data yet"
@@ -75,10 +76,10 @@ echo "──────────────────"
 
 CRASHES="$(echo "$DATA" | grep -o '"crashes":\[[^]]*\]' || echo "")"
 if [ -n "$CRASHES" ] && [ "$CRASHES" != '"crashes":[]' ]; then
-  echo "$CRASHES" | grep -o '"error_class":"[^"]*"[^}]*"total_occurrences":[0-9]*' | head -5 | while read -r ENTRY; do
-    ERR="$(echo "$ENTRY" | grep -o '"error_class":"[^"]*"' | awk -F'"' '{print $4}')"
-    C="$(echo "$ENTRY" | grep -o '"total_occurrences":[0-9]*' | grep -o '[0-9]*')"
-    printf "  %-30s %s occurrences\n" "$ERR" "${C:-?}"
+  echo "$CRASHES" | grep -o '{[^}]*}' | head -5 | while read -r OBJ; do
+    ERR="$(echo "$OBJ" | grep -o '"error_class":"[^"]*"' | awk -F'"' '{print $4}')"
+    C="$(echo "$OBJ" | grep -o '"total_occurrences":[0-9]*' | grep -o '[0-9]*')"
+    [ -n "$ERR" ] && printf "  %-30s %s occurrences\n" "$ERR" "${C:-?}"
   done
 else
   echo "  No crashes reported"
@@ -91,10 +92,10 @@ echo "────────────────────────�
 
 VERSIONS="$(echo "$DATA" | grep -o '"versions":\[[^]]*\]' || echo "")"
 if [ -n "$VERSIONS" ] && [ "$VERSIONS" != '"versions":[]' ]; then
-  echo "$VERSIONS" | grep -o '"version":"[^"]*","count":[0-9]*' | head -5 | while read -r ENTRY; do
-    VER="$(echo "$ENTRY" | grep -o '"version":"[^"]*"' | awk -F'"' '{print $4}')"
-    COUNT="$(echo "$ENTRY" | grep -o '"count":[0-9]*' | grep -o '[0-9]*')"
-    printf "  v%-15s %s events\n" "$VER" "$COUNT"
+  echo "$VERSIONS" | grep -o '{[^}]*}' | head -5 | while read -r OBJ; do
+    VER="$(echo "$OBJ" | grep -o '"version":"[^"]*"' | awk -F'"' '{print $4}')"
+    COUNT="$(echo "$OBJ" | grep -o '"count":[0-9]*' | grep -o '[0-9]*')"
+    [ -n "$VER" ] && [ -n "$COUNT" ] && printf "  v%-15s %s events\n" "$VER" "$COUNT"
   done
 else
   echo "  No data yet"

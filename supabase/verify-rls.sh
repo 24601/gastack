@@ -23,6 +23,7 @@ check() {
 
   local args=(-sf -o /dev/null -w '%{http_code}' --max-time 10
     -H "apikey: ${KEY}"
+    -H "Authorization: Bearer ${KEY}"
     -H "Content-Type: application/json")
 
   if [ "$method" = "GET" ]; then
@@ -33,23 +34,28 @@ check() {
     HTTP="$(curl "${args[@]}" -X PATCH "${URL}/rest/v1/${path}" -d "$data" 2>/dev/null || echo "000")"
   fi
 
-  # Success = anything that is NOT a 200/201 with data
-  # 403, 401, or empty 200 (=[]) all count as "denied"
+  # Only 401/403 prove RLS denial. 200 (even empty) means access is granted.
+  # 5xx means something errored but access wasn't denied by policy.
   case "$HTTP" in
+    401|403)
+      echo "  PASS  $desc (HTTP $HTTP, denied by RLS)"
+      PASS=$(( PASS + 1 ))
+      ;;
     200)
-      # For GETs, check if response is empty array
-      BODY="$(curl -sf --max-time 10 "${URL}/rest/v1/${path}" -H "apikey: ${KEY}" -H "Content-Type: application/json" 2>/dev/null || echo "")"
-      if [ "$BODY" = "[]" ] || [ -z "$BODY" ]; then
-        echo "  PASS  $desc (HTTP $HTTP, empty)"
-        PASS=$(( PASS + 1 ))
+      # 200 means the request was accepted — check if data was returned
+      if [ "$method" = "GET" ]; then
+        BODY="$(curl -sf --max-time 10 "${URL}/rest/v1/${path}" -H "apikey: ${KEY}" -H "Authorization: Bearer ${KEY}" -H "Content-Type: application/json" 2>/dev/null || echo "")"
+        if [ "$BODY" = "[]" ] || [ -z "$BODY" ]; then
+          echo "  WARN  $desc (HTTP $HTTP, empty — may be RLS or empty table, verify manually)"
+          FAIL=$(( FAIL + 1 ))
+        else
+          echo "  FAIL  $desc (HTTP $HTTP, got data)"
+          FAIL=$(( FAIL + 1 ))
+        fi
       else
-        echo "  FAIL  $desc (HTTP $HTTP, got data)"
+        echo "  FAIL  $desc (HTTP $HTTP, write accepted)"
         FAIL=$(( FAIL + 1 ))
       fi
-      ;;
-    401|403|404|406)
-      echo "  PASS  $desc (HTTP $HTTP, denied)"
-      PASS=$(( PASS + 1 ))
       ;;
     201)
       echo "  FAIL  $desc (HTTP $HTTP, write succeeded!)"
@@ -60,8 +66,9 @@ check() {
       FAIL=$(( FAIL + 1 ))
       ;;
     *)
-      echo "  PASS  $desc (HTTP $HTTP)"
-      PASS=$(( PASS + 1 ))
+      # 404, 406, 500, etc. — access not definitively denied by RLS
+      echo "  WARN  $desc (HTTP $HTTP — not a clean RLS denial)"
+      FAIL=$(( FAIL + 1 ))
       ;;
   esac
 }

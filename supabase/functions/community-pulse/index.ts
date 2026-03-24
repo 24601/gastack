@@ -85,12 +85,10 @@ Deno.serve(async () => {
 
     // Version distribution (last 7 days)
     const versionCounts: Record<string, number> = {};
-    for (const row of skillRows ?? []) {
-      // skillRows doesn't have version — query separately
-    }
     const { data: versionRows } = await supabase
       .from("telemetry_events")
       .select("gstack_version")
+      .eq("event_type", "skill_run")
       .gte("event_timestamp", weekAgo)
       .limit(1000);
 
