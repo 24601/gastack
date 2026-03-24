@@ -113,7 +113,7 @@ jobs:
       # Verify Playwright can launch Chromium (fails fast if sandbox/deps are broken)
       - name: Verify Chromium
         if: matrix.suite.name == 'e2e-browse'
-        run: node -e "const {chromium}=require('playwright');(async()=>{const b=await chromium.launch({args:['--no-sandbox']});console.log('Chromium OK');await b.close();})()"
+        run: bun -e "import {chromium} from 'playwright';const b=await chromium.launch({args:['--no-sandbox']});console.log('Chromium OK');await b.close()"
 
       - name: Run ${{ matrix.suite.name }}
         env:
