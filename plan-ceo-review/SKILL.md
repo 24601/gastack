@@ -1302,9 +1302,31 @@ After displaying the Review Readiness Dashboard in conversation output, also upd
 
 ### Detect the plan file
 
-1. Check if there is an active plan file in this conversation (the host provides plan file
-   paths in system messages — look for plan file references in the conversation context).
-2. If not found, skip this section silently — not every review runs in plan mode.
+### Plan File Discovery
+
+1. **Conversation context (primary):** Check if there is an active plan file in this conversation — Claude Code system messages include plan file paths when in plan mode. Look for references like `~/.claude/plans/*.md` in system messages. If found, use it directly — this is the most reliable signal.
+
+2. **Content-based search (fallback):** If no plan file is referenced in conversation context, search by content:
+
+```bash
+BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-')
+REPO=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
+# Try branch name match first (most specific)
+PLAN=$(ls -t ~/.claude/plans/*.md 2>/dev/null | xargs grep -l "$BRANCH" 2>/dev/null | head -1)
+# Fall back to repo name match
+[ -z "$PLAN" ] && PLAN=$(ls -t ~/.claude/plans/*.md 2>/dev/null | xargs grep -l "$REPO" 2>/dev/null | head -1)
+# Last resort: most recent plan modified in the last 24 hours
+[ -z "$PLAN" ] && PLAN=$(find ~/.claude/plans -name '*.md' -mmin -1440 -maxdepth 1 2>/dev/null | xargs ls -t 2>/dev/null | head -1)
+[ -n "$PLAN" ] && echo "PLAN_FILE: $PLAN" || echo "NO_PLAN_FILE"
+```
+
+3. **Validation:** If a plan file was found via content-based search (not conversation context), read the first 20 lines and verify it is relevant to the current branch's work. If it appears to be from a different project or feature, treat as "no plan file found."
+
+**Error handling:**
+- No plan file found → skip with "No plan file detected — skipping."
+- Plan file found but unreadable (permissions, encoding) → skip with "Plan file found but unreadable — skipping."
+
+If no plan file is found after both checks, skip this section silently — not every review runs in plan mode.
 
 ### Generate the report
 
