@@ -123,8 +123,9 @@ jobs:
       - name: Verify Chromium
         if: matrix.suite.name == 'e2e-browse'
         run: |
+          # shellcheck disable=SC2012
           echo "whoami=$(whoami) HOME=$HOME TMPDIR=${TMPDIR:-unset}"
-          ls -la /tmp | head -3
+          stat /tmp
           touch /tmp/.bun-write-test && rm /tmp/.bun-write-test && echo "/tmp writable"
           bun -e "import {chromium} from 'playwright';const b=await chromium.launch({args:['--no-sandbox']});console.log('Chromium OK');await b.close()"
 
