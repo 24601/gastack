@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.11.15.0] - 2026-03-24 — Ship With Teeth
+## [0.11.16.0] - 2026-03-24 — Ship With Teeth
 
 `/ship` and `/review` now actually enforce the quality gates they've been talking about. Coverage audit becomes a real gate (not just a diagram), plan completion gets verified against the diff, and verification steps from your plan run automatically.
 
@@ -14,6 +14,19 @@
 - **Shared plan file discovery.** Conversation context first, content-based grep fallback second. Used by plan completion, plan review reports, and verification.
 - **Ship metrics logging.** Coverage %, plan completion ratio, and verification results are logged to review JSONL for /retro to track trends.
 - **Plan completion in /retro.** Weekly retros now show plan completion rates across shipped branches.
+
+## [0.11.15.0] - 2026-03-24 — E2E Test Coverage for Plan Reviews & Codex
+
+### Added
+
+- **E2E tests verify plan review reports appear at the bottom of plans.** The `/plan-eng-review` review report is now tested end-to-end — if it stops writing `## GSTACK REVIEW REPORT` to the plan file, the test catches it.
+- **E2E tests verify Codex is offered in every plan skill.** Four new lightweight tests confirm that `/office-hours`, `/plan-ceo-review`, `/plan-design-review`, and `/plan-eng-review` all check for Codex availability, prompt the user, and handle the fallback when Codex is unavailable.
+
+### For contributors
+
+- New E2E tests in `test/skill-e2e-plan.test.ts`: `plan-review-report`, `codex-offered-eng-review`, `codex-offered-ceo-review`, `codex-offered-office-hours`, `codex-offered-design-review`
+- Updated touchfile mappings and selection count assertions
+- Added `touchfiles` to the documented global touchfile list in CLAUDE.md
 
 ## [0.11.14.0] - 2026-03-24 — Windows Browse Fix
 
