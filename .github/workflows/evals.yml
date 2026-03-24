@@ -62,7 +62,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user runner --tmpfs /tmp:exec
+      options: --tmpfs /tmp:exec
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -123,9 +123,10 @@ jobs:
       - name: Verify Chromium
         if: matrix.suite.name == 'e2e-browse'
         run: |
-          echo "TMPDIR=$TMPDIR BUN_TMPDIR=$BUN_TMPDIR HOME=$HOME"
-          ls -la "$TMPDIR" || echo "TMPDIR not accessible"
-          TMPDIR="$HOME/tmp" BUN_TMPDIR="$HOME/tmp" bun -e "import {chromium} from 'playwright';const b=await chromium.launch({args:['--no-sandbox']});console.log('Chromium OK');await b.close()"
+          echo "whoami=$(whoami) HOME=$HOME TMPDIR=${TMPDIR:-unset}"
+          ls -la /tmp | head -3
+          touch /tmp/.bun-write-test && rm /tmp/.bun-write-test && echo "/tmp writable"
+          bun -e "import {chromium} from 'playwright';const b=await chromium.launch({args:['--no-sandbox']});console.log('Chromium OK');await b.close()"
 
       - name: Run ${{ matrix.suite.name }}
         env:
