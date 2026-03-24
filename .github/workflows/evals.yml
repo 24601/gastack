@@ -130,7 +130,6 @@ jobs:
           bun -e "import {chromium} from 'playwright';const b=await chromium.launch({args:['--no-sandbox']});console.log('Chromium OK');await b.close()"
 
       - name: Run ${{ matrix.suite.name }}
-        continue-on-error: ${{ matrix.suite.allow_failure || false }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
