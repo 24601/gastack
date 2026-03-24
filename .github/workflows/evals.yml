@@ -62,7 +62,6 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --tmpfs /tmp:exec
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -97,14 +96,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # Bun needs a writable tmpdir — set to /tmp which is a tmpfs mount
-      - name: Fix temp dirs
-        run: |
-          echo "TMPDIR=/tmp" >> "$GITHUB_ENV"
-          echo "BUN_TMPDIR=/tmp" >> "$GITHUB_ENV"
-          echo "XDG_CACHE_HOME=/tmp/.cache" >> "$GITHUB_ENV"
-          mkdir -p /tmp/.cache
 
       # Restore pre-installed node_modules from Docker image via symlink (~0s vs ~15s install)
       # If package.json changed since image was built, fall back to fresh install
