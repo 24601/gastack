@@ -98,10 +98,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Bun needs a writable tmpdir — GH Actions container user may not own the default
+      # Bun needs a writable tmpdir — GH Actions container user may not own the default.
+      # Force /tmp writable for all users (container default may be root-only).
       - name: Fix temp dirs
         run: |
-          mkdir -p "$HOME/tmp"
+          chmod 1777 /tmp 2>/dev/null || sudo chmod 1777 /tmp 2>/dev/null || true
+          mkdir -p "$HOME/tmp" && chmod 1777 "$HOME/tmp"
           echo "TMPDIR=$HOME/tmp" >> "$GITHUB_ENV"
           echo "BUN_TMPDIR=$HOME/tmp" >> "$GITHUB_ENV"
 
