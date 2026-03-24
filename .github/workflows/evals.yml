@@ -62,7 +62,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user runner
+      options: --user runner --tmpfs /tmp:exec
     timeout-minutes: 20
     strategy:
       fail-fast: false
