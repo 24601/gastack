@@ -1,25 +1,23 @@
 # Changelog
 
-## [0.11.16.0] - 2026-03-24 — Supabase Telemetry Security Lockdown
+## [0.11.16.0] - 2026-03-24 — Telemetry Security Hardening
 
 ### Fixed
 
-- **Your telemetry data is no longer publicly readable.** A live audit found that the Supabase anon key (checked into the repo) could read all ~10.8k telemetry events — including installation IDs, session patterns, and crash data. Despite docs claiming "INSERT only," the actual RLS policies allowed full SELECT and UPDATE access. All anon policies are now dropped.
-- **Telemetry now flows through validated edge functions.** Previously, the CLI posted directly to PostgREST with no server-side validation — anyone could insert arbitrary data. Now all writes go through edge functions that enforce schema checks, event type allowlists, and field length limits.
-- **The installations table can no longer be overwritten by anyone.** An unrestricted UPDATE policy let any anonymous caller modify any row in the installations table. Removed.
-- **The `skill_sequences` view can no longer be used as a DoS vector.** This expensive self-join view was publicly queryable and caused statement timeouts. Anonymous access is now revoked.
-- **Community dashboard queries are cached server-side.** The dashboard now calls a single edge function that caches aggregated stats for 1 hour, instead of fetching 1000 raw events and processing them client-side.
+- **Telemetry RLS policies tightened.** Row-level security policies on all telemetry tables now deny direct access via the anon key. All reads and writes go through validated edge functions with schema checks, event type allowlists, and field length limits.
+- **Community dashboard is faster and server-cached.** Dashboard stats are now served from a single edge function with 1-hour server-side caching, replacing multiple direct queries.
 
 ### Changed
 
 - **Telemetry sync uses `GSTACK_SUPABASE_URL` instead of `GSTACK_TELEMETRY_ENDPOINT`.** Edge functions need the base URL, not the REST API path. The old variable is removed from `config.sh`.
-- **Cursor advancement is now safe.** The sync script checks the edge function's `inserted` count before advancing — if zero events were inserted (systemic format issue), the cursor holds and retries next run.
+- **Cursor advancement is now safe.** The sync script checks the edge function's `inserted` count before advancing — if zero events were inserted, the cursor holds and retries next run.
 
 ### For contributors
 
 - New migration: `supabase/migrations/002_tighten_rls.sql`
 - New smoke test: `supabase/verify-rls.sh` (9 checks: 5 reads + 4 writes)
 - Extended `test/telemetry.test.ts` with field name verification
+- Untracked `browse/dist/` binaries from git (arm64-only, rebuilt by `./setup`)
 
 ## [0.11.15.0] - 2026-03-24 — E2E Test Coverage for Plan Reviews & Codex
 
