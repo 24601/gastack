@@ -1,6 +1,6 @@
 -- 002_tighten_rls.sql
--- Lock down all anon access. All reads/writes now go through edge functions
--- (which use SUPABASE_SERVICE_ROLE_KEY and bypass RLS).
+-- Lock down read/update access. Keep INSERT policies so old clients can still
+-- write via PostgREST while new clients migrate to edge functions.
 
 -- Drop all SELECT policies (anon key should not read telemetry data)
 DROP POLICY IF EXISTS "anon_select" ON telemetry_events;
@@ -10,18 +10,21 @@ DROP POLICY IF EXISTS "anon_select" ON update_checks;
 -- Drop dangerous UPDATE policy (was unrestricted on all columns)
 DROP POLICY IF EXISTS "anon_update_last_seen" ON installations;
 
--- Drop INSERT policies (writes go through edge functions now)
-DROP POLICY IF EXISTS "anon_insert_only" ON telemetry_events;
-DROP POLICY IF EXISTS "anon_insert_only" ON installations;
-DROP POLICY IF EXISTS "anon_insert_only" ON update_checks;
+-- Keep INSERT policies — old clients (pre-v0.11.16) still POST directly to
+-- PostgREST. These will be dropped in a future migration once adoption of
+-- edge-function-based sync is widespread.
+-- (anon_insert_only ON telemetry_events — kept)
+-- (anon_insert_only ON installations — kept)
+-- (anon_insert_only ON update_checks — kept)
 
 -- Explicitly revoke view access (belt-and-suspenders)
 REVOKE SELECT ON crash_clusters FROM anon;
 REVOKE SELECT ON skill_sequences FROM anon;
 
--- Drop stale columns that exist live but not in 001_telemetry.sql
-ALTER TABLE telemetry_events DROP COLUMN IF EXISTS error_message;
-ALTER TABLE telemetry_events DROP COLUMN IF EXISTS failed_step;
+-- Keep error_message and failed_step columns (exist on live schema, may be
+-- used in future). Add them to the migration record so repo matches live.
+ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS error_message TEXT;
+ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS failed_step TEXT;
 
 -- Cache table for community-pulse aggregation (prevents DoS via repeated queries)
 CREATE TABLE IF NOT EXISTS community_pulse_cache (
