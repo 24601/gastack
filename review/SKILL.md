@@ -762,21 +762,6 @@ If no test framework detected → include gaps as INFORMATIONAL findings only, n
 
 **Diff is test-only changes:** Skip Step 4.75 entirely: "No new application code paths to audit."
 
-### Coverage Warning
-
-After producing the coverage diagram, check the coverage percentage. Read CLAUDE.md for a `## Test Coverage` section with a `Minimum:` field. If not found, use default: 60%.
-
-If coverage is below the minimum threshold, output a prominent warning **before** the regular review findings:
-
-```
-⚠️ COVERAGE WARNING: AI-assessed coverage is {X}%. {N} code paths untested.
-Consider writing tests before running /ship.
-```
-
-This is INFORMATIONAL — does not block /review. But it makes low coverage visible early so the developer can address it before reaching the /ship coverage gate.
-
-If coverage percentage cannot be determined, skip the warning silently.
-
 This step subsumes the "Test Gaps" category from Pass 2 — do not duplicate findings between the checklist Test Gaps item and this coverage diagram. Include any coverage gaps alongside the findings from Step 4 and Step 4.5. They follow the same Fix-First flow — gaps are INFORMATIONAL findings.
 
 ---

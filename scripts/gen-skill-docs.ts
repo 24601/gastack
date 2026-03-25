@@ -18,6 +18,7 @@ import type { Host, TemplateContext } from './resolvers/types';
 import { HOST_PATHS } from './resolvers/types';
 import { RESOLVERS } from './resolvers/index';
 import { codexSkillName, transformFrontmatter, extractHookSafetyProse, extractNameAndDescription, condenseOpenAIShortDescription, generateOpenAIYaml } from './resolvers/codex-helpers';
+import { generatePlanCompletionAuditShip, generatePlanCompletionAuditReview, generatePlanVerificationExec } from './resolvers/review';
 
 const ROOT = path.resolve(import.meta.dir, '..');
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -2828,6 +2829,9 @@ const RESOLVERS: Record<string, (ctx: TemplateContext) => string> = {
   ADVERSARIAL_STEP: generateAdversarialStep,
   DEPLOY_BOOTSTRAP: generateDeployBootstrap,
   CODEX_PLAN_REVIEW: generateCodexPlanReview,
+  PLAN_COMPLETION_AUDIT_SHIP: generatePlanCompletionAuditShip,
+  PLAN_COMPLETION_AUDIT_REVIEW: generatePlanCompletionAuditReview,
+  PLAN_VERIFICATION_EXEC: generatePlanVerificationExec,
 };
 
 // ─── Codex Helpers ───────────────────────────────────────────
