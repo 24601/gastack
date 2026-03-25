@@ -3,7 +3,6 @@ name: plan-eng-review
 preamble-tier: 3
 version: 1.0.0
 description: |
-  MANUAL TRIGGER ONLY: invoke only when user types /plan-eng-review.
   Eng manager-mode plan review. Lock in the execution plan — architecture,
   data flow, diagrams, edge cases, test coverage, performance. Walks through
   issues interactively with opinionated recommendations. Use when asked to

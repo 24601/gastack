@@ -3,7 +3,6 @@ name: browse
 preamble-tier: 1
 version: 1.1.0
 description: |
-  MANUAL TRIGGER ONLY: invoke only when user types /browse.
   Fast headless browser for QA testing and site dogfooding. Navigate any URL, interact with
   elements, verify page state, diff before/after actions, take annotated screenshots, check
   responsive layouts, test forms and uploads, handle dialogs, and assert element states.

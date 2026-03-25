@@ -3,7 +3,6 @@ name: review
 preamble-tier: 4
 version: 1.0.0
 description: |
-  MANUAL TRIGGER ONLY: invoke only when user types /review.
   Pre-landing PR review. Analyzes diff against the base branch for SQL safety, LLM trust
   boundary violations, conditional side effects, and other structural issues. Use when
   asked to "review this PR", "code review", "pre-landing review", or "check my diff".
