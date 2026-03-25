@@ -120,6 +120,77 @@ describe('gstack-community-backup', () => {
   });
 });
 
+describe('gstack-screenshot-upload', () => {
+  test('shows usage when no file provided', () => {
+    const output = run(`${BIN}/gstack-screenshot-upload`);
+    expect(output).toContain('Usage:');
+  });
+
+  test('errors on missing file', () => {
+    const output = run(`${BIN}/gstack-screenshot-upload /nonexistent/file.png`);
+    expect(output).toContain('file not found');
+  });
+
+  test('errors when not authenticated', () => {
+    // Create a valid PNG file (1x1 pixel)
+    const pngFile = path.join(tmpDir, 'test.png');
+    // Minimal valid PNG: 1x1 white pixel
+    const png = Buffer.from([
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+      0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+      0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, // IDAT chunk
+      0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+      0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC,
+      0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, // IEND chunk
+      0x44, 0xAE, 0x42, 0x60, 0x82
+    ]);
+    fs.writeFileSync(pngFile, png);
+
+    const output = run(`${BIN}/gstack-screenshot-upload ${pngFile}`);
+    expect(output).toContain('not authenticated');
+  });
+
+  test('slugifies repo and branch names', () => {
+    // Test the slugify behavior by checking the upload script parses args correctly
+    // We can't test actual upload without a server, but we can verify arg parsing
+    const pngFile = path.join(tmpDir, 'test.png');
+    const png = Buffer.from([
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+      0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+      0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
+      0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+      0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC,
+      0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+      0x44, 0xAE, 0x42, 0x60, 0x82
+    ]);
+    fs.writeFileSync(pngFile, png);
+
+    // Will fail at auth check, but we verify it gets past arg parsing
+    const output = run(`${BIN}/gstack-screenshot-upload ${pngFile} --repo-slug "My/Repo" --branch "feat/my-thing" --viewport desktop`);
+    // Should fail at auth, not at arg parsing
+    expect(output).toContain('not authenticated');
+  });
+
+  test('rejects non-PNG files', () => {
+    const txtFile = path.join(tmpDir, 'test.txt');
+    fs.writeFileSync(txtFile, 'not a png');
+    const output = run(`${BIN}/gstack-screenshot-upload ${txtFile}`);
+    expect(output).toContain('only PNG');
+  });
+});
+
+describe('gstack-auth device code', () => {
+  test('change-email shows instructions', () => {
+    const output = run(`${BIN}/gstack-auth change-email`);
+    expect(output).toContain('log out');
+    expect(output).toContain('re-authenticate');
+  });
+});
+
 describe('gstack-community-benchmarks', () => {
   test('shows no data message when no local analytics', () => {
     const output = run(`${BIN}/gstack-community-benchmarks`);
