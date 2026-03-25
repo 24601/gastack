@@ -8,3 +8,6 @@ GSTACK_SUPABASE_ANON_KEY="sb_publishable_tR4i6cyMIrYTE3s6OyHGHw_ppx2p6WK"
 
 # Telemetry ingest endpoint (Data API)
 GSTACK_TELEMETRY_ENDPOINT="${GSTACK_SUPABASE_URL}/rest/v1"
+
+# gstack.gg web app (auth + screenshot upload)
+GSTACK_WEB_URL="https://gstack.gg"
