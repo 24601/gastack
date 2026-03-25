@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.11.16.0] - 2026-03-24 — Ship With Teeth
+## [0.11.18.0] - 2026-03-24 — Ship With Teeth
 
 `/ship` and `/review` now actually enforce the quality gates they've been talking about. Coverage audit becomes a real gate (not just a diagram), plan completion gets verified against the diff, and verification steps from your plan run automatically.
 
@@ -14,6 +14,50 @@
 - **Shared plan file discovery.** Conversation context first, content-based grep fallback second. Used by plan completion, plan review reports, and verification.
 - **Ship metrics logging.** Coverage %, plan completion ratio, and verification results are logged to review JSONL for /retro to track trends.
 - **Plan completion in /retro.** Weekly retros now show plan completion rates across shipped branches.
+
+## [0.11.17.0] - 2026-03-24 — Cleaner Skill Descriptions + Proactive Opt-Out
+
+### Changed
+
+- **Skill descriptions are now clean and readable.** Removed the ugly "MANUAL TRIGGER ONLY" prefix from every skill description that was wasting 58 characters and causing build errors for Codex integration.
+- **You can now opt out of proactive skill suggestions.** The first time you run any gstack skill, you'll be asked whether you want gstack to suggest skills during your workflow. If you prefer to invoke skills manually, just say no — it's saved as a global setting. You can change your mind anytime with `gstack-config set proactive true/false`.
+
+### Fixed
+
+- **Telemetry source tagging no longer crashes.** Fixed duration guards and source field validation in the telemetry logger so it handles edge cases cleanly instead of erroring.
+
+## [0.11.16.1] - 2026-03-24 — Installation ID Privacy Fix
+
+### Fixed
+
+- **Installation IDs are now random UUIDs instead of hostname hashes.** The old `SHA-256(hostname+username)` approach meant anyone who knew your machine identity could compute your installation ID. Now uses a random UUID stored in `~/.gstack/installation-id` — not derivable from any public input, rotatable by deleting the file.
+- **RLS verification script handles edge cases.** `verify-rls.sh` now correctly treats INSERT success as expected (kept for old client compat), handles 409 conflicts and 204 no-ops.
+
+## [0.11.16.0] - 2026-03-24 — Smarter CI + Telemetry Security
+
+### Changed
+
+- **CI runs only gate tests by default — periodic tests run weekly.** Every E2E test is now classified as `gate` (blocks PRs) or `periodic` (weekly cron + on-demand). Gate tests cover functional correctness and safety guardrails. Periodic tests cover expensive Opus quality benchmarks, non-deterministic routing tests, and tests requiring external services (Codex, Gemini). CI feedback is faster and cheaper while quality benchmarks still run weekly.
+- **Global touchfiles are now granular.** Previously, changing `gen-skill-docs.ts` triggered all 56 E2E tests. Now only the ~27 tests that actually depend on it run. Same for `llm-judge.ts`, `test-server.ts`, `worktree.ts`, and the Codex/Gemini session runners. The truly global list is down to 3 files (session-runner, eval-store, touchfiles.ts itself).
+- **New `test:gate` and `test:periodic` scripts** replace `test:e2e:fast`. Use `EVALS_TIER=gate` or `EVALS_TIER=periodic` to filter tests by tier.
+- **Telemetry sync uses `GSTACK_SUPABASE_URL` instead of `GSTACK_TELEMETRY_ENDPOINT`.** Edge functions need the base URL, not the REST API path. The old variable is removed from `config.sh`.
+- **Cursor advancement is now safe.** The sync script checks the edge function's `inserted` count before advancing — if zero events were inserted, the cursor holds and retries next run.
+
+### Fixed
+
+- **Telemetry RLS policies tightened.** Row-level security policies on all telemetry tables now deny direct access via the anon key. All reads and writes go through validated edge functions with schema checks, event type allowlists, and field length limits.
+- **Community dashboard is faster and server-cached.** Dashboard stats are now served from a single edge function with 1-hour server-side caching, replacing multiple direct queries.
+
+### For contributors
+
+- `E2E_TIERS` map in `test/helpers/touchfiles.ts` classifies every test — a free validation test ensures it stays in sync with `E2E_TOUCHFILES`
+- `EVALS_FAST` / `FAST_EXCLUDED_TESTS` removed in favor of `EVALS_TIER`
+- `allow_failure` removed from CI matrix (gate tests should be reliable)
+- New `.github/workflows/evals-periodic.yml` runs periodic tests Monday 6 AM UTC
+- New migration: `supabase/migrations/002_tighten_rls.sql`
+- New smoke test: `supabase/verify-rls.sh` (9 checks: 5 reads + 4 writes)
+- Extended `test/telemetry.test.ts` with field name verification
+- Untracked `browse/dist/` binaries from git (arm64-only, rebuilt by `./setup`)
 
 ## [0.11.15.0] - 2026-03-24 — E2E Test Coverage for Plan Reviews & Codex
 
