@@ -1,8 +1,8 @@
 -- gstack telemetry data integrity + growth metrics
 -- Adds source tagging, install fingerprinting, duration guards, and growth views.
 --
--- PREREQUISITE: Run Phase 4A cleanup BEFORE this migration:
---   UPDATE telemetry_events SET duration_s = NULL WHERE duration_s > 86400 OR duration_s < 0;
+-- ─── Phase 4A cleanup (inline — fixes 56-year durations from shell var bug) ──
+UPDATE telemetry_events SET duration_s = NULL WHERE duration_s > 86400 OR duration_s < 0;
 
 -- ─── Source field (live/test/dev tagging) ─────────────────────
 ALTER TABLE telemetry_events ADD COLUMN source TEXT DEFAULT 'live';
