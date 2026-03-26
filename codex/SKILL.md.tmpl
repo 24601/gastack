@@ -241,14 +241,26 @@ ls -t ~/.claude/plans/*.md 2>/dev/null | xargs grep -l "$(basename $(pwd))" 2>/d
 ```
 If no project-scoped match, fall back to `ls -t ~/.claude/plans/*.md 2>/dev/null | head -1`
 but warn: "Note: this plan may be from a different project — verify before sending to Codex."
-Read the plan file and prepend the persona to the user's prompt:
+
+**IMPORTANT — embed content, don't reference path:** Codex runs sandboxed to the repo
+root (`-C`) and cannot access `~/.claude/plans/` or any files outside the repo. You MUST
+read the plan file yourself and embed its FULL CONTENT in the prompt below. Do NOT tell
+Codex the file path or ask it to read the plan file — it will waste 10+ tool calls
+searching and fail.
+
+Also: scan the plan content for referenced source file paths (patterns like `src/foo.ts`,
+`lib/bar.py`, paths containing `/` that exist in the repo). If found, list them in the
+prompt so Codex reads them directly instead of discovering them via rg/find.
+
+Prepend the persona to the user's prompt:
 "You are a brutally honest technical reviewer. Review this plan for: logical gaps and
 unstated assumptions, missing error handling or edge cases, overcomplexity (is there a
 simpler approach?), feasibility risks (what could go wrong?), and missing dependencies
 or sequencing issues. Be direct. Be terse. No compliments. Just the problems.
+Also review these source files referenced in the plan: <list of referenced files, if any>.
 
 THE PLAN:
-<plan content>"
+<full plan content, embedded verbatim>"
 
 4. Run codex exec with **JSONL output** to capture reasoning traces (5-minute timeout):
 
