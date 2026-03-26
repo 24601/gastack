@@ -234,13 +234,42 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
-## Detect default branch
+## Step 0: Detect platform and base branch
 
-Before gathering data, detect the repo's default branch name:
-`gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
+First, detect the git hosting platform from the remote URL:
 
-If this fails, fall back to `main`. Use the detected name wherever the instructions
-say `origin/<default>` below.
+```bash
+git remote get-url origin 2>/dev/null
+```
+
+- If the URL contains "github.com" → platform is **GitHub**
+- If the URL contains "gitlab" → platform is **GitLab**
+- Otherwise, check CLI availability:
+  - `gh auth status 2>/dev/null` succeeds → platform is **GitHub** (covers GitHub Enterprise)
+  - `glab auth status 2>/dev/null` succeeds → platform is **GitLab** (covers self-hosted)
+  - Neither → **unknown** (use git-native commands only)
+
+Determine which branch this PR/MR targets, or the repo's default branch if no
+PR/MR exists. Use the result as "the base branch" in all subsequent steps.
+
+**If GitHub:**
+1. `gh pr view --json baseRefName -q .baseRefName` — if succeeds, use it
+2. `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` — if succeeds, use it
+
+**If GitLab:**
+1. `glab mr view -F json 2>/dev/null` and extract the `target_branch` field — if succeeds, use it
+2. `glab repo view -F json 2>/dev/null` and extract the `default_branch` field — if succeeds, use it
+
+**Git-native fallback (if unknown platform, or CLI commands fail):**
+1. `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'`
+2. If that fails: `git rev-parse --verify origin/main 2>/dev/null` → use `main`
+3. If that fails: `git rev-parse --verify origin/master 2>/dev/null` → use `master`
+
+If all fail, fall back to `main`.
+
+Print the detected base branch name. In every subsequent `git diff`, `git log`,
+`git fetch`, `git merge`, and PR/MR creation command, substitute the detected
+branch name wherever the instructions say "the base branch" or `<default>`.
 
 ---
 
@@ -311,8 +340,8 @@ git log origin/<default> --since="<window>" --format="%at|%aN|%ai|%s" | sort -n
 # 4. Files most frequently changed (hotspot analysis)
 git log origin/<default> --since="<window>" --format="" --name-only | grep -v '^$' | sort | uniq -c | sort -rn
 
-# 5. PR numbers from commit messages (extract #NNN patterns)
-git log origin/<default> --since="<window>" --format="%s" | grep -oE '#[0-9]+' | sed 's/^#//' | sort -n | uniq | sed 's/^/#/'
+# 5. PR/MR numbers from commit messages (GitHub #NNN, GitLab !NNN)
+git log origin/<default> --since="<window>" --format="%s" | grep -oE '[#!][0-9]+' | sed 's/^[#!]//' | sort -n | uniq | sed 's/^/#/'
 
 # 6. Per-author file hotspots (who touches what)
 git log origin/<default> --since="<window>" --format="AUTHOR:%aN" --name-only
@@ -783,8 +812,8 @@ git -C <path> log origin/$DEFAULT --since="<start_date>T00:00:00" --format="%at|
 # Per-author commit counts
 git -C <path> shortlog origin/$DEFAULT --since="<start_date>T00:00:00" -sn --no-merges
 
-# PR numbers from commit messages
-git -C <path> log origin/$DEFAULT --since="<start_date>T00:00:00" --format="%s" | grep -oE '#[0-9]+' | sort -n | uniq
+# PR/MR numbers from commit messages (GitHub #NNN, GitLab !NNN)
+git -C <path> log origin/$DEFAULT --since="<start_date>T00:00:00" --format="%s" | grep -oE '[#!][0-9]+' | sed 's/^[#!]//' | sort -n | uniq | sed 's/^/#/'
 ```
 
 For repos that fail (deleted paths, network errors): skip and note "N repos could not be reached."
@@ -862,7 +891,7 @@ align cleanly. Never truncate project names.
 ║  • [1-line description of second theme]
 ║  • [1-line description of third theme]
 ║
-║  Powered by gstack · github.com/garrytan/gstack
+║  Powered by gstack
 ╚═══════════════════════════════════════════════════════════════
 ```
 
@@ -991,7 +1020,7 @@ Use the Write tool to save JSON to `~/.gstack/retros/global-${today}-${next}.jso
   "projects": [
     {
       "name": "gstack",
-      "remote": "https://github.com/garrytan/gstack",
+      "remote": "<detected from git remote get-url origin, normalized to HTTPS>",
       "commits": 47,
       "insertions": 3200,
       "deletions": 800,
