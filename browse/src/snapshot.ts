@@ -17,7 +17,7 @@
  * Later: "click @e3" → look up Locator → locator.click()
  */
 
-import type { Page, Locator } from 'playwright';
+import type { Page, Frame, Locator } from 'playwright';
 import type { BrowserManager, RefEntry } from './browser-manager';
 import * as Diff from 'diff';
 import { TEMP_DIR, isPathWithin } from './platform';
@@ -136,15 +136,18 @@ export async function handleSnapshot(
 ): Promise<string> {
   const opts = parseSnapshotArgs(args);
   const page = bm.getPage();
+  // Frame-aware target for accessibility tree
+  const target = bm.getActiveFrameOrPage();
+  const inFrame = bm.getFrame() !== null;
 
   // Get accessibility tree via ariaSnapshot
   let rootLocator: Locator;
   if (opts.selector) {
-    rootLocator = page.locator(opts.selector);
+    rootLocator = target.locator(opts.selector);
     const count = await rootLocator.count();
     if (count === 0) throw new Error(`Selector not found: ${opts.selector}`);
   } else {
-    rootLocator = page.locator('body');
+    rootLocator = target.locator('body');
   }
 
   const ariaText = await rootLocator.ariaSnapshot();
@@ -393,6 +396,12 @@ export async function handleSnapshot(
 
   // Store for future diffs
   bm.setLastSnapshot(snapshotText);
+
+  // Add frame context header when operating inside an iframe
+  if (inFrame) {
+    const frameUrl = bm.getFrame()?.url() ?? 'unknown';
+    output.unshift(`[Context: iframe src="${frameUrl}"]`);
+  }
 
   return output.join('\n');
 }

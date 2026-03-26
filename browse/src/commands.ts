@@ -34,6 +34,8 @@ export const META_COMMANDS = new Set([
   'connect', 'disconnect', 'focus',
   'inbox',
   'watch',
+  'state',
+  'frame',
 ]);
 
 export const ALL_COMMANDS = new Set([...READ_COMMANDS, ...WRITE_COMMANDS, ...META_COMMANDS]);
@@ -109,6 +111,10 @@ export const COMMAND_DESCRIPTIONS: Record<string, { category: string; descriptio
   'inbox':   { category: 'Meta', description: 'List messages from sidebar scout inbox', usage: 'inbox [--clear]' },
   // Watch
   'watch':   { category: 'Meta', description: 'Passive observation — periodic snapshots while user browses', usage: 'watch [stop]' },
+  // State
+  'state':   { category: 'Server', description: 'Save/load browser state (cookies + URLs)', usage: 'state save|load <name>' },
+  // Frame
+  'frame':   { category: 'Meta', description: 'Switch to iframe context (or main to return)', usage: 'frame <sel|@ref|--name n|--url pattern|main>' },
 };
 
 // Load-time validation: descriptions must cover exactly the command sets
