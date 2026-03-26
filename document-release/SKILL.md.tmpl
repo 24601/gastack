@@ -320,8 +320,12 @@ gh pr edit --body-file /tmp/gstack-pr-body-$$.md
 ```
 
 **If GitLab:**
+Read the contents of `/tmp/gstack-pr-body-$$.md` using the Read tool, then pass it to `glab mr update` using a heredoc to avoid shell metacharacter issues:
 ```bash
-glab mr update -d "$(cat /tmp/gstack-pr-body-$$.md)"
+glab mr update -d "$(cat <<'MRBODY'
+<paste the file contents here>
+MRBODY
+)"
 ```
 
 5. Clean up the tempfile:
