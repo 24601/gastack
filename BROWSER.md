@@ -217,6 +217,34 @@ Or do it manually:
 - **Side Panel is empty:** The feed only shows activity after the extension connects. Run a browse command (`$B snapshot`) to see it appear.
 - **Extension disappeared after Chrome update:** Sideloaded extensions persist across updates. If it's gone, reload it from Step 3.
 
+### Sidebar agent
+
+The Chrome side panel includes a chat interface. Type a message and a child Claude instance executes it in the browser. The sidebar agent has access to `Bash`, `Read`, `Glob`, and `Grep` tools (same as Claude Code, minus `Edit` and `Write` ... read-only by design).
+
+**How it works:**
+
+1. You type a message in the side panel chat
+2. The extension POSTs to the local browse server (`/sidebar-command`)
+3. The server queues the message and the sidebar-agent process spawns `claude -p` with your message + the current page context
+4. Claude executes browse commands via Bash (`$B snapshot`, `$B click @e3`, etc.)
+5. Progress streams back to the side panel in real time
+
+**What you can do:**
+- "Take a snapshot and describe what you see"
+- "Click the Login button, fill in test@example.com / password123, and submit"
+- "Go through every row in this table and extract the names and emails"
+- "Navigate to Settings > Account and screenshot it"
+
+**Timeout:** Each task gets up to 5 minutes. Multi-page workflows (navigating a directory, filling forms across pages) work within this window. If a task times out, the side panel shows an error and you can retry or break it into smaller steps.
+
+**Session isolation:** Each sidebar session runs in its own git worktree. The sidebar agent won't interfere with your main Claude Code session.
+
+**Authentication:** The sidebar agent uses the same browser session as headed mode. Two options:
+1. Log in manually in the headed browser ... your session persists for the sidebar agent
+2. Import cookies from your real Chrome via `/setup-browser-cookies`
+
+**Random delays:** If you need the agent to pause between actions (e.g., to avoid rate limits), use `sleep` in bash or `$B wait <milliseconds>`.
+
 ### User handoff
 
 When the headless browser can't proceed (CAPTCHA, MFA, complex auth), `handoff` opens a visible Chrome window at the exact same page with all cookies, localStorage, and tabs preserved. The user solves the problem manually, then `resume` returns control to the agent with a fresh snapshot.

@@ -14,6 +14,26 @@
 **Priority:** P2
 **Depends on:** Blog post about Search Before Building
 
+## Chrome DevTools MCP Integration
+
+### Real Chrome session access
+
+**What:** Integrate Chrome DevTools MCP to connect to the user's real Chrome session with real cookies, real state, no Playwright middleman.
+
+**Why:** Right now, headed mode launches a fresh Chromium profile. Users must log in manually or import cookies. Chrome DevTools MCP connects to the user's actual Chrome ... instant access to every authenticated site. This is the future of browser automation for AI agents.
+
+**Context:** Google shipped Chrome DevTools MCP in Chrome 146+ (June 2025). It provides screenshots, console messages, performance traces, Lighthouse audits, and full page interaction through the user's real browser. gstack should use it for real-session access while keeping Playwright for headless CI/testing workflows.
+
+Potential new skills:
+- `/debug-browser`: JS error tracing with source-mapped stack traces
+- `/perf-debug`: performance traces, Core Web Vitals, network waterfall
+
+May replace `/setup-browser-cookies` for most use cases since the user's real cookies are already there.
+
+**Effort:** L (human: ~2 weeks / CC: ~2 hours)
+**Priority:** P0
+**Depends on:** Chrome 146+, DevTools MCP server installed
+
 ## Browse
 
 ### Bundle server.ts into compiled binary
