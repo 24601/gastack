@@ -591,6 +591,7 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 | Command | Description |
 |---------|-------------|
 | `chain` | Run commands from JSON stdin. Format: [["cmd","arg1",...],...] |
+| `frame <sel|@ref|--name n|--url pattern|main>` | Switch to iframe context (or main to return) |
 | `inbox [--clear]` | List messages from sidebar scout inbox |
 | `watch [stop]` | Passive observation — periodic snapshots while user browses |
 
@@ -611,6 +612,7 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 | `handoff [message]` | Open visible Chrome at current page for user takeover |
 | `restart` | Restart server |
 | `resume` | Re-snapshot after user takeover, return control to AI |
+| `state save|load <name>` | Save/load browser state (cookies + URLs) |
 | `status` | Health check |
 | `stop` | Shutdown server |
 

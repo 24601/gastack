@@ -80,17 +80,14 @@ May replace `/setup-browser-cookies` for most use cases since the user's real co
 **Effort:** S
 **Priority:** P3
 
-### State persistence
+### State persistence — SHIPPED
 
-**What:** Save/load cookies + localStorage to JSON files for reproducible test sessions.
+~~**What:** Save/load cookies + localStorage to JSON files for reproducible test sessions.~~
 
-**Why:** Enables "resume where I left off" for QA sessions and repeatable auth states.
+`$B state save/load` ships in v0.12.1.0. V1 saves cookies + URLs only (not localStorage, which breaks on load-before-navigate). Files at `.gstack/browse-states/{name}.json` with 0o600 permissions. Load replaces session (closes all pages first). Name sanitized to `[a-zA-Z0-9_-]`.
 
-**Context:** The `saveState()`/`restoreState()` helpers from the handoff feature (browser-manager.ts) already capture cookies + localStorage + sessionStorage + URLs. Adding file I/O on top is ~20 lines.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** Sessions
+**Remaining:** V2 localStorage support (needs pre-navigation injection strategy).
+**Completed:** v0.12.1.0 (2026-03-26)
 
 ### Auth vault
 
@@ -102,14 +99,13 @@ May replace `/setup-browser-cookies` for most use cases since the user's real co
 **Priority:** P3
 **Depends on:** Sessions, state persistence
 
-### Iframe support
+### Iframe support — SHIPPED
 
-**What:** `frame <sel>` and `frame main` commands for cross-frame interaction.
+~~**What:** `frame <sel>` and `frame main` commands for cross-frame interaction.~~
 
-**Why:** Many web apps use iframes (embeds, payment forms, ads). Currently invisible to browse.
+`$B frame` ships in v0.12.1.0. Supports CSS selector, @ref, `--name`, and `--url` pattern matching. Execution target abstraction (`getActiveFrameOrPage()`) across all read/write/snapshot commands. Frame context cleared on navigation, tab switch, resume. Detached frame auto-recovery. Page-only operations (goto, screenshot, viewport) throw clear error when in frame context.
 
-**Effort:** M
-**Priority:** P4
+**Completed:** v0.12.1.0 (2026-03-26)
 
 ### Semantic locators
 

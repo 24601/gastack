@@ -402,6 +402,7 @@ export class BrowserManager {
   switchTab(id: number): void {
     if (!this.pages.has(id)) throw new Error(`Tab ${id} not found`);
     this.activeTabId = id;
+    this.activeFrame = null; // Frame context is per-tab
   }
 
   getTabCount(): number {
@@ -529,6 +530,42 @@ export class BrowserManager {
 
   getUserAgent(): string | null {
     return this.customUserAgent;
+  }
+
+  // ─── Lifecycle helpers ───────────────────────────────
+  /**
+   * Close all open pages and clear the pages map.
+   * Used by state load to replace the current session.
+   */
+  async closeAllPages(): Promise<void> {
+    for (const page of this.pages.values()) {
+      await page.close().catch(() => {});
+    }
+    this.pages.clear();
+    this.clearRefs();
+  }
+
+  // ─── Frame context ─────────────────────────────────
+  private activeFrame: import('playwright').Frame | null = null;
+
+  setFrame(frame: import('playwright').Frame | null): void {
+    this.activeFrame = frame;
+  }
+
+  getFrame(): import('playwright').Frame | null {
+    return this.activeFrame;
+  }
+
+  /**
+   * Returns the active frame if set, otherwise the current page.
+   * Use this for operations that work on both Page and Frame (locator, evaluate, etc.).
+   */
+  getActiveFrameOrPage(): import('playwright').Page | import('playwright').Frame {
+    // Auto-recover from detached frames (iframe removed/navigated)
+    if (this.activeFrame?.isDetached()) {
+      this.activeFrame = null;
+    }
+    return this.activeFrame ?? this.getPage();
   }
 
   // ─── State Save/Restore (shared by recreateContext + handoff) ─
@@ -789,6 +826,7 @@ export class BrowserManager {
   resume(): void {
     this.clearRefs();
     this.resetFailures();
+    this.activeFrame = null;
   }
 
   getIsHeaded(): boolean {
@@ -818,6 +856,7 @@ export class BrowserManager {
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame()) {
         this.clearRefs();
+        this.activeFrame = null; // Navigation invalidates frame context
       }
     });
 
