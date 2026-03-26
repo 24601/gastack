@@ -363,6 +363,14 @@ Parse the user's input to determine which mode to run:
    - Otherwise, ask: "What would you like to ask Codex?"
 4. `/codex <anything else>` — **Consult mode** (Step 2C), where the remaining text is the prompt
 
+**Reasoning effort override:** If the user's input contains `--xhigh` anywhere,
+note it and remove it from the prompt text before passing to Codex. When `--xhigh`
+is present, use `model_reasoning_effort="xhigh"` for all modes regardless of the
+per-mode default below. Otherwise, use the per-mode defaults:
+- Review (2A): `high` — bounded diff input, needs thoroughness
+- Challenge (2B): `high` — adversarial but bounded by diff
+- Consult (2C): `medium` — large context, interactive, needs speed
+
 ---
 
 ## Step 2A: Review Mode
@@ -376,13 +384,15 @@ TMPERR=$(mktemp /tmp/codex-err-XXXXXX.txt)
 
 2. Run the review (5-minute timeout):
 ```bash
-codex review --base <base> -c 'model_reasoning_effort="xhigh"' --enable web_search_cached 2>"$TMPERR"
+codex review --base <base> -c 'model_reasoning_effort="high"' --enable web_search_cached 2>"$TMPERR"
 ```
+
+If the user passed `--xhigh`, use `"xhigh"` instead of `"high"`.
 
 Use `timeout: 300000` on the Bash call. If the user provided custom instructions
 (e.g., `/codex review focus on security`), pass them as the prompt argument:
 ```bash
-codex review "focus on security" --base <base> -c 'model_reasoning_effort="xhigh"' --enable web_search_cached 2>"$TMPERR"
+codex review "focus on security" --base <base> -c 'model_reasoning_effort="high"' --enable web_search_cached 2>"$TMPERR"
 ```
 
 3. Capture the output. Then parse cost from stderr:
@@ -520,7 +530,7 @@ With focus (e.g., "security"):
 
 2. Run codex exec with **JSONL output** to capture reasoning traces and tool calls (5-minute timeout):
 ```bash
-codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>/dev/null | PYTHONUNBUFFERED=1 python3 -u -c "
+codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached --json 2>/dev/null | PYTHONUNBUFFERED=1 python3 -u -c "
 import sys, json
 for line in sys.stdin:
     line = line.strip()
@@ -605,7 +615,7 @@ THE PLAN:
 
 For a **new session:**
 ```bash
-codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | PYTHONUNBUFFERED=1 python3 -u -c "
+codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="medium"' --enable web_search_cached --json 2>"$TMPERR" | PYTHONUNBUFFERED=1 python3 -u -c "
 import sys, json
 for line in sys.stdin:
     line = line.strip()
@@ -638,7 +648,7 @@ for line in sys.stdin:
 
 For a **resumed session** (user chose "Continue"):
 ```bash
-codex exec resume <session-id> "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | PYTHONUNBUFFERED=1 python3 -u -c "
+codex exec resume <session-id> "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="medium"' --enable web_search_cached --json 2>"$TMPERR" | PYTHONUNBUFFERED=1 python3 -u -c "
 <same python streaming parser as above, with flush=True on all print() calls>
 "
 ```
@@ -674,7 +684,14 @@ Session saved — run /codex again to continue this conversation.
 agentic coding model). This means as OpenAI ships newer models, /codex automatically
 uses them. If the user wants a specific model, pass `-m` through to codex.
 
-**Reasoning effort:** All modes use `xhigh` — maximum reasoning power. When reviewing code, breaking code, or consulting on architecture, you want the model thinking as hard as possible.
+**Reasoning effort (per-mode defaults):**
+- **Review (2A):** `high` — bounded diff input, needs thoroughness but not max tokens
+- **Challenge (2B):** `high` — adversarial but bounded by diff size
+- **Consult (2C):** `medium` — large context (plans, codebase), interactive, needs speed
+
+`xhigh` uses ~23x more tokens than `high` and causes 50+ minute hangs on large context
+tasks (OpenAI issues #8545, #8402, #6931). Users can override with `--xhigh` flag
+(e.g., `/codex review --xhigh`) when they want maximum reasoning and are willing to wait.
 
 **Web search:** All codex commands use `--enable web_search_cached` so Codex can look up
 docs and APIs during review. This is OpenAI's cached index — fast, no extra cost.
