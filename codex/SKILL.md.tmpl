@@ -168,6 +168,9 @@ With focus (e.g., "security"):
 "Review the changes on this branch against the base branch. Run `git diff origin/<base>` to see the diff. Focus specifically on SECURITY. Your job is to find every way an attacker could exploit this code. Think about injection vectors, auth bypasses, privilege escalation, data exposure, and timing attacks. Be adversarial."
 
 2. Run codex exec with **JSONL output** to capture reasoning traces and tool calls (5-minute timeout):
+
+If the user passed `--xhigh`, use `"xhigh"` instead of `"high"`.
+
 ```bash
 codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached --json 2>/dev/null | PYTHONUNBUFFERED=1 python3 -u -c "
 import sys, json
@@ -263,6 +266,8 @@ THE PLAN:
 <full plan content, embedded verbatim>"
 
 4. Run codex exec with **JSONL output** to capture reasoning traces (5-minute timeout):
+
+If the user passed `--xhigh`, use `"xhigh"` instead of `"medium"`.
 
 For a **new session:**
 ```bash
