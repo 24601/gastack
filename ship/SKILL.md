@@ -253,22 +253,42 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
-## Step 0: Detect base branch
+## Step 0: Detect platform and base branch
 
-Determine which branch this PR targets. Use the result as "the base branch" in all subsequent steps.
+First, detect the git hosting platform from the remote URL:
 
-1. Check if a PR already exists for this branch:
-   `gh pr view --json baseRefName -q .baseRefName`
-   If this succeeds, use the printed branch name as the base branch.
+```bash
+git remote get-url origin 2>/dev/null
+```
 
-2. If no PR exists (command fails), detect the repo's default branch:
-   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
+- If the URL contains "github.com" → platform is **GitHub**
+- If the URL contains "gitlab" → platform is **GitLab**
+- Otherwise, check CLI availability:
+  - `gh auth status 2>/dev/null` succeeds → platform is **GitHub** (covers GitHub Enterprise)
+  - `glab auth status 2>/dev/null` succeeds → platform is **GitLab** (covers self-hosted)
+  - Neither → **unknown** (use git-native commands only)
 
-3. If both commands fail, fall back to `main`.
+Determine which branch this PR/MR targets, or the repo's default branch if no
+PR/MR exists. Use the result as "the base branch" in all subsequent steps.
+
+**If GitHub:**
+1. `gh pr view --json baseRefName -q .baseRefName` — if succeeds, use it
+2. `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` — if succeeds, use it
+
+**If GitLab:**
+1. `glab mr view -F json 2>/dev/null` and extract the `target_branch` field — if succeeds, use it
+2. `glab repo view -F json 2>/dev/null` and extract the `default_branch` field — if succeeds, use it
+
+**Git-native fallback (if unknown platform, or CLI commands fail):**
+1. `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'`
+2. If that fails: `git rev-parse --verify origin/main 2>/dev/null` → use `main`
+3. If that fails: `git rev-parse --verify origin/master 2>/dev/null` → use `master`
+
+If all fail, fall back to `main`.
 
 Print the detected base branch name. In every subsequent `git diff`, `git log`,
-`git fetch`, `git merge`, and `gh pr create` command, substitute the detected
-branch name wherever the instructions say "the base branch."
+`git fetch`, `git merge`, and PR/MR creation command, substitute the detected
+branch name wherever the instructions say "the base branch" or `<default>`.
 
 ---
 
@@ -391,12 +411,13 @@ service with existing deployment — verify that a distribution pipeline exists.
 2. If new artifact detected, check for a release workflow:
    ```bash
    ls .github/workflows/ 2>/dev/null | grep -iE 'release|publish|dist'
+   grep -qE 'release|publish|deploy' .gitlab-ci.yml 2>/dev/null && echo "GITLAB_CI_RELEASE"
    ```
 
 3. **If no release pipeline exists and a new artifact was added:** Use AskUserQuestion:
    - "This PR adds a new binary/tool but there's no CI/CD pipeline to build and publish it.
      Users won't be able to download the artifact after merge."
-   - A) Add a release workflow now (GitHub Actions cross-platform build + GitHub Releases)
+   - A) Add a release workflow now (CI/CD release pipeline — GitHub Actions or GitLab CI depending on platform)
    - B) Defer — add to TODOS.md
    - C) Not needed — this is internal/web-only, existing deployment covers it
 
@@ -676,14 +697,22 @@ Use AskUserQuestion:
   git log --format="%an (%ae)" -1 -- <source-file-under-test>
   ```
   If these are different people, prefer the production code author — they likely introduced the regression.
-- Create a GitHub issue assigned to that person:
-  ```bash
-  gh issue create \
-    --title "Pre-existing test failure: <test-name>" \
-    --body "Found failing on branch <current-branch>. Failure is pre-existing.\n\n**Error:**\n```\n<first 10 lines>\n```\n\n**Last modified by:** <author>\n**Noticed by:** gstack /ship on <date>" \
-    --assignee "<github-username>"
-  ```
-- If `gh` is not available or `--assignee` fails (user not in org, etc.), create the issue without assignee and note who should look at it in the body.
+- Create an issue assigned to that person (use the platform detected in Step 0):
+  - **If GitHub:**
+    ```bash
+    gh issue create \
+      --title "Pre-existing test failure: <test-name>" \
+      --body "Found failing on branch <current-branch>. Failure is pre-existing.\n\n**Error:**\n```\n<first 10 lines>\n```\n\n**Last modified by:** <author>\n**Noticed by:** gstack /ship on <date>" \
+      --assignee "<github-username>"
+    ```
+  - **If GitLab:**
+    ```bash
+    glab issue create \
+      -t "Pre-existing test failure: <test-name>" \
+      -d "Found failing on branch <current-branch>. Failure is pre-existing.\n\n**Error:**\n```\n<first 10 lines>\n```\n\n**Last modified by:** <author>\n**Noticed by:** gstack /ship on <date>" \
+      -a "<gitlab-username>"
+    ```
+- If neither CLI is available or `--assignee`/`-a` fails (user not in org, etc.), create the issue without assignee and note who should look at it in the body.
 - Continue with the workflow.
 
 **If "Skip":**
@@ -1420,12 +1449,13 @@ git push -u origin <branch-name>
 
 ---
 
-## Step 8: Create PR
+## Step 8: Create PR/MR
 
-Create a pull request using `gh`:
+Create a pull request (GitHub) or merge request (GitLab) using the platform detected in Step 0.
 
-```bash
-gh pr create --base <base> --title "<type>: <summary>" --body "$(cat <<'EOF'
+The PR/MR body should contain these sections:
+
+```
 ## Summary
 <bullet points from CHANGELOG>
 
@@ -1459,11 +1489,30 @@ gh pr create --base <base> --title "<type>: <summary>" --body "$(cat <<'EOF'
 - [x] All Vitest tests pass (N tests)
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```
+
+**If GitHub:**
+
+```bash
+gh pr create --base <base> --title "<type>: <summary>" --body "$(cat <<'EOF'
+<PR body from above>
 EOF
 )"
 ```
 
-**Output the PR URL** — then proceed to Step 8.5.
+**If GitLab:**
+
+```bash
+glab mr create -b <base> -t "<type>: <summary>" -d "$(cat <<'EOF'
+<MR body from above>
+EOF
+)"
+```
+
+**If neither CLI is available:**
+Print the branch name, remote URL, and instruct the user to create the PR/MR manually via the web UI. Do not stop — the code is pushed and ready.
+
+**Output the PR/MR URL** — then proceed to Step 8.5.
 
 ---
 

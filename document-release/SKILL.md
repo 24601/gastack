@@ -236,22 +236,42 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
-## Step 0: Detect base branch
+## Step 0: Detect platform and base branch
 
-Determine which branch this PR targets. Use the result as "the base branch" in all subsequent steps.
+First, detect the git hosting platform from the remote URL:
 
-1. Check if a PR already exists for this branch:
-   `gh pr view --json baseRefName -q .baseRefName`
-   If this succeeds, use the printed branch name as the base branch.
+```bash
+git remote get-url origin 2>/dev/null
+```
 
-2. If no PR exists (command fails), detect the repo's default branch:
-   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
+- If the URL contains "github.com" → platform is **GitHub**
+- If the URL contains "gitlab" → platform is **GitLab**
+- Otherwise, check CLI availability:
+  - `gh auth status 2>/dev/null` succeeds → platform is **GitHub** (covers GitHub Enterprise)
+  - `glab auth status 2>/dev/null` succeeds → platform is **GitLab** (covers self-hosted)
+  - Neither → **unknown** (use git-native commands only)
 
-3. If both commands fail, fall back to `main`.
+Determine which branch this PR/MR targets, or the repo's default branch if no
+PR/MR exists. Use the result as "the base branch" in all subsequent steps.
+
+**If GitHub:**
+1. `gh pr view --json baseRefName -q .baseRefName` — if succeeds, use it
+2. `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` — if succeeds, use it
+
+**If GitLab:**
+1. `glab mr view -F json 2>/dev/null` and extract the `target_branch` field — if succeeds, use it
+2. `glab repo view -F json 2>/dev/null` and extract the `default_branch` field — if succeeds, use it
+
+**Git-native fallback (if unknown platform, or CLI commands fail):**
+1. `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'`
+2. If that fails: `git rev-parse --verify origin/main 2>/dev/null` → use `main`
+3. If that fails: `git rev-parse --verify origin/master 2>/dev/null` → use `master`
+
+If all fail, fall back to `main`.
 
 Print the detected base branch name. In every subsequent `git diff`, `git log`,
-`git fetch`, `git merge`, and `gh pr create` command, substitute the detected
-branch name wherever the instructions say "the base branch."
+`git fetch`, `git merge`, and PR/MR creation command, substitute the detected
+branch name wherever the instructions say "the base branch" or `<default>`.
 
 ---
 
@@ -524,12 +544,18 @@ EOF
 git push
 ```
 
-**PR body update (idempotent, race-safe):**
+**PR/MR body update (idempotent, race-safe):**
 
-1. Read the existing PR body into a PID-unique tempfile:
+1. Read the existing PR/MR body into a PID-unique tempfile (use the platform detected in Step 0):
 
+**If GitHub:**
 ```bash
 gh pr view --json body -q .body > /tmp/gstack-pr-body-$$.md
+```
+
+**If GitLab:**
+```bash
+glab mr view -F json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('description',''))" > /tmp/gstack-pr-body-$$.md
 ```
 
 2. If the tempfile already contains a `## Documentation` section, replace that section with the
@@ -541,8 +567,14 @@ gh pr view --json body -q .body > /tmp/gstack-pr-body-$$.md
 
 4. Write the updated body back:
 
+**If GitHub:**
 ```bash
 gh pr edit --body-file /tmp/gstack-pr-body-$$.md
+```
+
+**If GitLab:**
+```bash
+glab mr update -d "$(cat /tmp/gstack-pr-body-$$.md)"
 ```
 
 5. Clean up the tempfile:
@@ -551,8 +583,8 @@ gh pr edit --body-file /tmp/gstack-pr-body-$$.md
 rm -f /tmp/gstack-pr-body-$$.md
 ```
 
-6. If `gh pr view` fails (no PR exists): skip with message "No PR found — skipping body update."
-7. If `gh pr edit` fails: warn "Could not update PR body — documentation changes are in the
+6. If `gh pr view` / `glab mr view` fails (no PR/MR exists): skip with message "No PR/MR found — skipping body update."
+7. If `gh pr edit` / `glab mr update` fails: warn "Could not update PR/MR body — documentation changes are in the
    commit." and continue.
 
 **Structured doc health summary (final output):**
