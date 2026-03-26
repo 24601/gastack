@@ -520,18 +520,15 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
     // Delete stale state file
     try { fs.unlinkSync(config.stateFile); } catch {}
 
-    const chatMode = commandArgs.includes('--chat');
-    console.log(chatMode
-      ? 'Launching headed Chromium with extension + standalone chat (experimental)...'
-      : 'Launching headed Chromium with extension...');
+    console.log('Launching headed Chromium with extension + sidebar agent...');
     try {
       // Start server in headed mode with extension auto-loaded
       // Use a well-known port so the Chrome extension auto-connects
       const serverEnv: Record<string, string> = {
         BROWSE_HEADED: '1',
         BROWSE_PORT: '34567',
+        BROWSE_SIDEBAR_CHAT: '1',
       };
-      if (chatMode) serverEnv.BROWSE_SIDEBAR_CHAT = '1';
       const newState = await startServer(serverEnv);
 
       // Print connected status
@@ -547,31 +544,28 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
       const status = await resp.text();
       console.log(`Connected to real Chrome\n${status}`);
 
-      // Auto-start sidebar agent only when --chat is enabled
-      if (chatMode) {
-        const agentScript = path.resolve(__dirname, 'sidebar-agent.ts');
-        const agentLogFile = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-agent.log');
-        try {
-          // Clear old agent queue
-          const agentQueue = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-agent-queue.jsonl');
-          try { fs.writeFileSync(agentQueue, ''); } catch {}
+      // Auto-start sidebar agent
+      const agentScript = path.resolve(__dirname, 'sidebar-agent.ts');
+      try {
+        // Clear old agent queue
+        const agentQueue = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-agent-queue.jsonl');
+        try { fs.writeFileSync(agentQueue, ''); } catch {}
 
-          const agentProc = Bun.spawn(['bun', 'run', agentScript], {
-            cwd: config.projectDir,
-            env: {
-              ...process.env,
-              BROWSE_BIN: path.resolve(__dirname, '..', 'dist', 'browse'),
-              BROWSE_STATE_FILE: config.stateFile,
-              BROWSE_SERVER_PORT: String(newState.port),
-            },
-            stdio: ['ignore', 'ignore', 'ignore'],
-          });
-          agentProc.unref();
-          console.log(`[browse] Sidebar agent started (PID: ${agentProc.pid})`);
-        } catch (err: any) {
-          console.error(`[browse] Sidebar agent failed to start: ${err.message}`);
-          console.error(`[browse] Run manually: bun run ${agentScript}`);
-        }
+        const agentProc = Bun.spawn(['bun', 'run', agentScript], {
+          cwd: config.projectDir,
+          env: {
+            ...process.env,
+            BROWSE_BIN: path.resolve(__dirname, '..', 'dist', 'browse'),
+            BROWSE_STATE_FILE: config.stateFile,
+            BROWSE_SERVER_PORT: String(newState.port),
+          },
+          stdio: ['ignore', 'ignore', 'ignore'],
+        });
+        agentProc.unref();
+        console.log(`[browse] Sidebar agent started (PID: ${agentProc.pid})`);
+      } catch (err: any) {
+        console.error(`[browse] Sidebar agent failed to start: ${err.message}`);
+        console.error(`[browse] Run manually: bun run ${agentScript}`);
       }
     } catch (err: any) {
       console.error(`[browse] Connect failed: ${err.message}`);

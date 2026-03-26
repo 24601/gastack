@@ -36,7 +36,7 @@ ensureStateDir(config);
 const AUTH_TOKEN = crypto.randomUUID();
 const BROWSE_PORT = parseInt(process.env.BROWSE_PORT || '0', 10);
 const IDLE_TIMEOUT_MS = parseInt(process.env.BROWSE_IDLE_TIMEOUT || '1800000', 10); // 30 min
-const chatEnabled = process.env.BROWSE_SIDEBAR_CHAT === '1';
+// Sidebar chat is always enabled in headed mode (ungated in v0.12.0)
 
 function validateAuth(req: Request): boolean {
   const header = req.headers.get('authorization');
@@ -116,7 +116,7 @@ interface SidebarSession {
 }
 
 const SESSIONS_DIR = path.join(process.env.HOME || '/tmp', '.gstack', 'sidebar-sessions');
-const AGENT_TIMEOUT_MS = 120_000;
+const AGENT_TIMEOUT_MS = 300_000; // 5 minutes — multi-page tasks need time
 const MAX_QUEUE = 5;
 
 let sidebarSession: SidebarSession | null = null;
@@ -811,7 +811,7 @@ async function start() {
           tabs: browserManager.getTabCount(),
           currentUrl: browserManager.getCurrentUrl(),
           token: AUTH_TOKEN,  // Extension uses this for Bearer auth
-          chatEnabled,
+          chatEnabled: true,
           agent: {
             status: agentStatus,
             runningFor: agentStartTime ? Date.now() - agentStartTime : null,
@@ -910,13 +910,7 @@ async function start() {
 
       // ─── Sidebar endpoints (auth required — token from /health) ────
 
-      // Gate all sidebar/chat routes behind --chat flag
-      if (!chatEnabled && url.pathname.startsWith('/sidebar')) {
-        return new Response(JSON.stringify({ error: 'Chat not enabled. Use: $B connect --chat' }), {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
+      // Sidebar routes are always available in headed mode (ungated in v0.12.0)
 
       // Sidebar chat history — read from in-memory buffer
       if (url.pathname === '/sidebar-chat') {

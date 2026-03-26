@@ -205,14 +205,14 @@ async function askClaude(queueEntry: any): Promise<void> {
       });
     });
 
-    // Timeout after 120 seconds
+    // Timeout after 300 seconds (5 min — multi-page tasks need time)
     setTimeout(() => {
       try { proc.kill(); } catch {}
-      sendEvent({ type: 'agent_error', error: 'Timed out after 120s' }).then(() => {
+      sendEvent({ type: 'agent_error', error: 'Timed out after 300s' }).then(() => {
         isProcessing = false;
         resolve();
       });
-    }, 120000);
+    }, 300000);
   });
 }
 
