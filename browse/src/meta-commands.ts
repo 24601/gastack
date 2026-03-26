@@ -219,7 +219,9 @@ export async function handleMetaCommand(
         if (!Array.isArray(commands)) throw new Error('not array');
       } catch {
         // Fallback: pipe-delimited format "goto url | click @e5 | snapshot -ic"
-        commands = jsonStr.split(' | ').map(seg => tokenizePipeSegment(seg.trim()));
+        commands = jsonStr.split(' | ')
+          .filter(seg => seg.trim().length > 0)
+          .map(seg => tokenizePipeSegment(seg.trim()));
       }
 
       const results: string[] = [];
@@ -478,7 +480,11 @@ export async function handleMetaCommand(
       if (action === 'load') {
         if (!fs.existsSync(statePath)) throw new Error(`State not found: ${statePath}`);
         const data = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+        if (!Array.isArray(data.cookies) || !Array.isArray(data.pages)) {
+          throw new Error('Invalid state file: expected cookies and pages arrays');
+        }
         // Close existing pages, then restore (replace, not merge)
+        bm.setFrame(null);
         await bm.closeAllPages();
         await bm.restoreState({
           cookies: data.cookies,
@@ -516,6 +522,7 @@ export async function handleMetaCommand(
         const locator = 'locator' in resolved ? resolved.locator : page.locator(resolved.selector);
         const elementHandle = await locator.elementHandle({ timeout: 5000 });
         frame = await elementHandle?.contentFrame() ?? null;
+        await elementHandle?.dispose();
       }
 
       if (!frame) throw new Error(`Frame not found: ${target}`);

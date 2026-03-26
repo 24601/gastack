@@ -258,7 +258,7 @@ export async function handleWriteCommand(
       if ('locator' in resolved) {
         await resolved.locator.setInputFiles(filePaths);
       } else {
-        await page.locator(resolved.selector).setInputFiles(filePaths);
+        await target.locator(resolved.selector).setInputFiles(filePaths);
       }
 
       const fileInfo = filePaths.map(fp => {

@@ -561,6 +561,10 @@ export class BrowserManager {
    * Use this for operations that work on both Page and Frame (locator, evaluate, etc.).
    */
   getActiveFrameOrPage(): import('playwright').Page | import('playwright').Frame {
+    // Auto-recover from detached frames (iframe removed/navigated)
+    if (this.activeFrame?.isDetached()) {
+      this.activeFrame = null;
+    }
     return this.activeFrame ?? this.getPage();
   }
 

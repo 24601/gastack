@@ -208,11 +208,11 @@ export async function handleSnapshot(
 
     let locator: Locator;
     if (opts.selector) {
-      locator = page.locator(opts.selector).getByRole(node.role as any, {
+      locator = target.locator(opts.selector).getByRole(node.role as any, {
         name: node.name || undefined,
       });
     } else {
-      locator = page.getByRole(node.role as any, {
+      locator = target.getByRole(node.role as any, {
         name: node.name || undefined,
       });
     }
@@ -236,7 +236,7 @@ export async function handleSnapshot(
   // ─── Cursor-interactive scan (-C) ─────────────────────────
   if (opts.cursorInteractive) {
     try {
-      const cursorElements = await page.evaluate(() => {
+      const cursorElements = await target.evaluate(() => {
         const STANDARD_INTERACTIVE = new Set([
           'A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SUMMARY', 'DETAILS',
         ]);
@@ -290,7 +290,7 @@ export async function handleSnapshot(
         let cRefCounter = 1;
         for (const elem of cursorElements) {
           const ref = `c${cRefCounter++}`;
-          const locator = page.locator(elem.selector);
+          const locator = target.locator(elem.selector);
           refMap.set(ref, { locator, role: 'cursor-interactive', name: elem.text });
           output.push(`@${ref} [${elem.reason}] "${elem.text}"`);
         }
