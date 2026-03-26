@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.12.1.0] - 2026-03-26 — Smarter Browsing: Network Idle, State Persistence, Iframes
+
+Every click, fill, and select now waits for the page to settle before returning. No more stale snapshots because an XHR was still in-flight. Chain accepts pipe-delimited format for faster multi-step flows. You can save and restore browser sessions (cookies + open tabs). And iframe content is now reachable.
+
+### Added
+
+- **Network idle detection.** `click`, `fill`, and `select` auto-wait up to 2s for network requests to settle before returning. Catches XHR/fetch triggered by interactions. Uses Playwright's built-in `waitForLoadState('networkidle')`, not a custom tracker.
+
+- **`$B state save/load`.** Save your browser session (cookies + open tabs) to a named file, load it back later. Files stored at `.gstack/browse-states/{name}.json` with 0o600 permissions. V1 saves cookies + URLs only (not localStorage, which breaks on load-before-navigate). Load replaces the current session, not merge.
+
+- **`$B frame` command.** Switch command context into an iframe: `$B frame iframe`, `$B frame --name checkout`, `$B frame --url stripe`, or `$B frame @e5`. All subsequent commands (click, fill, snapshot, etc.) operate inside the iframe. `$B frame main` returns to the main page. Snapshot shows `[Context: iframe src="..."]` header. Detached frames auto-recover.
+
+- **Chain pipe format.** Chain now accepts `$B chain 'goto url | click @e5 | snapshot -ic'` as a fallback when JSON parsing fails. Pipe-delimited with quote-aware tokenization.
+
+### Changed
+
+- **Chain post-loop idle wait.** After executing all commands in a chain, if the last was a write command, chain waits for network idle before returning.
+
+### Fixed
+
+- **Iframe ref scoping.** Snapshot ref locators, cursor-interactive scan, and cursor locators now use the frame-aware target instead of always scoping to the main page.
+- **Detached frame recovery.** `getActiveFrameOrPage()` checks `isDetached()` and auto-recovers.
+- **State load resets frame context.** Loading a saved state clears the active frame reference.
+- **elementHandle leak in frame command.** Now properly disposed after getting contentFrame.
+- **Upload command frame-aware.** `upload` uses the frame-aware target for file input locators.
+
 ## [0.12.0.0] - 2026-03-26 — Headed Mode + Sidebar Agent
 
 You can now watch Claude work in a real Chrome window and direct it from a sidebar chat.
