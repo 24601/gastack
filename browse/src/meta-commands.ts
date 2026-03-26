@@ -11,6 +11,8 @@ import * as Diff from 'diff';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TEMP_DIR, isPathWithin } from './platform';
+import { resolveConfig } from './config';
+import type { Frame } from 'playwright';
 
 // Security: Path validation to prevent path traversal attacks
 const SAFE_DIRECTORIES = [TEMP_DIR, process.cwd()];
@@ -21,6 +23,25 @@ export function validateOutputPath(filePath: string): void {
   if (!isSafe) {
     throw new Error(`Path must be within: ${SAFE_DIRECTORIES.join(', ')}`);
   }
+}
+
+/** Tokenize a pipe segment respecting double-quoted strings. */
+function tokenizePipeSegment(segment: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuote = false;
+  for (let i = 0; i < segment.length; i++) {
+    const ch = segment[i];
+    if (ch === '"') {
+      inQuote = !inQuote;
+    } else if (ch === ' ' && !inQuote) {
+      if (current) { tokens.push(current); current = ''; }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) tokens.push(current);
+  return tokens;
 }
 
 export async function handleMetaCommand(
@@ -187,33 +208,50 @@ export async function handleMetaCommand(
     case 'chain': {
       // Read JSON array from args[0] (if provided) or expect it was passed as body
       const jsonStr = args[0];
-      if (!jsonStr) throw new Error('Usage: echo \'[["goto","url"],["text"]]\' | browse chain');
+      if (!jsonStr) throw new Error(
+        'Usage: echo \'[["goto","url"],["text"]]\' | browse chain\n' +
+        '   or: browse chain \'goto url | click @e5 | snapshot -ic\''
+      );
 
       let commands: string[][];
       try {
         commands = JSON.parse(jsonStr);
+        if (!Array.isArray(commands)) throw new Error('not array');
       } catch {
-        throw new Error('Invalid JSON. Expected: [["command", "arg1", "arg2"], ...]');
+        // Fallback: pipe-delimited format "goto url | click @e5 | snapshot -ic"
+        commands = jsonStr.split(' | ').map(seg => tokenizePipeSegment(seg.trim()));
       }
-
-      if (!Array.isArray(commands)) throw new Error('Expected JSON array of commands');
 
       const results: string[] = [];
       const { handleReadCommand } = await import('./read-commands');
       const { handleWriteCommand } = await import('./write-commands');
 
+      let lastWasWrite = false;
       for (const cmd of commands) {
         const [name, ...cmdArgs] = cmd;
         try {
           let result: string;
-          if (WRITE_COMMANDS.has(name))    result = await handleWriteCommand(name, cmdArgs, bm);
-          else if (READ_COMMANDS.has(name))  result = await handleReadCommand(name, cmdArgs, bm);
-          else if (META_COMMANDS.has(name))  result = await handleMetaCommand(name, cmdArgs, bm, shutdown);
-          else throw new Error(`Unknown command: ${name}`);
+          if (WRITE_COMMANDS.has(name)) {
+            result = await handleWriteCommand(name, cmdArgs, bm);
+            lastWasWrite = true;
+          } else if (READ_COMMANDS.has(name)) {
+            result = await handleReadCommand(name, cmdArgs, bm);
+            lastWasWrite = false;
+          } else if (META_COMMANDS.has(name)) {
+            result = await handleMetaCommand(name, cmdArgs, bm, shutdown);
+            lastWasWrite = false;
+          } else {
+            throw new Error(`Unknown command: ${name}`);
+          }
           results.push(`[${name}] ${result}`);
         } catch (err: any) {
           results.push(`[${name}] ERROR: ${err.message}`);
         }
+      }
+
+      // Wait for network to settle after write commands before returning
+      if (lastWasWrite) {
+        await bm.getPage().waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
       }
 
       return results.join('\n\n');
@@ -408,6 +446,82 @@ export async function handleMetaCommand(
       }
 
       return lines.join('\n');
+    }
+
+    // ─── State ────────────────────────────────────────
+    case 'state': {
+      const [action, name] = args;
+      if (!action || !name) throw new Error('Usage: state save|load <name>');
+
+      // Sanitize name: alphanumeric + hyphens + underscores only
+      if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        throw new Error('State name must be alphanumeric (a-z, 0-9, _, -)');
+      }
+
+      const config = resolveConfig();
+      const stateDir = path.join(config.stateDir, 'browse-states');
+      fs.mkdirSync(stateDir, { recursive: true });
+      const statePath = path.join(stateDir, `${name}.json`);
+
+      if (action === 'save') {
+        const state = await bm.saveState();
+        // V1: cookies + URLs only (not localStorage — breaks on load-before-navigate)
+        const saveData = {
+          version: 1,
+          cookies: state.cookies,
+          pages: state.pages.map(p => ({ url: p.url, isActive: p.isActive })),
+        };
+        fs.writeFileSync(statePath, JSON.stringify(saveData, null, 2), { mode: 0o600 });
+        return `State saved: ${statePath} (${state.cookies.length} cookies, ${state.pages.length} pages — treat as sensitive)`;
+      }
+
+      if (action === 'load') {
+        if (!fs.existsSync(statePath)) throw new Error(`State not found: ${statePath}`);
+        const data = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+        // Close existing pages, then restore (replace, not merge)
+        await bm.closeAllPages();
+        await bm.restoreState({
+          cookies: data.cookies,
+          pages: data.pages.map((p: any) => ({ ...p, storage: null })),
+        });
+        return `State loaded: ${data.cookies.length} cookies, ${data.pages.length} pages`;
+      }
+
+      throw new Error('Usage: state save|load <name>');
+    }
+
+    // ─── Frame ───────────────────────────────────────
+    case 'frame': {
+      const target = args[0];
+      if (!target) throw new Error('Usage: frame <selector|@ref|--name name|--url pattern|main>');
+
+      if (target === 'main') {
+        bm.setFrame(null);
+        bm.clearRefs();
+        return 'Switched to main frame';
+      }
+
+      const page = bm.getPage();
+      let frame: Frame | null = null;
+
+      if (target === '--name') {
+        if (!args[1]) throw new Error('Usage: frame --name <name>');
+        frame = page.frame({ name: args[1] });
+      } else if (target === '--url') {
+        if (!args[1]) throw new Error('Usage: frame --url <pattern>');
+        frame = page.frame({ url: new RegExp(args[1]) });
+      } else {
+        // CSS selector or @ref for the iframe element
+        const resolved = await bm.resolveRef(target);
+        const locator = 'locator' in resolved ? resolved.locator : page.locator(resolved.selector);
+        const elementHandle = await locator.elementHandle({ timeout: 5000 });
+        frame = await elementHandle?.contentFrame() ?? null;
+      }
+
+      if (!frame) throw new Error(`Frame not found: ${target}`);
+      bm.setFrame(frame);
+      bm.clearRefs();
+      return `Switched to frame: ${frame.url()}`;
     }
 
     default:

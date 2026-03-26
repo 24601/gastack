@@ -1323,13 +1323,12 @@ describe('Errors', () => {
     }
   });
 
-  test('chain with invalid JSON throws', async () => {
-    try {
-      await handleMetaCommand('chain', ['not json'], bm, async () => {});
-      expect(true).toBe(false);
-    } catch (err: any) {
-      expect(err.message).toContain('Invalid JSON');
-    }
+  test('chain with invalid JSON falls back to pipe format', async () => {
+    // Non-JSON input is now treated as pipe-delimited format
+    // 'not json' → [["not", "json"]] → "not" is unknown command → error in result
+    const result = await handleMetaCommand('chain', ['not json'], bm, async () => {});
+    expect(result).toContain('ERROR');
+    expect(result).toContain('Unknown command: not');
   });
 
   test('chain with no arg throws', async () => {
