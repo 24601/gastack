@@ -520,7 +520,7 @@ With focus (e.g., "security"):
 
 2. Run codex exec with **JSONL output** to capture reasoning traces and tool calls (5-minute timeout):
 ```bash
-codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>/dev/null | python3 -c "
+codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>/dev/null | PYTHONUNBUFFERED=1 python3 -u -c "
 import sys, json
 for line in sys.stdin:
     line = line.strip()
@@ -533,17 +533,17 @@ for line in sys.stdin:
             itype = item.get('type','')
             text = item.get('text','')
             if itype == 'reasoning' and text:
-                print(f'[codex thinking] {text}')
-                print()
+                print(f'[codex thinking] {text}', flush=True)
+                print(flush=True)
             elif itype == 'agent_message' and text:
-                print(text)
+                print(text, flush=True)
             elif itype == 'command_execution':
                 cmd = item.get('command','')
-                if cmd: print(f'[codex ran] {cmd}')
+                if cmd: print(f'[codex ran] {cmd}', flush=True)
         elif t == 'turn.completed':
             usage = obj.get('usage',{})
             tokens = usage.get('input_tokens',0) + usage.get('output_tokens',0)
-            if tokens: print(f'\ntokens used: {tokens}')
+            if tokens: print(f'\ntokens used: {tokens}', flush=True)
     except: pass
 "
 ```
@@ -605,7 +605,7 @@ THE PLAN:
 
 For a **new session:**
 ```bash
-codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | python3 -c "
+codex exec "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | PYTHONUNBUFFERED=1 python3 -u -c "
 import sys, json
 for line in sys.stdin:
     line = line.strip()
@@ -615,31 +615,31 @@ for line in sys.stdin:
         t = obj.get('type','')
         if t == 'thread.started':
             tid = obj.get('thread_id','')
-            if tid: print(f'SESSION_ID:{tid}')
+            if tid: print(f'SESSION_ID:{tid}', flush=True)
         elif t == 'item.completed' and 'item' in obj:
             item = obj['item']
             itype = item.get('type','')
             text = item.get('text','')
             if itype == 'reasoning' and text:
-                print(f'[codex thinking] {text}')
-                print()
+                print(f'[codex thinking] {text}', flush=True)
+                print(flush=True)
             elif itype == 'agent_message' and text:
-                print(text)
+                print(text, flush=True)
             elif itype == 'command_execution':
                 cmd = item.get('command','')
-                if cmd: print(f'[codex ran] {cmd}')
+                if cmd: print(f'[codex ran] {cmd}', flush=True)
         elif t == 'turn.completed':
             usage = obj.get('usage',{})
             tokens = usage.get('input_tokens',0) + usage.get('output_tokens',0)
-            if tokens: print(f'\ntokens used: {tokens}')
+            if tokens: print(f'\ntokens used: {tokens}', flush=True)
     except: pass
 "
 ```
 
 For a **resumed session** (user chose "Continue"):
 ```bash
-codex exec resume <session-id> "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | python3 -c "
-<same python streaming parser as above>
+codex exec resume <session-id> "<prompt>" -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | PYTHONUNBUFFERED=1 python3 -u -c "
+<same python streaming parser as above, with flush=True on all print() calls>
 "
 ```
 
