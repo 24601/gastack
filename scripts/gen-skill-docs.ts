@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Host, TemplateContext } from './resolvers/types';
 import { HOST_PATHS } from './resolvers/types';
-import { RESOLVERS } from './resolvers/index';
+import { RESOLVERS as IMPORTED_RESOLVERS } from './resolvers/index';
 import { codexSkillName, transformFrontmatter, extractHookSafetyProse, extractNameAndDescription, condenseOpenAIShortDescription, generateOpenAIYaml } from './resolvers/codex-helpers';
 import { generatePlanCompletionAuditShip, generatePlanCompletionAuditReview, generatePlanVerificationExec } from './resolvers/review';
 
@@ -473,7 +473,7 @@ Hey gstack team — ran into this while using /{skill-name}:
 
 **What I was trying to do:** {what the user/agent was attempting}
 **What happened instead:** {what actually happened}
-**My rating:** {0-10} — {one sentence on why it wasn't a 10}
+**My Rating:** {0-10} — {one sentence on why it wasn't a 10}
 
 ## Steps to reproduce
 1. {step}
@@ -584,15 +584,14 @@ plan's living status.`;
 }
 
 function generatePreamble(ctx: TemplateContext): string {
+  const tier = ctx.preambleTier ?? 4;
   return [
     generatePreambleBash(ctx),
     generateUpgradeCheck(ctx),
     generateLakeIntro(),
     generateTelemetryPrompt(ctx),
-    generateAskUserFormat(ctx),
-    generateCompletenessSection(),
-    generateRepoModeSection(),
-    generateSearchBeforeBuildingSection(ctx),
+    ...(tier >= 2 ? [generateAskUserFormat(ctx), generateCompletenessSection()] : []),
+    ...(tier >= 3 ? [generateRepoModeSection(), generateSearchBeforeBuildingSection(ctx)] : []),
     generateContributorMode(),
     generateCompletionStatus(),
   ].join('\n\n');
@@ -2801,37 +2800,20 @@ function generateSlugSetup(ctx: TemplateContext): string {
   return `eval "$(${ctx.paths.binDir}/gstack-slug 2>/dev/null)" && mkdir -p ~/.gstack/projects/$SLUG`;
 }
 
+// Use the canonical RESOLVERS from resolvers/index.ts, extended with local overrides.
+// Local overrides are kept for functions that have hardcoded ~/.claude/ paths in the
+// imported versions — the local versions are host-agnostic and safe for Codex output.
 const RESOLVERS: Record<string, (ctx: TemplateContext) => string> = {
-  SLUG_EVAL: generateSlugEval,
-  SLUG_SETUP: generateSlugSetup,
-  COMMAND_REFERENCE: generateCommandReference,
-  SNAPSHOT_FLAGS: generateSnapshotFlags,
+  ...IMPORTED_RESOLVERS,
+  // Local override — preamble generator with tier-gated sections
   PREAMBLE: generatePreamble,
-  BROWSE_SETUP: generateBrowseSetup,
-  BASE_BRANCH_DETECT: generateBaseBranchDetect,
-  QA_METHODOLOGY: generateQAMethodology,
-  DESIGN_METHODOLOGY: generateDesignMethodology,
-  DESIGN_HARD_RULES: generateDesignHardRules,
-  DESIGN_OUTSIDE_VOICES: generateDesignOutsideVoices,
-  DESIGN_REVIEW_LITE: generateDesignReviewLite,
-  REVIEW_DASHBOARD: generateReviewDashboard,
+  // Local overrides — these use host-agnostic paths (no ~/.claude/ hardcoding)
   PLAN_FILE_REVIEW_REPORT: generatePlanFileReviewReport,
-  TEST_BOOTSTRAP: generateTestBootstrap,
-  TEST_COVERAGE_AUDIT_PLAN: generateTestCoverageAuditPlan,
-  TEST_COVERAGE_AUDIT_SHIP: generateTestCoverageAuditShip,
-  TEST_COVERAGE_AUDIT_REVIEW: generateTestCoverageAuditReview,
-  TEST_FAILURE_TRIAGE: generateTestFailureTriage,
-  SPEC_REVIEW_LOOP: generateSpecReviewLoop,
-  DESIGN_SKETCH: generateDesignSketch,
-  BENEFITS_FROM: generateBenefitsFrom,
-  CODEX_SECOND_OPINION: generateCodexSecondOpinion,
-  CODEX_REVIEW_STEP: generateAdversarialStep,
-  ADVERSARIAL_STEP: generateAdversarialStep,
-  DEPLOY_BOOTSTRAP: generateDeployBootstrap,
-  CODEX_PLAN_REVIEW: generateCodexPlanReview,
   PLAN_COMPLETION_AUDIT_SHIP: generatePlanCompletionAuditShip,
   PLAN_COMPLETION_AUDIT_REVIEW: generatePlanCompletionAuditReview,
   PLAN_VERIFICATION_EXEC: generatePlanVerificationExec,
+  // Local-only entry not in resolvers/index.ts
+  CODEX_REVIEW_STEP: generateAdversarialStep,
 };
 
 // ─── Codex Helpers ───────────────────────────────────────────
