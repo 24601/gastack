@@ -3,7 +3,6 @@ name: review
 preamble-tier: 4
 version: 1.0.0
 description: |
-  MANUAL TRIGGER ONLY: invoke only when user types /review.
   Pre-landing PR review. Analyzes diff against the base branch for SQL safety, LLM trust
   boundary violations, conditional side effects, and other structural issues. Use when
   asked to "review this PR", "code review", "pre-landing review", or "check my diff".
@@ -33,9 +32,11 @@ _SESSIONS=$(find ~/.gstack/sessions -mmin -120 -type f 2>/dev/null | wc -l | tr 
 find ~/.gstack/sessions -mmin +120 -type f -delete 2>/dev/null || true
 _CONTRIB=$(~/.claude/skills/gstack/bin/gstack-config get gstack_contributor 2>/dev/null || true)
 _PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null || echo "true")
+_PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
 _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 echo "BRANCH: $_BRANCH"
 echo "PROACTIVE: $_PROACTIVE"
+echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
 source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
 REPO_MODE=${REPO_MODE:-unknown}
 echo "REPO_MODE: $REPO_MODE"
@@ -53,8 +54,11 @@ echo '{"skill":"review","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basen
 for _PF in $(find ~/.gstack/analytics -maxdepth 1 -name '.pending-*' 2>/dev/null); do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
 ```
 
-If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills — only invoke
-them when the user explicitly asks. The user opted out of proactive suggestions.
+If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills AND do not
+auto-invoke skills based on conversation context. Only run skills the user explicitly
+types (e.g., /qa, /ship). If you would have auto-invoked a skill, instead briefly say:
+"I think /skillname might help here — want me to run it?" and wait for confirmation.
+The user opted out of proactive behavior.
 
 If output shows `UPGRADE_AVAILABLE <old> <new>`: read `~/.claude/skills/gstack/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
 
@@ -102,6 +106,27 @@ touch ~/.gstack/.telemetry-prompted
 ```
 
 This only happens once. If `TEL_PROMPTED` is `yes`, skip this entirely.
+
+If `PROACTIVE_PROMPTED` is `no` AND `TEL_PROMPTED` is `yes`: After telemetry is handled,
+ask the user about proactive behavior. Use AskUserQuestion:
+
+> gstack can proactively figure out when you might need a skill while you work —
+> like suggesting /qa when you say "does this work?" or /investigate when you hit
+> a bug. We recommend keeping this on — it speeds up every part of your workflow.
+
+Options:
+- A) Keep it on (recommended)
+- B) Turn it off — I'll type /commands myself
+
+If A: run `~/.claude/skills/gstack/bin/gstack-config set proactive true`
+If B: run `~/.claude/skills/gstack/bin/gstack-config set proactive false`
+
+Always run:
+```bash
+touch ~/.gstack/.proactive-prompted
+```
+
+This only happens once. If `PROACTIVE_PROMPTED` is `yes`, skip this entirely.
 
 ## AskUserQuestion Format
 
@@ -255,22 +280,42 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
-## Step 0: Detect base branch
+## Step 0: Detect platform and base branch
 
-Determine which branch this PR targets. Use the result as "the base branch" in all subsequent steps.
+First, detect the git hosting platform from the remote URL:
 
-1. Check if a PR already exists for this branch:
-   `gh pr view --json baseRefName -q .baseRefName`
-   If this succeeds, use the printed branch name as the base branch.
+```bash
+git remote get-url origin 2>/dev/null
+```
 
-2. If no PR exists (command fails), detect the repo's default branch:
-   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
+- If the URL contains "github.com" → platform is **GitHub**
+- If the URL contains "gitlab" → platform is **GitLab**
+- Otherwise, check CLI availability:
+  - `gh auth status 2>/dev/null` succeeds → platform is **GitHub** (covers GitHub Enterprise)
+  - `glab auth status 2>/dev/null` succeeds → platform is **GitLab** (covers self-hosted)
+  - Neither → **unknown** (use git-native commands only)
 
-3. If both commands fail, fall back to `main`.
+Determine which branch this PR/MR targets, or the repo's default branch if no
+PR/MR exists. Use the result as "the base branch" in all subsequent steps.
+
+**If GitHub:**
+1. `gh pr view --json baseRefName -q .baseRefName` — if succeeds, use it
+2. `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` — if succeeds, use it
+
+**If GitLab:**
+1. `glab mr view -F json 2>/dev/null` and extract the `target_branch` field — if succeeds, use it
+2. `glab repo view -F json 2>/dev/null` and extract the `default_branch` field — if succeeds, use it
+
+**Git-native fallback (if unknown platform, or CLI commands fail):**
+1. `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'`
+2. If that fails: `git rev-parse --verify origin/main 2>/dev/null` → use `main`
+3. If that fails: `git rev-parse --verify origin/master 2>/dev/null` → use `master`
+
+If all fail, fall back to `main`.
 
 Print the detected base branch name. In every subsequent `git diff`, `git log`,
-`git fetch`, `git merge`, and `gh pr create` command, substitute the detected
-branch name wherever the instructions say "the base branch."
+`git fetch`, `git merge`, and PR/MR creation command, substitute the detected
+branch name wherever the instructions say "the base branch" or `<default>`.
 
 ---
 
@@ -297,7 +342,120 @@ Before reviewing code quality, check: **did they build what was requested — no
    **If no PR exists:** rely on commit messages and TODOS.md for stated intent — this is the common case since /review runs before /ship creates the PR.
 2. Identify the **stated intent** — what was this branch supposed to accomplish?
 3. Run `git diff origin/<base>...HEAD --stat` and compare the files changed against the stated intent.
-4. Evaluate with skepticism:
+
+### Plan File Discovery
+
+1. **Conversation context (primary):** Check if there is an active plan file in this conversation — Claude Code system messages include plan file paths when in plan mode. Look for references like `~/.claude/plans/*.md` in system messages. If found, use it directly — this is the most reliable signal.
+
+2. **Content-based search (fallback):** If no plan file is referenced in conversation context, search by content:
+
+```bash
+BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-')
+REPO=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
+# Try branch name match first (most specific)
+PLAN=$(ls -t ~/.claude/plans/*.md 2>/dev/null | xargs grep -l "$BRANCH" 2>/dev/null | head -1)
+# Fall back to repo name match
+[ -z "$PLAN" ] && PLAN=$(ls -t ~/.claude/plans/*.md 2>/dev/null | xargs grep -l "$REPO" 2>/dev/null | head -1)
+# Last resort: most recent plan modified in the last 24 hours
+[ -z "$PLAN" ] && PLAN=$(find ~/.claude/plans -name '*.md' -mmin -1440 -maxdepth 1 2>/dev/null | xargs ls -t 2>/dev/null | head -1)
+[ -n "$PLAN" ] && echo "PLAN_FILE: $PLAN" || echo "NO_PLAN_FILE"
+```
+
+3. **Validation:** If a plan file was found via content-based search (not conversation context), read the first 20 lines and verify it is relevant to the current branch's work. If it appears to be from a different project or feature, treat as "no plan file found."
+
+**Error handling:**
+- No plan file found → skip with "No plan file detected — skipping."
+- Plan file found but unreadable (permissions, encoding) → skip with "Plan file found but unreadable — skipping."
+
+### Actionable Item Extraction
+
+Read the plan file. Extract every actionable item — anything that describes work to be done. Look for:
+
+- **Checkbox items:** `- [ ] ...` or `- [x] ...`
+- **Numbered steps** under implementation headings: "1. Create ...", "2. Add ...", "3. Modify ..."
+- **Imperative statements:** "Add X to Y", "Create a Z service", "Modify the W controller"
+- **File-level specifications:** "New file: path/to/file.ts", "Modify path/to/existing.rb"
+- **Test requirements:** "Test that X", "Add test for Y", "Verify Z"
+- **Data model changes:** "Add column X to table Y", "Create migration for Z"
+
+**Ignore:**
+- Context/Background sections (`## Context`, `## Background`, `## Problem`)
+- Questions and open items (marked with ?, "TBD", "TODO: decide")
+- Review report sections (`## GSTACK REVIEW REPORT`)
+- Explicitly deferred items ("Future:", "Out of scope:", "NOT in scope:", "P2:", "P3:", "P4:")
+- CEO Review Decisions sections (these record choices, not work items)
+
+**Cap:** Extract at most 50 items. If the plan has more, note: "Showing top 50 of N plan items — full list in plan file."
+
+**No items found:** If the plan contains no extractable actionable items, skip with: "Plan file contains no actionable items — skipping completion audit."
+
+For each item, note:
+- The item text (verbatim or concise summary)
+- Its category: CODE | TEST | MIGRATION | CONFIG | DOCS
+
+### Cross-Reference Against Diff
+
+Run `git diff origin/<base>...HEAD` and `git log origin/<base>..HEAD --oneline` to understand what was implemented.
+
+For each extracted plan item, check the diff and classify:
+
+- **DONE** — Clear evidence in the diff that this item was implemented. Cite the specific file(s) changed.
+- **PARTIAL** — Some work toward this item exists in the diff but it's incomplete (e.g., model created but controller missing, function exists but edge cases not handled).
+- **NOT DONE** — No evidence in the diff that this item was addressed.
+- **CHANGED** — The item was implemented using a different approach than the plan described, but the same goal is achieved. Note the difference.
+
+**Be conservative with DONE** — require clear evidence in the diff. A file being touched is not enough; the specific functionality described must be present.
+**Be generous with CHANGED** — if the goal is met by different means, that counts as addressed.
+
+### Output Format
+
+```
+PLAN COMPLETION AUDIT
+═══════════════════════════════
+Plan: {plan file path}
+
+## Implementation Items
+  [DONE]      Create UserService — src/services/user_service.rb (+142 lines)
+  [PARTIAL]   Add validation — model validates but missing controller checks
+  [NOT DONE]  Add caching layer — no cache-related changes in diff
+  [CHANGED]   "Redis queue" → implemented with Sidekiq instead
+
+## Test Items
+  [DONE]      Unit tests for UserService — test/services/user_service_test.rb
+  [NOT DONE]  E2E test for signup flow
+
+## Migration Items
+  [DONE]      Create users table — db/migrate/20240315_create_users.rb
+
+─────────────────────────────────
+COMPLETION: 4/7 DONE, 1 PARTIAL, 1 NOT DONE, 1 CHANGED
+─────────────────────────────────
+```
+
+### Integration with Scope Drift Detection
+
+The plan completion results augment the existing Scope Drift Detection. If a plan file is found:
+
+- **NOT DONE items** become additional evidence for **MISSING REQUIREMENTS** in the scope drift report.
+- **Items in the diff that don't match any plan item** become evidence for **SCOPE CREEP** detection.
+
+This is **INFORMATIONAL** — does not block the review (consistent with existing scope drift behavior).
+
+Update the scope drift output to include plan file context:
+
+```
+Scope Check: [CLEAN / DRIFT DETECTED / REQUIREMENTS MISSING]
+Intent: <from plan file — 1-line summary>
+Plan: <plan file path>
+Delivered: <1-line summary of what the diff actually does>
+Plan items: N DONE, M PARTIAL, K NOT DONE
+[If NOT DONE: list each missing item]
+[If scope creep: list each out-of-scope change not in the plan]
+```
+
+**No plan file found:** Fall back to existing scope drift behavior (check TODOS.md and PR description only).
+
+4. Evaluate with skepticism (incorporating plan completion results if available):
 
    **SCOPE CREEP detection:**
    - Files changed that are unrelated to the stated intent
@@ -417,7 +575,7 @@ If Codex is available, run a lightweight design check on the diff:
 
 ```bash
 TMPERR_DRL=$(mktemp /tmp/codex-drl-XXXXXXXX)
-codex exec "Review the git diff on this branch. Run 7 litmus checks (YES/NO each): 1. Brand/product unmistakable in first screen? 2. One strong visual anchor present? 3. Page understandable by scanning headlines only? 4. Each section has one job? 5. Are cards actually necessary? 6. Does motion improve hierarchy or atmosphere? 7. Would design feel premium with all decorative shadows removed? Flag any hard rejections: 1. Generic SaaS card grid as first impression 2. Beautiful image with weak brand 3. Strong headline with no clear action 4. Busy imagery behind text 5. Sections repeating same mood statement 6. Carousel with no narrative purpose 7. App UI made of stacked cards instead of layout 5 most important design findings only. Reference file:line." -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached 2>"$TMPERR_DRL"
+codex exec "Review the git diff on this branch. Run 7 litmus checks (YES/NO each): 1. Brand/product unmistakable in first screen? 2. One strong visual anchor present? 3. Page understandable by scanning headlines only? 4. Each section has one job? 5. Are cards actually necessary? 6. Does motion improve hierarchy or atmosphere? 7. Would design feel premium with all decorative shadows removed? Flag any hard rejections: 1. Generic SaaS card grid as first impression 2. Beautiful image with weak brand 3. Strong headline with no clear action 4. Busy imagery behind text 5. Sections repeating same mood statement 6. Carousel with no narrative purpose 7. App UI made of stacked cards instead of layout 5 most important design findings only. Reference file:line." -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached 2>"$TMPERR_DRL"
 ```
 
 Use a 5-minute timeout (`timeout: 300000`). After the command completes, read stderr:
@@ -606,6 +764,21 @@ If no test framework detected → include gaps as INFORMATIONAL findings only, n
 
 **Diff is test-only changes:** Skip Step 4.75 entirely: "No new application code paths to audit."
 
+### Coverage Warning
+
+After producing the coverage diagram, check the coverage percentage. Read CLAUDE.md for a `## Test Coverage` section with a `Minimum:` field. If not found, use default: 60%.
+
+If coverage is below the minimum threshold, output a prominent warning **before** the regular review findings:
+
+```
+⚠️ COVERAGE WARNING: AI-assessed coverage is {X}%. {N} code paths untested.
+Consider writing tests before running /ship.
+```
+
+This is INFORMATIONAL — does not block /review. But it makes low coverage visible early so the developer can address it before reaching the /ship coverage gate.
+
+If coverage percentage cannot be determined, skip the warning silently.
+
 This step subsumes the "Test Gaps" category from Pass 2 — do not duplicate findings between the checklist Test Gaps item and this coverage diagram. Include any coverage gaps alongside the findings from Step 4 and Step 4.5. They follow the same Fix-First flow — gaps are INFORMATIONAL findings.
 
 ---
@@ -760,7 +933,7 @@ Claude's structured review already ran. Now add a **cross-model adversarial chal
 
 ```bash
 TMPERR_ADV=$(mktemp /tmp/codex-adv-XXXXXXXX)
-codex exec "Review the changes on this branch against the base branch. Run git diff origin/<base> to see the diff. Your job is to find ways this code will fail in production. Think like an attacker and a chaos engineer. Find edge cases, race conditions, security holes, resource leaks, failure modes, and silent data corruption paths. Be adversarial. Be thorough. No compliments — just the problems." -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached 2>"$TMPERR_ADV"
+codex exec "Review the changes on this branch against the base branch. Run git diff origin/<base> to see the diff. Your job is to find ways this code will fail in production. Think like an attacker and a chaos engineer. Find edge cases, race conditions, security holes, resource leaks, failure modes, and silent data corruption paths. Be adversarial. Be thorough. No compliments — just the problems." -C "$(git rev-parse --show-toplevel)" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached 2>"$TMPERR_ADV"
 ```
 
 Set the Bash tool's `timeout` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. After the command completes, read stderr:

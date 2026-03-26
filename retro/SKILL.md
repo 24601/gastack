@@ -3,7 +3,6 @@ name: retro
 preamble-tier: 2
 version: 2.0.0
 description: |
-  MANUAL TRIGGER ONLY: invoke only when user types /retro.
   Weekly engineering retrospective. Analyzes commit history, work patterns,
   and code quality metrics with persistent history and trend tracking.
   Team-aware: breaks down per-person contributions with praise and growth areas.
@@ -30,9 +29,11 @@ _SESSIONS=$(find ~/.gstack/sessions -mmin -120 -type f 2>/dev/null | wc -l | tr 
 find ~/.gstack/sessions -mmin +120 -type f -delete 2>/dev/null || true
 _CONTRIB=$(~/.claude/skills/gstack/bin/gstack-config get gstack_contributor 2>/dev/null || true)
 _PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null || echo "true")
+_PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
 _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 echo "BRANCH: $_BRANCH"
 echo "PROACTIVE: $_PROACTIVE"
+echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
 source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
 REPO_MODE=${REPO_MODE:-unknown}
 echo "REPO_MODE: $REPO_MODE"
@@ -50,8 +51,11 @@ echo '{"skill":"retro","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basena
 for _PF in $(find ~/.gstack/analytics -maxdepth 1 -name '.pending-*' 2>/dev/null); do [ -f "$_PF" ] && ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
 ```
 
-If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills — only invoke
-them when the user explicitly asks. The user opted out of proactive suggestions.
+If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills AND do not
+auto-invoke skills based on conversation context. Only run skills the user explicitly
+types (e.g., /qa, /ship). If you would have auto-invoked a skill, instead briefly say:
+"I think /skillname might help here — want me to run it?" and wait for confirmation.
+The user opted out of proactive behavior.
 
 If output shows `UPGRADE_AVAILABLE <old> <new>`: read `~/.claude/skills/gstack/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
 
@@ -99,6 +103,27 @@ touch ~/.gstack/.telemetry-prompted
 ```
 
 This only happens once. If `TEL_PROMPTED` is `yes`, skip this entirely.
+
+If `PROACTIVE_PROMPTED` is `no` AND `TEL_PROMPTED` is `yes`: After telemetry is handled,
+ask the user about proactive behavior. Use AskUserQuestion:
+
+> gstack can proactively figure out when you might need a skill while you work —
+> like suggesting /qa when you say "does this work?" or /investigate when you hit
+> a bug. We recommend keeping this on — it speeds up every part of your workflow.
+
+Options:
+- A) Keep it on (recommended)
+- B) Turn it off — I'll type /commands myself
+
+If A: run `~/.claude/skills/gstack/bin/gstack-config set proactive true`
+If B: run `~/.claude/skills/gstack/bin/gstack-config set proactive false`
+
+Always run:
+```bash
+touch ~/.gstack/.proactive-prompted
+```
+
+This only happens once. If `PROACTIVE_PROMPTED` is `yes`, skip this entirely.
 
 ## AskUserQuestion Format
 
@@ -234,13 +259,42 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
-## Detect default branch
+## Step 0: Detect platform and base branch
 
-Before gathering data, detect the repo's default branch name:
-`gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
+First, detect the git hosting platform from the remote URL:
 
-If this fails, fall back to `main`. Use the detected name wherever the instructions
-say `origin/<default>` below.
+```bash
+git remote get-url origin 2>/dev/null
+```
+
+- If the URL contains "github.com" → platform is **GitHub**
+- If the URL contains "gitlab" → platform is **GitLab**
+- Otherwise, check CLI availability:
+  - `gh auth status 2>/dev/null` succeeds → platform is **GitHub** (covers GitHub Enterprise)
+  - `glab auth status 2>/dev/null` succeeds → platform is **GitLab** (covers self-hosted)
+  - Neither → **unknown** (use git-native commands only)
+
+Determine which branch this PR/MR targets, or the repo's default branch if no
+PR/MR exists. Use the result as "the base branch" in all subsequent steps.
+
+**If GitHub:**
+1. `gh pr view --json baseRefName -q .baseRefName` — if succeeds, use it
+2. `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` — if succeeds, use it
+
+**If GitLab:**
+1. `glab mr view -F json 2>/dev/null` and extract the `target_branch` field — if succeeds, use it
+2. `glab repo view -F json 2>/dev/null` and extract the `default_branch` field — if succeeds, use it
+
+**Git-native fallback (if unknown platform, or CLI commands fail):**
+1. `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'`
+2. If that fails: `git rev-parse --verify origin/main 2>/dev/null` → use `main`
+3. If that fails: `git rev-parse --verify origin/master 2>/dev/null` → use `master`
+
+If all fail, fall back to `main`.
+
+Print the detected base branch name. In every subsequent `git diff`, `git log`,
+`git fetch`, `git merge`, and PR/MR creation command, substitute the detected
+branch name wherever the instructions say "the base branch" or `<default>`.
 
 ---
 
@@ -311,8 +365,8 @@ git log origin/<default> --since="<window>" --format="%at|%aN|%ai|%s" | sort -n
 # 4. Files most frequently changed (hotspot analysis)
 git log origin/<default> --since="<window>" --format="" --name-only | grep -v '^$' | sort | uniq -c | sort -rn
 
-# 5. PR numbers from commit messages (extract #NNN patterns)
-git log origin/<default> --since="<window>" --format="%s" | grep -oE '#[0-9]+' | sed 's/^#//' | sort -n | uniq | sed 's/^/#/'
+# 5. PR/MR numbers from commit messages (GitHub #NNN, GitLab !NNN)
+git log origin/<default> --since="<window>" --format="%s" | grep -oE '[#!][0-9]+' | sort -t'#' -k1 | uniq
 
 # 6. Per-author file hotspots (who touches what)
 git log origin/<default> --since="<window>" --format="AUTHOR:%aN" --name-only
@@ -676,6 +730,28 @@ Narrative covering:
 - If prior retro exists and has `test_health`: show delta "Test count: {last} → {now} (+{delta})"
 - If test ratio < 20%: flag as growth area — "100% test coverage is the goal. Tests make vibe coding safe."
 
+### Plan Completion
+Check review JSONL logs for plan completion data from /ship runs this period:
+
+```bash
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+cat ~/.gstack/projects/$SLUG/*-reviews.jsonl 2>/dev/null | grep '"skill":"ship"' | grep '"plan_items_total"' || echo "NO_PLAN_DATA"
+```
+
+If plan completion data exists within the retro time window:
+- Count branches shipped with plans (entries that have `plan_items_total` > 0)
+- Compute average completion: sum of `plan_items_done` / sum of `plan_items_total`
+- Identify most-skipped item category if data supports it
+
+Output:
+```
+Plan Completion This Period:
+  {N} branches shipped with plans
+  Average completion: {X}% ({done}/{total} items)
+```
+
+If no plan data exists, skip this section silently.
+
 ### Focus & Highlights
 (from Step 8)
 - Focus score with interpretation
@@ -783,8 +859,8 @@ git -C <path> log origin/$DEFAULT --since="<start_date>T00:00:00" --format="%at|
 # Per-author commit counts
 git -C <path> shortlog origin/$DEFAULT --since="<start_date>T00:00:00" -sn --no-merges
 
-# PR numbers from commit messages
-git -C <path> log origin/$DEFAULT --since="<start_date>T00:00:00" --format="%s" | grep -oE '#[0-9]+' | sort -n | uniq
+# PR/MR numbers from commit messages (GitHub #NNN, GitLab !NNN)
+git -C <path> log origin/$DEFAULT --since="<start_date>T00:00:00" --format="%s" | grep -oE '[#!][0-9]+' | sort -t'#' -k1 | uniq
 ```
 
 For repos that fail (deleted paths, network errors): skip and note "N repos could not be reached."
@@ -862,7 +938,7 @@ align cleanly. Never truncate project names.
 ║  • [1-line description of second theme]
 ║  • [1-line description of third theme]
 ║
-║  Powered by gstack · github.com/garrytan/gstack
+║  Powered by gstack
 ╚═══════════════════════════════════════════════════════════════
 ```
 
@@ -991,7 +1067,7 @@ Use the Write tool to save JSON to `~/.gstack/retros/global-${today}-${next}.jso
   "projects": [
     {
       "name": "gstack",
-      "remote": "https://github.com/garrytan/gstack",
+      "remote": "<detected from git remote get-url origin, normalized to HTTPS>",
       "commits": 47,
       "insertions": 3200,
       "deletions": 800,
