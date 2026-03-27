@@ -21,6 +21,7 @@ import { iterate } from "./iterate";
 import { resolveApiKey, saveApiKey } from "./auth";
 import { extractDesignLanguage, updateDesignMd } from "./memory";
 import { diffMockups, verifyAgainstMockup } from "./diff";
+import { evolve } from "./evolve";
 
 function parseArgs(argv: string[]): { command: string; flags: Record<string, string | boolean> } {
   const args = argv.slice(2); // skip bun/node and script path
@@ -207,8 +208,11 @@ async function main(): Promise<void> {
     }
 
     case "evolve":
-      console.error(`Command 'evolve' will be implemented in Commit 8.`);
-      process.exit(1);
+      await evolve({
+        screenshot: flags.screenshot as string,
+        brief: flags.brief as string,
+        output: (flags.output as string) || "/tmp/gstack-evolved.png",
+      });
       break;
   }
 }
