@@ -19,6 +19,7 @@ import { compare } from "./compare";
 import { variants } from "./variants";
 import { iterate } from "./iterate";
 import { resolveApiKey, saveApiKey } from "./auth";
+import { extractDesignLanguage, updateDesignMd } from "./memory";
 
 function parseArgs(argv: string[]): { command: string; flags: Record<string, string | boolean> } {
   const args = argv.slice(2); // skip bun/node and script path
@@ -159,6 +160,23 @@ async function main(): Promise<void> {
         output: (flags.output as string) || "/tmp/gstack-iterate.png",
       });
       break;
+
+    case "extract": {
+      const imagePath = flags.image as string;
+      if (!imagePath) {
+        console.error("--image is required");
+        process.exit(1);
+      }
+      console.error(`Extracting design language from ${imagePath}...`);
+      const extracted = await extractDesignLanguage(imagePath);
+      const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"]);
+      const repoRoot = (await new Response(proc.stdout).text()).trim();
+      if (repoRoot) {
+        updateDesignMd(repoRoot, extracted, imagePath);
+      }
+      console.log(JSON.stringify(extracted, null, 2));
+      break;
+    }
 
     case "diff":
     case "evolve":

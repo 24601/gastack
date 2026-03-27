@@ -54,6 +54,11 @@ export const COMMANDS = new Map<string, {
     usage: "verify --mockup approved.png --screenshot live.png",
     flags: ["--mockup", "--screenshot", "--output"],
   }],
+  ["extract", {
+    description: "Extract design language from approved mockup into DESIGN.md",
+    usage: "extract --image approved.png",
+    flags: ["--image"],
+  }],
   ["setup", {
     description: "Guided API key setup + smoke test",
     usage: "setup",
