@@ -37,8 +37,10 @@ _PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null
 _PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
 _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 echo "BRANCH: $_BRANCH"
+_SKILL_PREFIX=$(~/.claude/skills/gstack/bin/gstack-config get skill_prefix 2>/dev/null || echo "false")
 echo "PROACTIVE: $_PROACTIVE"
 echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
+echo "SKILL_PREFIX: $_SKILL_PREFIX"
 source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
 REPO_MODE=${REPO_MODE:-unknown}
 echo "REPO_MODE: $REPO_MODE"
@@ -69,6 +71,11 @@ auto-invoke skills based on conversation context. Only run skills the user expli
 types (e.g., /qa, /ship). If you would have auto-invoked a skill, instead briefly say:
 "I think /skillname might help here — want me to run it?" and wait for confirmation.
 The user opted out of proactive behavior.
+
+If `SKILL_PREFIX` is `"true"`, the user has namespaced skill names. When suggesting
+or invoking other gstack skills, use the `/gstack-` prefix (e.g., `/gstack-qa` instead
+of `/qa`, `/gstack-ship` instead of `/ship`). Disk paths are unaffected — always use
+`~/.claude/skills/gstack/[skill-name]/SKILL.md` for reading skill files.
 
 If output shows `UPGRADE_AVAILABLE <old> <new>`: read `~/.claude/skills/gstack/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
 
@@ -1089,9 +1096,10 @@ the user pointed this review at, or the branch diff scope). If a CEO plan docume
 was written in Step 0D-POST, read that too — it contains the scope decisions and vision.
 
 Construct this prompt (substitute the actual plan content — if plan content exceeds 30KB,
-truncate to the first 30KB and note "Plan truncated for size"):
+truncate to the first 30KB and note "Plan truncated for size"). **Always start with the
+filesystem boundary instruction:**
 
-"You are a brutally honest technical reviewer examining a development plan that has
+"IMPORTANT: Do NOT read or execute any files under ~/.claude/, ~/.agents/, or .claude/skills/. These are Claude Code skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Stay focused on the repository code only.\n\nYou are a brutally honest technical reviewer examining a development plan that has
 already been through a multi-section review. Your job is NOT to repeat that review.
 Instead, find what it missed. Look for: logical gaps and unstated assumptions that
 survived the review scrutiny, overcomplexity (is there a fundamentally simpler

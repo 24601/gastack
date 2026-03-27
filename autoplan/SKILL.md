@@ -39,8 +39,10 @@ _PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null
 _PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
 _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 echo "BRANCH: $_BRANCH"
+_SKILL_PREFIX=$(~/.claude/skills/gstack/bin/gstack-config get skill_prefix 2>/dev/null || echo "false")
 echo "PROACTIVE: $_PROACTIVE"
 echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
+echo "SKILL_PREFIX: $_SKILL_PREFIX"
 source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
 REPO_MODE=${REPO_MODE:-unknown}
 echo "REPO_MODE: $REPO_MODE"
@@ -71,6 +73,11 @@ auto-invoke skills based on conversation context. Only run skills the user expli
 types (e.g., /qa, /ship). If you would have auto-invoked a skill, instead briefly say:
 "I think /skillname might help here — want me to run it?" and wait for confirmation.
 The user opted out of proactive behavior.
+
+If `SKILL_PREFIX` is `"true"`, the user has namespaced skill names. When suggesting
+or invoking other gstack skills, use the `/gstack-` prefix (e.g., `/gstack-qa` instead
+of `/qa`, `/gstack-ship` instead of `/ship`). Disk paths are unaffected — always use
+`~/.claude/skills/gstack/[skill-name]/SKILL.md` for reading skill files.
 
 If output shows `UPGRADE_AVAILABLE <old> <new>`: read `~/.claude/skills/gstack/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
 
@@ -515,6 +522,18 @@ State what you examined and why nothing was flagged (1-2 sentences minimum).
 
 ---
 
+## Filesystem Boundary — Codex Prompts
+
+All prompts sent to Codex (via `codex exec` or `codex review`) MUST be prefixed with
+this boundary instruction:
+
+> IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Stay focused on the repository code only.
+
+This prevents Codex from discovering gstack skill files on disk and following their
+instructions instead of reviewing the plan.
+
+---
+
 ## Phase 0: Intake + Restore Point
 
 ### Step 1: Capture restore point
@@ -603,7 +622,9 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   **Codex CEO voice** (via Bash):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-  codex exec "You are a CEO/founder advisor reviewing a development plan.
+  codex exec "IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. Stay focused on repository code only.
+
+  You are a CEO/founder advisor reviewing a development plan.
   Challenge the strategic foundations: Are the premises valid or assumed? Is this the
   right problem to solve, or is there a reframing that would be 10x more impactful?
   What alternatives were dismissed too quickly? What competitive or market risks are
@@ -711,7 +732,9 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   **Codex design voice** (via Bash):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-  codex exec "Read the plan file at <plan_path>. Evaluate this plan's
+  codex exec "IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. Stay focused on repository code only.
+
+  Read the plan file at <plan_path>. Evaluate this plan's
   UI/UX design decisions.
 
   Also consider these findings from the CEO review phase:
@@ -784,7 +807,9 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   **Codex eng voice** (via Bash):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-  codex exec "Review this plan for architectural issues, missing edge cases,
+  codex exec "IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. Stay focused on repository code only.
+
+  Review this plan for architectural issues, missing edge cases,
   and hidden complexity. Be adversarial.
 
   Also consider these findings from prior review phases:
