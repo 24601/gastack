@@ -1655,9 +1655,10 @@ describe('codex commands must not use inline $(git rev-parse --show-toplevel) fo
   // The fix is to resolve _REPO_ROOT eagerly at the top of each bash block.
 
   // Scan all source files that could contain codex commands
+  // Use Bun.Glob to avoid ELOOP from .claude/skills/gstack symlink back to ROOT
+  const tmplGlob = new Bun.Glob('**/*.tmpl');
   const sourceFiles = [
-    ...fs.readdirSync(ROOT, { recursive: true })
-      .filter((f): f is string => typeof f === 'string' && f.endsWith('.tmpl') && !f.includes('node_modules')),
+    ...Array.from(tmplGlob.scanSync({ cwd: ROOT, followSymlinks: false })),
     ...fs.readdirSync(path.join(ROOT, 'scripts/resolvers'))
       .filter(f => f.endsWith('.ts'))
       .map(f => `scripts/resolvers/${f}`),
@@ -1688,6 +1689,8 @@ describe('codex commands must not use inline $(git rev-parse --show-toplevel) fo
         typeof f === 'string' &&
         f.endsWith('SKILL.md') &&
         !f.includes('node_modules') &&
+        !f.includes('.claude') &&
+        !f.includes('.agents') &&
         !f.includes('.tmpl'));
     for (const rel of skillMdFiles) {
       const abs = path.join(ROOT, rel);
