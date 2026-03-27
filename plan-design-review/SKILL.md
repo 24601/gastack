@@ -481,11 +481,22 @@ if [ -x "$D" ]; then
 else
   echo "DESIGN_NOT_AVAILABLE"
 fi
+B=""
+[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/browse/dist/browse" ] && B="$_ROOT/.claude/skills/gstack/browse/dist/browse"
+[ -z "$B" ] && B=~/.claude/skills/gstack/browse/dist/browse
+if [ -x "$B" ]; then
+  echo "BROWSE_READY: $B"
+else
+  echo "BROWSE_NOT_AVAILABLE (will use 'open' to view comparison boards)"
+fi
 ```
 
 If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation and fall back to the
 existing HTML wireframe approach (`DESIGN_SKETCH`). Design mockups are a
 progressive enhancement, not a hard requirement.
+
+If `BROWSE_NOT_AVAILABLE`: use `open file://...` instead of `$B goto` to open
+comparison boards. The user just needs to see the HTML file in any browser.
 
 If `DESIGN_READY`: the design binary is available for visual mockup generation.
 Commands:
@@ -541,6 +552,8 @@ Allowed commands under this exception:
 - `mkdir -p ~/.gstack/projects/$SLUG/designs/...`
 - `$D generate`, `$D variants`, `$D compare`, `$D iterate`, `$D evolve`, `$D check`
 - `$B goto file:///` (to view comparison board in browser)
+- `$B eval document.getElementById(...)` (to read user feedback from comparison board)
+- `open` (fallback for viewing boards when `$B` is not available)
 
 First, set up the output directory. Name it after the screen/feature being designed and today's date:
 
@@ -571,12 +584,59 @@ Create a comparison board and open it for review:
 
 ```bash
 $D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html"
-$B goto "file://$_DESIGN_DIR/design-board.html"
 ```
 
-Tell the user: "I've generated design directions and opened the comparison board. Pick your favorite, rate the others, and I'll use your choice to calibrate the review passes."
+Open the comparison board for the user. If `$B` is available (BROWSE_READY was printed
+during setup), use it. Otherwise fall back to `open` which works on macOS:
 
-Read the user's feedback. Note which direction was approved — this becomes the visual reference for all subsequent review passes.
+```bash
+if [ -x "$B" ]; then
+  $B goto "file://$_DESIGN_DIR/design-board.html"
+else
+  open "$_DESIGN_DIR/design-board.html"
+fi
+```
+
+Tell the user: "I've generated design directions and opened the comparison board. Pick your favorite, rate the others, and click Submit when you're done."
+
+**Poll for user feedback from the comparison board.**
+
+The comparison board has a Submit button that writes structured JSON to hidden DOM
+elements. Poll for the user's submission:
+
+```bash
+$B eval document.getElementById('status').textContent
+```
+
+- If empty: user hasn't submitted yet. Wait 10 seconds and poll again.
+- If `"submitted"`: read the feedback below.
+- If `"regenerate"`: user wants new variants. Read the regeneration request from
+  `feedback-result`, generate new variants with the updated brief using `$D variants`
+  or `$D iterate`, update the comparison board, and resume polling.
+
+When status is `"submitted"`, read the structured feedback:
+
+```bash
+$B eval document.getElementById('feedback-result').textContent
+```
+
+This returns JSON like:
+```json
+{
+  "preferred": "A",
+  "ratings": { "A": 4, "B": 3, "C": 2 },
+  "comments": { "A": "Love the spacing", "B": "Too busy", "C": "Wrong mood" },
+  "overall": "Go with A, make the CTA bigger",
+  "regenerated": false
+}
+```
+
+**If `$B` is not available** (BROWSE_NOT_AVAILABLE): the board was opened with `open`
+and you cannot poll the DOM. In this case, send a text message asking the user to
+describe their choice (which variant, what to change). Do NOT use AskUserQuestion —
+their feedback may combine elements across variants. Wait for free-form response.
+
+Note which direction was approved — this becomes the visual reference for all subsequent review passes.
 
 After the user picks a direction, write an `approved.json` to record the choice:
 
