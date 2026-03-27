@@ -6,28 +6,52 @@ gstack can generate real UI mockups. Not ASCII art, not text descriptions of hex
 
 ### Added
 
-- **Design binary** (`$D`). New compiled CLI wrapping OpenAI's GPT Image API. 11 commands: `generate`, `variants`, `iterate`, `check`, `compare`, `extract`, `diff`, `verify`, `evolve`, `prompt`, `setup`. Generates pixel-perfect UI mockups from structured design briefs in ~40 seconds.
-- **Comparison board.** `$D compare` generates a self-contained HTML page with all variants, star ratings, a "Pick your favorite" radio button, per-variant feedback fields, regeneration controls ("Totally different" / "More like this" / "Match my design"), and a Submit button the agent reads directly from the DOM. No clipboard, no pasting.
+- **Design binary** (`$D`). New compiled CLI wrapping OpenAI's GPT Image API. 13 commands: `generate`, `variants`, `iterate`, `check`, `compare`, `extract`, `diff`, `verify`, `evolve`, `prompt`, `serve`, `gallery`, `setup`. Generates pixel-perfect UI mockups from structured design briefs in ~40 seconds.
+- **Comparison board.** `$D compare` generates a self-contained HTML page with all variants, star ratings, per-variant feedback, regeneration controls, a remix grid (mix layout from A with colors from B), and a Submit button. Feedback flows back to the agent via HTTP POST, not DOM polling.
+- **`/design-shotgun` skill.** Standalone design exploration you can run anytime. Generates multiple AI design variants, opens a comparison board in your browser, and iterates until you approve a direction. Session awareness (remembers prior explorations), taste memory (biases new generations toward your demonstrated preferences), screenshot-to-variants (screenshot what you don't like, get improvements), configurable variant count (3-8).
+- **`$D serve` command.** HTTP server for the comparison board feedback loop. Serves the board on localhost, opens in your default browser, collects feedback via POST. Stateful: stays alive across regeneration rounds, supports same-tab reload via `/api/progress` polling.
+- **`$D gallery` command.** Generates an HTML timeline of all design explorations for a project: every variant, feedback, organized by date.
 - **Design memory.** `$D extract` analyzes an approved mockup with GPT-4o vision and writes colors, typography, spacing, and layout patterns to DESIGN.md. Future mockups on the same project inherit the established visual language.
 - **Visual diffing.** `$D diff` compares two images and identifies differences by area with severity. `$D verify` compares a live site screenshot against an approved mockup, pass/fail gate.
 - **Screenshot evolution.** `$D evolve` takes a screenshot of your live site and generates a mockup showing how it should look based on your feedback. Starts from reality, not blank canvas.
 - **Responsive variants.** `$D variants --viewports desktop,tablet,mobile` generates mockups at multiple viewport sizes.
 - **Design-to-code prompt.** `$D prompt` extracts implementation instructions from an approved mockup: exact hex colors, font sizes, spacing values, component structure. Zero interpretation gap.
-- **`{{DESIGN_MOCKUP}}` template resolver.** Skills call `$D` through this resolver. Falls back to HTML wireframes if the design binary isn't available.
-- **`{{DESIGN_SETUP}}` template resolver.** Discovery pattern for `$D`, mirrors the existing `$B` browse setup.
-- **Auth from Codex config.** Reads API key from `~/.gstack/openai.json` (0600 permissions), falls back to `OPENAI_API_KEY` env var. `$D setup` runs guided key setup + smoke test.
+- **`{{DESIGN_SHOTGUN_LOOP}}` template resolver.** Shared comparison board feedback loop used by `/design-shotgun`, `/plan-design-review`, and `/design-consultation`.
+- **`{{DESIGN_SETUP}}` template resolver.** Discovery pattern for `$D`, mirrors the existing `$B` browse setup. Includes critical path rule enforcing `~/.gstack/projects/$SLUG/designs/` for all design artifacts.
 
 ### Changed
 
-- **/office-hours** now generates visual mockup explorations by default (skippable). Comparison board opens in Chrome for user feedback before generating HTML wireframes.
-- **/plan-design-review** can generate "what 10/10 looks like" mockups when a design dimension rates below 7/10.
+- **/office-hours** now generates visual mockup explorations by default (skippable). Comparison board opens in your browser for feedback before generating HTML wireframes.
+- **/plan-design-review** uses `{{DESIGN_SHOTGUN_LOOP}}` for the comparison board. Can generate "what 10/10 looks like" mockups when a design dimension rates below 7/10.
+- **/design-consultation** uses `{{DESIGN_SHOTGUN_LOOP}}` for Phase 5 AI mockup review.
+- **Comparison board post-submit lifecycle.** After submitting, all inputs are disabled and a "Return to your coding agent" message appears. After regenerating, a spinner shows with auto-refresh when new designs are ready. If the server is gone, a copyable JSON fallback appears.
 
 ### For contributors
 
-- Design binary source: `design/src/` (14 files, ~2000 lines TypeScript)
-- Compiled separately from browse (openai in devDependencies, not runtime deps)
-- `design/dist/` gitignored like `browse/dist/`
+- Design binary source: `design/src/` (16 files, ~2500 lines TypeScript)
+- New files: `serve.ts` (stateful HTTP server), `gallery.ts` (timeline generation)
+- Tests: `design/test/serve.test.ts` (11 tests), `design/test/gallery.test.ts` (7 tests)
 - Full design doc: `docs/designs/DESIGN_TOOLS_V1.md`
+
+## [0.12.9.0] - 2026-03-27 — Community PRs: Faster Install, Skill Namespacing, Uninstall
+
+Six community PRs landed in one batch. Install is faster, skills no longer collide with other tools, and you can cleanly uninstall gstack when needed.
+
+### Added
+
+- **Uninstall script.** `bin/gstack-uninstall` cleanly removes gstack from your system: stops browse daemons, removes all skill installs (Claude/Codex/Kiro), cleans up state. Supports `--force` (skip confirmation) and `--keep-state` (preserve config). (#323)
+- **Python security patterns in /review.** Shell injection (`subprocess.run(shell=True)`), SSRF via LLM-generated URLs, stored prompt injection, async/sync mixing, and column name safety checks now fire automatically on Python projects. (#531)
+- **Office-hours works without Codex.** The "second opinion" step now falls back to a Claude subagent when Codex CLI is unavailable, so every user gets the cross-model perspective. (#464)
+
+### Changed
+
+- **Faster install (~30s).** All clone commands now use `--single-branch --depth 1`. Full history available for contributors. (#484)
+- **Skills namespaced with `gstack-` prefix.** Skill symlinks are now `gstack-review`, `gstack-ship`, etc. instead of bare `review`, `ship`. Prevents collisions with other skill packs. Old symlinks are auto-cleaned on upgrade. Use `--no-prefix` to opt out. (#503)
+
+### Fixed
+
+- **Windows port race condition.** `findPort()` now uses `net.createServer()` instead of `Bun.serve()` for port probing, fixing an EADDRINUSE race on Windows where the polyfill's `stop()` is fire-and-forget. (#490)
+- **package.json version sync.** VERSION file and package.json now agree (was stuck at 0.12.5.0).
 
 ## [0.12.8.1] - 2026-03-27 — zsh Glob Compatibility
 
