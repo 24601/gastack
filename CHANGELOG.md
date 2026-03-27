@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.13.0.0] - 2026-03-27 — Your Agent Can Design Now
+
+gstack can generate real UI mockups. Not ASCII art, not text descriptions of hex codes, real visual designs you can look at, compare, pick from, and iterate on. Run `/office-hours` on a UI idea and you'll get 3 visual concepts in Chrome with a comparison board where you pick your favorite, rate the others, and tell the agent what to change.
+
+### Added
+
+- **Design binary** (`$D`). New compiled CLI wrapping OpenAI's GPT Image API. 11 commands: `generate`, `variants`, `iterate`, `check`, `compare`, `extract`, `diff`, `verify`, `evolve`, `prompt`, `setup`. Generates pixel-perfect UI mockups from structured design briefs in ~40 seconds.
+- **Comparison board.** `$D compare` generates a self-contained HTML page with all variants, star ratings, a "Pick your favorite" radio button, per-variant feedback fields, regeneration controls ("Totally different" / "More like this" / "Match my design"), and a Submit button the agent reads directly from the DOM. No clipboard, no pasting.
+- **Design memory.** `$D extract` analyzes an approved mockup with GPT-4o vision and writes colors, typography, spacing, and layout patterns to DESIGN.md. Future mockups on the same project inherit the established visual language.
+- **Visual diffing.** `$D diff` compares two images and identifies differences by area with severity. `$D verify` compares a live site screenshot against an approved mockup, pass/fail gate.
+- **Screenshot evolution.** `$D evolve` takes a screenshot of your live site and generates a mockup showing how it should look based on your feedback. Starts from reality, not blank canvas.
+- **Responsive variants.** `$D variants --viewports desktop,tablet,mobile` generates mockups at multiple viewport sizes.
+- **Design-to-code prompt.** `$D prompt` extracts implementation instructions from an approved mockup: exact hex colors, font sizes, spacing values, component structure. Zero interpretation gap.
+- **`{{DESIGN_MOCKUP}}` template resolver.** Skills call `$D` through this resolver. Falls back to HTML wireframes if the design binary isn't available.
+- **`{{DESIGN_SETUP}}` template resolver.** Discovery pattern for `$D`, mirrors the existing `$B` browse setup.
+- **Auth from Codex config.** Reads API key from `~/.gstack/openai.json` (0600 permissions), falls back to `OPENAI_API_KEY` env var. `$D setup` runs guided key setup + smoke test.
+
+### Changed
+
+- **/office-hours** now generates visual mockup explorations by default (skippable). Comparison board opens in Chrome for user feedback before generating HTML wireframes.
+- **/plan-design-review** can generate "what 10/10 looks like" mockups when a design dimension rates below 7/10.
+
+### For contributors
+
+- Design binary source: `design/src/` (14 files, ~2000 lines TypeScript)
+- Compiled separately from browse (openai in devDependencies, not runtime deps)
+- `design/dist/` gitignored like `browse/dist/`
+- Full design doc: `docs/designs/DESIGN_TOOLS_V1.md`
+
 ## [0.12.6.0] - 2026-03-27 — Sidebar Knows What Page You're On
 
 The Chrome sidebar agent used to navigate to the wrong page when you asked it to do something. If you'd manually browsed to a site, the sidebar would ignore that and go to whatever Playwright last saw (often Hacker News from the demo). Now it works.
