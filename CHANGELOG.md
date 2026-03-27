@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.12.4.0] - 2026-03-26 — Fix Codex Hangs: 30-Minute Waits Are Gone
+## [0.12.5.0] - 2026-03-26 — Fix Codex Hangs: 30-Minute Waits Are Gone
 
 Three bugs in `/codex` caused 30+ minute hangs with zero output during plan reviews and adversarial checks. All three are fixed.
 
@@ -10,6 +10,15 @@ Three bugs in `/codex` caused 30+ minute hangs with zero output during plan revi
 - **Streaming output actually streams.** Python's stdout buffering meant zero output visible until the process exited. Added `PYTHONUNBUFFERED=1`, `python3 -u`, and `flush=True` on every print call across all three Codex modes.
 - **Sane reasoning effort defaults.** Replaced hardcoded `xhigh` (23x more tokens, known 50+ min hangs per OpenAI issues #8545, #8402, #6931) with per-mode defaults: `high` for review and challenge, `medium` for consult. Users can override with `--xhigh` flag when they want maximum reasoning.
 - **`--xhigh` override works in all modes.** The override reminder was missing from challenge and consult mode instructions. Found by adversarial review.
+
+## [0.12.4.0] - 2026-03-26 — Full Commit Coverage in /ship
+
+When you ship a branch with 12 commits spanning performance work, dead code removal, and test infra, the PR should mention all three. It wasn't. The CHANGELOG and PR summary biased toward whatever happened most recently, silently dropping earlier work.
+
+### Fixed
+
+- **/ship Step 5 (CHANGELOG):** Now forces explicit commit enumeration before writing. You list every commit, group by theme, write the entry, then cross-check that every commit maps to a bullet. No more recency bias.
+- **/ship Step 8 (PR body):** Changed from "bullet points from CHANGELOG" to explicit commit-by-commit coverage. Groups commits into logical sections. Excludes the VERSION/CHANGELOG metadata commit (bookkeeping, not a change). Every substantive commit must appear somewhere.
 
 ## [0.12.3.0] - 2026-03-26 — Voice Directive: Every Skill Sounds Like a Builder
 
