@@ -366,6 +366,7 @@ eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
 
 3. Read existing design docs for context:
    ```bash
+   setopt +o nomatch 2>/dev/null || true  # zsh compat
    ls -t ~/.gstack/projects/$SLUG/*-design-*.md 2>/dev/null | head -5
    ```
    If design docs exist, read the most recent one. This gives you the "what was planned" narrative.
@@ -490,6 +491,7 @@ Use AskUserQuestion:
    ```bash
    PROJECT_DIR=$(git rev-parse --show-toplevel | sed 's|/|-|g; s|^-||')
    echo "Looking for transcripts in: ~/.claude/projects/-$PROJECT_DIR/"
+   setopt +o nomatch 2>/dev/null || true  # zsh compat
    ls ~/.claude/projects/-$PROJECT_DIR/*.jsonl 2>/dev/null | tail -10
    ```
 

@@ -1809,7 +1809,7 @@ If the user chooses A or B:
    ```bash
    REPO_SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
    BRANCH=$(git branch --show-current 2>/dev/null)
-   for img in /tmp/gstack-pr-screenshots/*.png; do
+   for img in $(find /tmp/gstack-pr-screenshots -name '*.png' 2>/dev/null); do
      VIEWPORT=$(basename "$img" .png)
      URL=$(~/.claude/skills/gstack/bin/gstack-screenshot-upload "$img" \
        --repo-slug "$REPO_SLUG" --branch "$BRANCH" --viewport "$VIEWPORT")
