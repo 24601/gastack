@@ -24,6 +24,9 @@ gstack has three telemetry tiers. You choose during first run:
 | **Off** (default) | Nothing | None |
 | **Anonymous** | Skill name, duration, success/fail, gstack version, OS | None — no way to connect sessions |
 | **Community** | Same as anonymous | Random UUID (`~/.gstack/.install-id`) — connects sessions from one device |
+| **Logged in** | Same as community, plus screenshots tied to your account | Email address + GitHub username (via OAuth) |
+
+The **logged in** tier applies when you sign in to gstack.gg to use features like PR screenshots. Your email and GitHub username are associated with your uploaded screenshots and auth session. Telemetry data itself remains anonymous — logging in does not retroactively attach your identity to prior telemetry events.
 
 ### What we never collect
 
