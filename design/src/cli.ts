@@ -22,6 +22,7 @@ import { resolveApiKey, saveApiKey } from "./auth";
 import { extractDesignLanguage, updateDesignMd } from "./memory";
 import { diffMockups, verifyAgainstMockup } from "./diff";
 import { evolve } from "./evolve";
+import { generateDesignToCodePrompt } from "./design-to-code";
 
 function parseArgs(argv: string[]): { command: string; flags: Record<string, string | boolean> } {
   const args = argv.slice(2); // skip bun/node and script path
@@ -140,6 +141,20 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "prompt": {
+      const promptImage = flags.image as string;
+      if (!promptImage) {
+        console.error("--image is required");
+        process.exit(1);
+      }
+      console.error(`Generating implementation prompt from ${promptImage}...`);
+      const proc2 = Bun.spawn(["git", "rev-parse", "--show-toplevel"]);
+      const root = (await new Response(proc2.stdout).text()).trim();
+      const d2c = await generateDesignToCodePrompt(promptImage, root || undefined);
+      console.log(JSON.stringify(d2c, null, 2));
+      break;
+    }
+
     case "setup":
       await runSetup();
       break;
@@ -152,6 +167,7 @@ async function main(): Promise<void> {
         outputDir: (flags["output-dir"] as string) || "/tmp/gstack-variants/",
         size: flags.size as string,
         quality: flags.quality as string,
+        viewports: flags.viewports as string,
       });
       break;
 

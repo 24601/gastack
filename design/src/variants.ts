@@ -16,6 +16,7 @@ export interface VariantsOptions {
   outputDir: string;
   size?: string;
   quality?: string;
+  viewports?: string; // "desktop,tablet,mobile" — generates at multiple sizes
 }
 
 const STYLE_VARIATIONS = [
@@ -109,11 +110,18 @@ export async function variants(options: VariantsOptions): Promise<void> {
     ? parseBrief(options.briefFile, true)
     : parseBrief(options.brief!, false);
 
-  const count = Math.min(options.count, 7); // Cap at 7 style variations
-  const size = options.size || "1536x1024";
   const quality = options.quality || "high";
 
   fs.mkdirSync(options.outputDir, { recursive: true });
+
+  // If viewports specified, generate responsive variants instead of style variants
+  if (options.viewports) {
+    await generateResponsiveVariants(apiKey, baseBrief, options.outputDir, options.viewports, quality);
+    return;
+  }
+
+  const count = Math.min(options.count, 7); // Cap at 7 style variations
+  const size = options.size || "1536x1024";
 
   console.error(`Generating ${count} variants...`);
   const startTime = Date.now();
@@ -169,5 +177,70 @@ export async function variants(options: VariantsOptions): Promise<void> {
     failed: failed.length,
     paths: succeeded,
     errors: failed,
+  }, null, 2));
+}
+
+const VIEWPORT_CONFIGS: Record<string, { size: string; suffix: string; desc: string }> = {
+  desktop: { size: "1536x1024", suffix: "desktop", desc: "Desktop (1536x1024)" },
+  tablet: { size: "1024x1024", suffix: "tablet", desc: "Tablet (1024x1024)" },
+  mobile: { size: "1024x1536", suffix: "mobile", desc: "Mobile (1024x1536, portrait)" },
+};
+
+async function generateResponsiveVariants(
+  apiKey: string,
+  baseBrief: string,
+  outputDir: string,
+  viewports: string,
+  quality: string,
+): Promise<void> {
+  const viewportList = viewports.split(",").map(v => v.trim().toLowerCase());
+  const configs = viewportList.map(v => VIEWPORT_CONFIGS[v]).filter(Boolean);
+
+  if (configs.length === 0) {
+    console.error(`No valid viewports. Use: desktop, tablet, mobile`);
+    process.exit(1);
+  }
+
+  console.error(`Generating responsive variants: ${configs.map(c => c.desc).join(", ")}...`);
+  const startTime = Date.now();
+
+  const promises = configs.map((config, i) => {
+    const prompt = `${baseBrief}\n\nViewport: ${config.desc}. Adapt the layout for this screen size. ${
+      config.suffix === "mobile" ? "Use a single-column layout, larger touch targets, and mobile navigation patterns." :
+      config.suffix === "tablet" ? "Use a responsive layout that works for medium screens." :
+      ""
+    }`;
+    const outputPath = path.join(outputDir, `responsive-${config.suffix}.png`);
+    const delay = i * 1500;
+
+    return new Promise<{ path: string; success: boolean; error?: string }>(resolve =>
+      setTimeout(resolve, delay)
+    ).then(() => {
+      console.error(`  Starting ${config.desc}...`);
+      return generateVariant(apiKey, prompt, outputPath, config.size, quality);
+    });
+  });
+
+  const results = await Promise.allSettled(promises);
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  const succeeded: string[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled" && result.value.success) {
+      const sz = fs.statSync(result.value.path).size;
+      console.error(`  ✓ ${path.basename(result.value.path)} (${(sz / 1024).toFixed(0)}KB)`);
+      succeeded.push(result.value.path);
+    } else {
+      const error = result.status === "fulfilled" ? result.value.error : (result.reason as Error).message;
+      console.error(`  ✗ ${error}`);
+    }
+  }
+
+  console.error(`\n${succeeded.length}/${configs.length} responsive variants generated (${elapsed}s)`);
+  console.log(JSON.stringify({
+    outputDir,
+    viewports: viewportList,
+    succeeded: succeeded.length,
+    paths: succeeded,
   }, null, 2));
 }
