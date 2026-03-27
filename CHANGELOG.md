@@ -2,7 +2,7 @@
 
 ## [0.12.11.0] - 2026-03-27 — Skill Prefix is Now Your Choice
 
-The v0.12.9.0 upgrade silently renamed all your commands from `/qa` to `/gstack-qa`. That wasn't cool. Now setup asks you what you prefer, remembers your choice, and switching is one command.
+You can now choose how gstack skills appear: short names (`/qa`, `/ship`, `/review`) or namespaced (`/gstack-qa`, `/gstack-ship`). Setup asks on first run, remembers your preference, and switching is one command.
 
 ### Added
 
