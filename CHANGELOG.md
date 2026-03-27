@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.12.5.0] - 2026-03-26 — Fix Codex Hangs: 30-Minute Waits Are Gone
+
+Three bugs in `/codex` caused 30+ minute hangs with zero output during plan reviews and adversarial checks. All three are fixed.
+
+### Fixed
+
+- **Plan files now visible to Codex sandbox.** Codex runs sandboxed to the repo root and couldn't see plan files at `~/.claude/plans/`. It would waste 10+ tool calls searching before giving up. Now the plan content is embedded directly in the prompt, and referenced source files are listed so Codex reads them immediately.
+- **Streaming output actually streams.** Python's stdout buffering meant zero output visible until the process exited. Added `PYTHONUNBUFFERED=1`, `python3 -u`, and `flush=True` on every print call across all three Codex modes.
+- **Sane reasoning effort defaults.** Replaced hardcoded `xhigh` (23x more tokens, known 50+ min hangs per OpenAI issues #8545, #8402, #6931) with per-mode defaults: `high` for review and challenge, `medium` for consult. Users can override with `--xhigh` flag when they want maximum reasoning.
+- **`--xhigh` override works in all modes.** The override reminder was missing from challenge and consult mode instructions. Found by adversarial review.
+
+## [0.12.4.0] - 2026-03-26 — Full Commit Coverage in /ship
+
+When you ship a branch with 12 commits spanning performance work, dead code removal, and test infra, the PR should mention all three. It wasn't. The CHANGELOG and PR summary biased toward whatever happened most recently, silently dropping earlier work.
+
+### Fixed
+
+- **/ship Step 5 (CHANGELOG):** Now forces explicit commit enumeration before writing. You list every commit, group by theme, write the entry, then cross-check that every commit maps to a bullet. No more recency bias.
+- **/ship Step 8 (PR body):** Changed from "bullet points from CHANGELOG" to explicit commit-by-commit coverage. Groups commits into logical sections. Excludes the VERSION/CHANGELOG metadata commit (bookkeeping, not a change). Every substantive commit must appear somewhere.
+
+## [0.12.3.0] - 2026-03-26 — Voice Directive: Every Skill Sounds Like a Builder
+
+Every gstack skill now has a voice. Not a personality, not a persona, but a consistent set of instructions that make Claude sound like someone who shipped code today and cares whether the thing works for real users. Direct, concrete, sharp. Names the file, the function, the command. Connects technical work to what the user actually experiences.
+
+Two tiers: lightweight skills get a trimmed version (tone + writing rules). Full skills get the complete directive with context-dependent tone (YC partner energy for strategy, senior eng for code review, blog-post clarity for debugging), concreteness standards, humor calibration, and user-outcome guidance.
+
+### Added
+
+- **Voice directive in all 25 skills.** Generated from `preamble.ts`, injected via the template resolver. Tier 1 skills get a 4-line version. Tier 2+ skills get the full directive.
+- **Context-dependent tone.** Match the context: YC partner for `/plan-ceo-review`, senior eng for `/review`, best-technical-blog-post for `/investigate`.
+- **Concreteness standard.** "Show the exact command. Use real numbers. Point at the exact line." Not aspirational... enforced.
+- **User outcome connection.** "This matters because your user will see a 3-second spinner." Make the user's user real.
+- **LLM eval test.** Judge scores directness, concreteness, anti-corporate tone, AI vocabulary avoidance, and user outcome connection. All dimensions must score 4/5+.
+
 ## [0.12.2.0] - 2026-03-26 — Deploy with Confidence: First-Run Dry Run
 
 The first time you run `/land-and-deploy` on a project, it does a dry run. It detects your deploy infrastructure, tests that every command works, and shows you exactly what will happen... before it touches anything. You confirm, and from then on it just works.
