@@ -1,37 +1,145 @@
 # Changelog
 
-## [0.12.0.0] - 2026-03-23 — Community Mode + Trustworthy Telemetry
+## [0.12.5.0] - 2026-03-26 — Fix Codex Hangs: 30-Minute Waits Are Gone
 
-### Added
-
-- **You can now count real users.** Every gstack install gets a random UUID fingerprint (`~/.gstack/.install-id`). Update-check pings — which send only your version, OS, and this random ID — now fire for all users (not just opted-in). The community dashboard shows unique weekly users for the first time.
-- **One-liner installer.** `bash <(curl -fsSL https://raw.githubusercontent.com/garrytan/gstack/main/install.sh)` — checks prereqs, clones, runs setup, handles upgrades if already installed.
-- **Community tier with email auth.** Opt in for cloud backup of your gstack config, benchmarks comparing your usage to other builders, and skill recommendations based on community patterns.
-- **Growth funnel metrics.** New SQL views track install → activate (first skill run within 24h) → retain (return pings in week 2). Dashboard shows the full funnel.
-- **Version adoption velocity.** Materialized view shows how fast users upgrade after each release.
-- **Anomaly detection views.** Daily active installs and version adoption materialized views, ready for alert edge functions.
+Three bugs in `/codex` caused 30+ minute hangs with zero output during plan reviews and adversarial checks. All three are fixed.
 
 ### Fixed
 
-- **Telemetry data is now trustworthy.** E2E test events were polluting production Supabase (~230 of 232 events were test noise). Source field (`live`/`test`/`dev`) tags every event. All dashboard and edge function queries filter `source=live`. E2E test runner sets `GSTACK_TELEMETRY_SOURCE=test`.
-- **56-year skill durations are gone.** The `_TEL_START` shell variable was lost between bash blocks, producing epoch-time durations. Now persisted to `~/.gstack/analytics/.tel-start-$PPID` and read back in the epilogue. Duration capped at 86,400s (24h) with a CHECK constraint in the schema.
-- **Session ID persistence across bash blocks.** Same `$PPID` file pattern as duration fix — epilogue reads session ID from file instead of relying on shell variable scope.
-- **Dashboard shows filtered data.** Weekly active installs, skill popularity, and error reports all filter `source=eq.live`. Community-pulse edge function uses `COUNT(DISTINCT install_fingerprint)` instead of raw count.
-- **Benchmarks and recommendations no longer include test data.** Source filter added to both edge functions. `skill_sequences` and `crash_clusters` views recreated with source filter.
+- **Plan files now visible to Codex sandbox.** Codex runs sandboxed to the repo root and couldn't see plan files at `~/.claude/plans/`. It would waste 10+ tool calls searching before giving up. Now the plan content is embedded directly in the prompt, and referenced source files are listed so Codex reads them immediately.
+- **Streaming output actually streams.** Python's stdout buffering meant zero output visible until the process exited. Added `PYTHONUNBUFFERED=1`, `python3 -u`, and `flush=True` on every print call across all three Codex modes.
+- **Sane reasoning effort defaults.** Replaced hardcoded `xhigh` (23x more tokens, known 50+ min hangs per OpenAI issues #8545, #8402, #6931) with per-mode defaults: `high` for review and challenge, `medium` for consult. Users can override with `--xhigh` flag when they want maximum reasoning.
+- **`--xhigh` override works in all modes.** The override reminder was missing from challenge and consult mode instructions. Found by adversarial review.
+
+## [0.12.4.0] - 2026-03-26 — Full Commit Coverage in /ship
+
+When you ship a branch with 12 commits spanning performance work, dead code removal, and test infra, the PR should mention all three. It wasn't. The CHANGELOG and PR summary biased toward whatever happened most recently, silently dropping earlier work.
+
+### Fixed
+
+- **/ship Step 5 (CHANGELOG):** Now forces explicit commit enumeration before writing. You list every commit, group by theme, write the entry, then cross-check that every commit maps to a bullet. No more recency bias.
+- **/ship Step 8 (PR body):** Changed from "bullet points from CHANGELOG" to explicit commit-by-commit coverage. Groups commits into logical sections. Excludes the VERSION/CHANGELOG metadata commit (bookkeeping, not a change). Every substantive commit must appear somewhere.
+
+## [0.12.3.0] - 2026-03-26 — Voice Directive: Every Skill Sounds Like a Builder
+
+Every gstack skill now has a voice. Not a personality, not a persona, but a consistent set of instructions that make Claude sound like someone who shipped code today and cares whether the thing works for real users. Direct, concrete, sharp. Names the file, the function, the command. Connects technical work to what the user actually experiences.
+
+Two tiers: lightweight skills get a trimmed version (tone + writing rules). Full skills get the complete directive with context-dependent tone (YC partner energy for strategy, senior eng for code review, blog-post clarity for debugging), concreteness standards, humor calibration, and user-outcome guidance.
+
+### Added
+
+- **Voice directive in all 25 skills.** Generated from `preamble.ts`, injected via the template resolver. Tier 1 skills get a 4-line version. Tier 2+ skills get the full directive.
+- **Context-dependent tone.** Match the context: YC partner for `/plan-ceo-review`, senior eng for `/review`, best-technical-blog-post for `/investigate`.
+- **Concreteness standard.** "Show the exact command. Use real numbers. Point at the exact line." Not aspirational... enforced.
+- **User outcome connection.** "This matters because your user will see a 3-second spinner." Make the user's user real.
+- **LLM eval test.** Judge scores directness, concreteness, anti-corporate tone, AI vocabulary avoidance, and user outcome connection. All dimensions must score 4/5+.
+
+## [0.12.2.0] - 2026-03-26 — Deploy with Confidence: First-Run Dry Run
+
+The first time you run `/land-and-deploy` on a project, it does a dry run. It detects your deploy infrastructure, tests that every command works, and shows you exactly what will happen... before it touches anything. You confirm, and from then on it just works.
+
+If your deploy config changes later (new platform, different workflow, updated URLs), it automatically re-runs the dry run. Trust is earned, maintained, and re-validated when the ground shifts.
+
+### Added
+
+- **First-run dry run.** Shows your deploy infrastructure in a validation table: platform, CLI status, production URL reachability, staging detection, merge method, merge queue status. You confirm before anything irreversible happens.
+- **Staging-first option.** If staging is detected (CLAUDE.md config, GitHub Actions workflow, or Vercel/Netlify preview), you can deploy there first, verify it works, then proceed to production.
+- **Config decay detection.** The dry-run confirmation stores a fingerprint of your deploy config. If CLAUDE.md's deploy section or your deploy workflows change, the dry run re-triggers automatically.
+- **Inline review gate.** If no recent code review exists, offers a quick safety check on the diff before merging. Catches SQL safety, race conditions, and security issues at deploy time.
+- **Merge queue awareness.** Detects when your repo uses merge queues and explains what's happening while it waits.
+- **CI auto-deploy detection.** Identifies deploy workflows triggered by the merge and monitors them.
 
 ### Changed
 
-- **Identity model simplified.** Replaced SHA-256(hostname+user) `installation_id` (community-only) with random UUID `install_fingerprint` (all tiers). Expand-contract migration preserves backward compat — old clients still work via a trigger that copies `installation_id` → `install_fingerprint`.
-- **Update-check pings ungated from telemetry.** These pings send only version + OS + random UUID — equivalent to what GitHub sees in access logs. Transparency note added to the telemetry prompt.
-- **Dead code removed.** Deleted the unused `telemetry-ingest` edge function — `telemetry-sync` POSTs directly to Supabase REST API.
+- **Full copy rewrite.** Every user-facing message rewritten to narrate what's happening, explain why, and be specific. First run = teacher mode. Subsequent runs = efficient mode.
+- **Voice & Tone section.** New guidelines for how the skill communicates: be a senior release engineer sitting next to the developer, not a robot.
 
-### For contributors
+## [0.12.1.0] - 2026-03-26 — Smarter Browsing: Network Idle, State Persistence, Iframes
 
-- Migration 003 adds source columns, install_fingerprint, duration CHECK constraint, 4 indexes, recreated views, growth funnel view, and materialized views
-- Deployment requires running Phase 4A cleanup SQL before migration, Phase 4B backfill after
-- Expand-contract pattern: old `installation_id` column kept for backward compat with a trigger
-- Homebrew tap deferred to TODOS.md (P2)
-- 8 new telemetry tests (source field, duration caps, fingerprint persistence)
+Every click, fill, and select now waits for the page to settle before returning. No more stale snapshots because an XHR was still in-flight. Chain accepts pipe-delimited format for faster multi-step flows. You can save and restore browser sessions (cookies + open tabs). And iframe content is now reachable.
+
+### Added
+
+- **Network idle detection.** `click`, `fill`, and `select` auto-wait up to 2s for network requests to settle before returning. Catches XHR/fetch triggered by interactions. Uses Playwright's built-in `waitForLoadState('networkidle')`, not a custom tracker.
+
+- **`$B state save/load`.** Save your browser session (cookies + open tabs) to a named file, load it back later. Files stored at `.gstack/browse-states/{name}.json` with 0o600 permissions. V1 saves cookies + URLs only (not localStorage, which breaks on load-before-navigate). Load replaces the current session, not merge.
+
+- **`$B frame` command.** Switch command context into an iframe: `$B frame iframe`, `$B frame --name checkout`, `$B frame --url stripe`, or `$B frame @e5`. All subsequent commands (click, fill, snapshot, etc.) operate inside the iframe. `$B frame main` returns to the main page. Snapshot shows `[Context: iframe src="..."]` header. Detached frames auto-recover.
+
+- **Chain pipe format.** Chain now accepts `$B chain 'goto url | click @e5 | snapshot -ic'` as a fallback when JSON parsing fails. Pipe-delimited with quote-aware tokenization.
+
+### Changed
+
+- **Chain post-loop idle wait.** After executing all commands in a chain, if the last was a write command, chain waits for network idle before returning.
+
+### Fixed
+
+- **Iframe ref scoping.** Snapshot ref locators, cursor-interactive scan, and cursor locators now use the frame-aware target instead of always scoping to the main page.
+- **Detached frame recovery.** `getActiveFrameOrPage()` checks `isDetached()` and auto-recovers.
+- **State load resets frame context.** Loading a saved state clears the active frame reference.
+- **elementHandle leak in frame command.** Now properly disposed after getting contentFrame.
+- **Upload command frame-aware.** `upload` uses the frame-aware target for file input locators.
+
+## [0.12.0.0] - 2026-03-26 — Headed Mode + Sidebar Agent
+
+You can now watch Claude work in a real Chrome window and direct it from a sidebar chat.
+
+### Added
+
+- **Headed mode with sidebar agent.** `$B connect` launches a visible Chrome window with the gstack extension. The Side Panel shows a live activity feed of every command AND a chat interface where you type natural language instructions. A child Claude instance executes your requests in the browser ... navigate pages, click buttons, fill forms, extract data. Each task gets up to 5 minutes.
+
+- **Personal automation.** The sidebar agent handles repetitive browser tasks beyond dev workflows. Browse your kid's school parent portal and add parent contact info to Google Contacts. Fill out vendor onboarding forms. Extract data from dashboards. Log in once in the headed browser or import cookies from your real Chrome with `/setup-browser-cookies`.
+
+- **Chrome extension.** Toolbar badge (green=connected, gray=not), Side Panel with activity feed + chat + refs tab, @ref overlays on the page, and a connection pill showing which window gstack controls. Auto-loads when you run `$B connect`.
+
+- **`/connect-chrome` skill.** Guided setup: launches Chrome, verifies the extension, demos the activity feed, and introduces the sidebar chat.
+
+### Changed
+
+- **Sidebar agent ungated.** Previously required `--chat` flag. Now always available in headed mode. The sidebar agent has the same security model as Claude Code itself (Bash, Read, Glob, Grep on localhost).
+
+- **Agent timeout raised to 5 minutes.** Multi-page tasks (navigating directories, filling forms across pages) need more than the previous 2-minute limit.
+
+## [0.11.21.0] - 2026-03-26
+
+### Fixed
+
+- **`/autoplan` reviews now count toward the ship readiness gate.** When `/autoplan` ran full CEO + Design + Eng reviews, `/ship` still showed "0 runs" for Eng Review because autoplan-logged entries weren't being read correctly. Now the dashboard shows source attribution (e.g., "CLEAR (PLAN via /autoplan)") so you can see exactly which tool satisfied each review.
+- **`/ship` no longer tells you to "run /review first."** Ship runs its own pre-landing review in Step 3.5 — asking you to run the same review separately was redundant. The gate is removed; ship just does it.
+- **`/land-and-deploy` now checks all 8 review types.** Previously missed `review`, `adversarial-review`, and `codex-plan-review` — if you only ran `/review` (not `/plan-eng-review`), land-and-deploy wouldn't see it.
+- **Dashboard Outside Voice row now works.** Was showing "0 runs" even after outside voices ran in `/plan-ceo-review` or `/plan-eng-review`. Now correctly maps to `codex-plan-review` entries.
+- **`/codex review` now tracks staleness.** Added the `commit` field to codex review log entries so the dashboard can detect when a codex review is outdated.
+- **`/autoplan` no longer hardcodes "clean" status.** Review log entries from autoplan used to always record `status:"clean"` even when issues were found. Now uses proper placeholder tokens that Claude substitutes with real values.
+
+## [0.11.20.0] - 2026-03-26
+
+### Added
+
+- **GitLab support for `/retro` and `/ship`.** You can now run `/ship` on GitLab repos — it creates merge requests via `glab mr create` instead of `gh pr create`. `/retro` detects default branches on both platforms. All 11 skills using `BASE_BRANCH_DETECT` automatically get GitHub, GitLab, and git-native fallback detection.
+- **GitHub Enterprise and self-hosted GitLab detection.** If the remote URL doesn't match `github.com` or `gitlab`, gstack checks `gh auth status` / `glab auth status` to detect authenticated platforms — no manual config needed.
+- **`/document-release` works on GitLab.** After `/ship` creates a merge request, the auto-invoked `/document-release` reads and updates the MR body via `glab` instead of failing silently.
+- **GitLab safety gate for `/land-and-deploy`.** Instead of silently failing on GitLab repos, `/land-and-deploy` now stops early with a clear message that GitLab merge support is not yet implemented.
+
+### Fixed
+
+- **Deduplicated gen-skill-docs resolvers.** The template generator had duplicate inline resolver functions that shadowed the modular versions, causing generated SKILL.md files to miss recent resolver updates.
+
+## [0.11.19.0] - 2026-03-24
+
+### Fixed
+
+- **Auto-upgrade no longer breaks.** The root gstack skill description was 7 characters from the Codex 1024-char limit. Every new skill addition pushed it closer. Moved the skill routing table from the description (bounded) to the body (unlimited), dropping from 1017 to 409 chars with 615 chars of headroom.
+- **Codex reviews now run in the correct repo.** In multi-workspace setups (like Conductor), Codex could pick up the wrong project directory. All `codex exec` calls now explicitly set `-C` to the git root.
+
+### Added
+
+- **900-char early warning test.** A new test fails if any Codex skill description exceeds 900 chars, catching description bloat before it breaks builds.
+
+## [0.11.18.2] - 2026-03-24
+
+### Fixed
+
+- **Windows browse daemon fixed.** The browse server wouldn't start on Windows because Bun requires `stdio` as an array (`['ignore', 'ignore', 'ignore']`), not a string (`'ignore'`). Fixes #448, #454, #458.
 
 ## [0.11.18.1] - 2026-03-24
 

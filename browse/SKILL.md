@@ -125,6 +125,12 @@ touch ~/.gstack/.proactive-prompted
 
 This only happens once. If `PROACTIVE_PROMPTED` is `yes`, skip this entirely.
 
+## Voice
+
+**Tone:** direct, concrete, sharp, never corporate, never academic. Sound like a builder, not a consultant. Name the file, the function, the command. No filler, no throat-clearing.
+
+**Writing rules:** No em dashes (use commas, periods, "..."). No AI vocabulary (delve, crucial, robust, comprehensive, nuanced, etc.). Short paragraphs. End with what to do.
+
 ## Contributor Mode
 
 If `_CONTRIB` is `true`: you are in **contributor mode**. At the end of each major workflow step, rate your gstack experience 0-10. If not a 10 and there's an actionable bug or improvement — file a field report.
@@ -474,6 +480,9 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 | Command | Description |
 |---------|-------------|
 | `chain` | Run commands from JSON stdin. Format: [["cmd","arg1",...],...] |
+| `frame <sel|@ref|--name n|--url pattern|main>` | Switch to iframe context (or main to return) |
+| `inbox [--clear]` | List messages from sidebar scout inbox |
+| `watch [stop]` | Passive observation — periodic snapshots while user browses |
 
 ### Tabs
 | Command | Description |
@@ -486,8 +495,12 @@ Refs are invalidated on navigation — run `snapshot` again after `goto`.
 ### Server
 | Command | Description |
 |---------|-------------|
+| `connect` | Launch headed Chromium with Chrome extension |
+| `disconnect` | Disconnect headed browser, return to headless mode |
+| `focus [@ref]` | Bring headed browser window to foreground (macOS) |
 | `handoff [message]` | Open visible Chrome at current page for user takeover |
 | `restart` | Restart server |
 | `resume` | Re-snapshot after user takeover, return control to AI |
+| `state save|load <name>` | Save/load browser state (cookies + URLs) |
 | `status` | Health check |
 | `stop` | Shutdown server |
