@@ -346,22 +346,124 @@ export function generateCompareHtml(images: string[]): string {
     submitRegenerate(detail);
   });
 
+  function postFeedback(feedback) {
+    if (!window.__GSTACK_SERVER_URL) return Promise.resolve(null);
+    return fetch(window.__GSTACK_SERVER_URL + '/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(feedback),
+    }).then(function(r) { return r.json(); }).catch(function() { return null; });
+  }
+
+  function disableAllInputs() {
+    document.querySelectorAll('input, button, textarea, .star, .regen-chiclet').forEach(function(el) {
+      el.disabled = true;
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.5';
+    });
+  }
+
+  function showPostSubmitState() {
+    disableAllInputs();
+    document.querySelector('.regenerate-bar').style.display = 'none';
+    document.getElementById('submit-btn').style.display = 'none';
+    document.getElementById('success-msg').style.display = 'block';
+    document.getElementById('success-msg').innerHTML =
+      'Feedback received! Return to your coding agent.' +
+      '<br><small style="color:#666;margin-top:8px;display:block;">Want to make more changes? Run <code>/design-shotgun</code> again.</small>';
+  }
+
+  function showRegeneratingState() {
+    disableAllInputs();
+    document.querySelector('.variants').innerHTML =
+      '<div style="text-align:center;padding:80px 24px;color:#666;">' +
+      '<div style="font-size:24px;margin-bottom:12px;">Generating new designs...</div>' +
+      '<div class="skeleton" style="width:60px;height:60px;border-radius:50%;margin:0 auto;"></div>' +
+      '</div>';
+    document.querySelector('.regenerate-bar').style.display = 'none';
+    document.querySelector('.submit-bar').style.display = 'none';
+    document.querySelector('.overall-section').style.display = 'none';
+    startProgressPolling();
+  }
+
+  function startProgressPolling() {
+    if (!window.__GSTACK_SERVER_URL) return;
+    var pollCount = 0;
+    var maxPolls = 150; // 5 min at 2s intervals
+    var pollInterval = setInterval(function() {
+      pollCount++;
+      if (pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+        document.querySelector('.variants').innerHTML =
+          '<div style="text-align:center;padding:80px 24px;color:#666;">' +
+          '<div style="font-size:18px;margin-bottom:8px;">Something went wrong.</div>' +
+          '<div>Run <code>/design-shotgun</code> again in your coding agent.</div>' +
+          '</div>';
+        return;
+      }
+      fetch(window.__GSTACK_SERVER_URL + '/api/progress')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.status === 'serving') {
+            clearInterval(pollInterval);
+            window.location.reload();
+          }
+        })
+        .catch(function() {
+          // Server gone, stop polling
+          clearInterval(pollInterval);
+          document.querySelector('.variants').innerHTML =
+            '<div style="text-align:center;padding:80px 24px;color:#666;">' +
+            '<div style="font-size:18px;margin-bottom:8px;">Connection lost.</div>' +
+            '<div>Run <code>/design-shotgun</code> again in your coding agent.</div>' +
+            '</div>';
+        });
+    }, 2000);
+  }
+
+  function showPostFailure(feedback) {
+    disableAllInputs();
+    var json = JSON.stringify(feedback, null, 2);
+    document.getElementById('success-msg').style.display = 'block';
+    document.getElementById('success-msg').innerHTML =
+      '<div style="color:#c00;margin-bottom:8px;">Connection lost. Copy your feedback below and paste it in your coding agent:</div>' +
+      '<pre style="text-align:left;background:#f5f5f5;padding:12px;border-radius:4px;font-size:12px;overflow-x:auto;cursor:pointer;" onclick="navigator.clipboard.writeText(this.textContent)">' +
+      json.replace(/</g, '&lt;') + '</pre>' +
+      '<small style="color:#666;">Click to copy</small>';
+  }
+
   function submitRegenerate(detail) {
-    const feedback = collectFeedback();
+    var feedback = collectFeedback();
     feedback.regenerated = true;
     feedback.regenerateAction = detail;
     document.getElementById('feedback-result').textContent = JSON.stringify(feedback);
     document.getElementById('status').textContent = 'regenerate';
+    postFeedback(feedback).then(function(result) {
+      if (result && result.received) {
+        showRegeneratingState();
+      } else if (window.__GSTACK_SERVER_URL) {
+        showPostFailure(feedback);
+      }
+    });
   }
 
   // Submit button
-  document.getElementById('submit-btn').addEventListener('click', () => {
-    const feedback = collectFeedback();
+  document.getElementById('submit-btn').addEventListener('click', function() {
+    var feedback = collectFeedback();
     feedback.regenerated = false;
     document.getElementById('feedback-result').textContent = JSON.stringify(feedback);
     document.getElementById('status').textContent = 'submitted';
-    document.getElementById('submit-btn').disabled = true;
-    document.getElementById('success-msg').style.display = 'block';
+    postFeedback(feedback).then(function(result) {
+      if (result && result.received) {
+        showPostSubmitState();
+      } else if (window.__GSTACK_SERVER_URL) {
+        showPostFailure(feedback);
+      } else {
+        // DOM-only mode (legacy / test)
+        document.getElementById('submit-btn').disabled = true;
+        document.getElementById('success-msg').style.display = 'block';
+      }
+    });
   });
 
   function collectFeedback() {
