@@ -586,69 +586,75 @@ $D check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
 
 Flag any variants that fail the quality check. Offer to regenerate failures.
 
-Create a comparison board and open it for review:
+Show each variant inline (Read tool on each PNG) so the user sees them immediately.
+
+Tell the user: "I've generated design directions. Take a look at the variants above,
+then use the comparison board that just opened in your browser to pick your favorite,
+rate the others, remix elements, and click Submit when you're done."
+
+### Comparison Board + Feedback Loop
+
+Create the comparison board and serve it over HTTP:
 
 ```bash
-$D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html"
+$D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
 ```
 
-Open the comparison board for the user. If `$B` is available (BROWSE_READY was printed
-during setup), use it. Otherwise fall back to `open` which works on macOS:
+This command generates the board HTML, starts an HTTP server on a random port,
+and opens it in the user's default browser. It blocks until the user submits
+feedback. The feedback JSON is printed to stdout.
 
-```bash
-if [ -x "$B" ]; then
-  $B goto "file://$_DESIGN_DIR/design-board.html"
-else
-  open "$_DESIGN_DIR/design-board.html"
-fi
-```
+**Reading the result:**
 
-Tell the user: "I've generated design directions and opened the comparison board. Pick your favorite, rate the others, and click Submit when you're done."
-
-**Poll for user feedback from the comparison board.**
-
-The comparison board has a Submit button that writes structured JSON to hidden DOM
-elements. Poll for the user's submission:
-
-```bash
-$B eval document.getElementById('status').textContent
-```
-
-- If empty: user hasn't submitted yet. Wait 10 seconds and poll again.
-- If `"submitted"`: read the feedback below.
-- If `"regenerate"`: user wants new variants. Read the regeneration request from
-  `feedback-result`, generate new variants with the updated brief using `$D variants`
-  or `$D iterate`, update the comparison board, and resume polling.
-
-When status is `"submitted"`, read the structured feedback:
-
-```bash
-$B eval document.getElementById('feedback-result').textContent
-```
-
-This returns JSON like:
+The agent reads stdout. The JSON has this shape:
 ```json
 {
   "preferred": "A",
   "ratings": { "A": 4, "B": 3, "C": 2 },
-  "comments": { "A": "Love the spacing", "B": "Too busy", "C": "Wrong mood" },
-  "overall": "Go with A, make the CTA bigger",
+  "comments": { "A": "Love the spacing" },
+  "overall": "Go with A, bigger CTA",
   "regenerated": false
 }
 ```
 
-**If `$B` is not available** (BROWSE_NOT_AVAILABLE): the board was opened with `open`
-and you cannot poll the DOM. In this case, send a text message asking the user to
-describe their choice (which variant, what to change). Do NOT use AskUserQuestion —
-their feedback may combine elements across variants. Wait for free-form response.
+**If `"regenerated": true`:**
+1. Read `regenerateAction` from the JSON (`"different"`, `"match"`, `"more_like_B"`,
+   `"remix"`, or custom text)
+2. If `regenerateAction` is `"remix"`, read `remixSpec` (e.g. `{"layout":"A","colors":"B"}`)
+3. Generate new variants with `$D iterate` or `$D variants` using updated brief
+4. Create new board: `$D compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
+5. Reload the running server: parse the port from stderr (`SERVE_STARTED: port=XXXXX`),
+   then POST the new HTML:
+   `curl -s -X POST http://localhost:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
+6. The board auto-refreshes in the same browser tab. Wait for the next stdout line.
+7. Repeat until `"regenerated": false`.
 
-Note which direction was approved — this becomes the visual reference for all subsequent review passes.
+**If `"regenerated": false`:**
+1. Read `preferred`, `ratings`, `comments`, `overall` from the JSON
+2. Proceed with the approved variant
 
-After the user picks a direction, write an `approved.json` to record the choice:
+**If `$D serve` fails or times out:** Fall back to AskUserQuestion:
+"I've opened the design board. Which variant do you prefer? Any feedback?"
 
+**After receiving feedback (any path):** Output a clear summary confirming
+what was understood:
+
+"Here's what I understood from your feedback:
+PREFERRED: Variant [X]
+RATINGS: [list]
+YOUR NOTES: [comments]
+DIRECTION: [overall]
+
+Is this right?"
+
+Use AskUserQuestion to verify before proceeding.
+
+**Save the approved choice:**
 ```bash
-echo '{"approved_variant":"<VARIANT>","feedback":"<USER_FEEDBACK>","date":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","screen":"<SCREEN_NAME>","branch":"'$(git branch --show-current 2>/dev/null)'"}' > "$_DESIGN_DIR/approved.json"
+echo '{"approved_variant":"<V>","feedback":"<FB>","date":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","screen":"<SCREEN>","branch":"'$(git branch --show-current 2>/dev/null)'"}' > "$_DESIGN_DIR/approved.json"
 ```
+
+Note which direction was approved. This becomes the visual reference for all subsequent review passes.
 
 **Multiple variants/screens:** If the user asked for multiple variants (e.g., "5 versions of the homepage"), generate ALL as separate variant sets with their own comparison boards. Each screen/variant set gets its own subdirectory under `designs/`. Complete all mockup generation and user selection before starting review passes.
 

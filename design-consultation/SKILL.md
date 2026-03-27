@@ -697,23 +697,76 @@ Run quality check on each variant:
 $D check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
 ```
 
-Create a comparison board and open it:
+Show each variant inline (Read tool on each PNG) for instant preview.
+
+Tell the user: "I've generated 3 visual directions applying your design system to a realistic [product type] screen. Pick your favorite in the comparison board that just opened in your browser. You can also remix elements across variants."
+
+### Comparison Board + Feedback Loop
+
+Create the comparison board and serve it over HTTP:
 
 ```bash
-$D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html"
-$B goto "file://$_DESIGN_DIR/design-board.html"
+$D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
 ```
 
-Tell the user: "I've generated 3 visual directions applying your design system to a realistic [product type] screen. Pick your favorite — I'll use it to refine the design system and extract exact tokens for DESIGN.md."
+This command generates the board HTML, starts an HTTP server on a random port,
+and opens it in the user's default browser. It blocks until the user submits
+feedback. The feedback JSON is printed to stdout.
+
+**Reading the result:**
+
+The agent reads stdout. The JSON has this shape:
+```json
+{
+  "preferred": "A",
+  "ratings": { "A": 4, "B": 3, "C": 2 },
+  "comments": { "A": "Love the spacing" },
+  "overall": "Go with A, bigger CTA",
+  "regenerated": false
+}
+```
+
+**If `"regenerated": true`:**
+1. Read `regenerateAction` from the JSON (`"different"`, `"match"`, `"more_like_B"`,
+   `"remix"`, or custom text)
+2. If `regenerateAction` is `"remix"`, read `remixSpec` (e.g. `{"layout":"A","colors":"B"}`)
+3. Generate new variants with `$D iterate` or `$D variants` using updated brief
+4. Create new board: `$D compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
+5. Reload the running server: parse the port from stderr (`SERVE_STARTED: port=XXXXX`),
+   then POST the new HTML:
+   `curl -s -X POST http://localhost:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
+6. The board auto-refreshes in the same browser tab. Wait for the next stdout line.
+7. Repeat until `"regenerated": false`.
+
+**If `"regenerated": false`:**
+1. Read `preferred`, `ratings`, `comments`, `overall` from the JSON
+2. Proceed with the approved variant
+
+**If `$D serve` fails or times out:** Fall back to AskUserQuestion:
+"I've opened the design board. Which variant do you prefer? Any feedback?"
+
+**After receiving feedback (any path):** Output a clear summary confirming
+what was understood:
+
+"Here's what I understood from your feedback:
+PREFERRED: Variant [X]
+RATINGS: [list]
+YOUR NOTES: [comments]
+DIRECTION: [overall]
+
+Is this right?"
+
+Use AskUserQuestion to verify before proceeding.
+
+**Save the approved choice:**
+```bash
+echo '{"approved_variant":"<V>","feedback":"<FB>","date":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","screen":"<SCREEN>","branch":"'$(git branch --show-current 2>/dev/null)'"}' > "$_DESIGN_DIR/approved.json"
+```
 
 After the user picks a direction:
 
 - Use `$D extract --image "$_DESIGN_DIR/variant-<CHOSEN>.png"` to analyze the approved mockup and extract design tokens (colors, typography, spacing) that will populate DESIGN.md in Phase 6. This grounds the design system in what was actually approved visually, not just what was described in text.
-- If the user wants to iterate: `$D iterate --feedback "<user's feedback>" --output "$_DESIGN_DIR/refined.png"`
-- Write an `approved.json` to record the choice:
-```bash
-echo '{"approved_variant":"<VARIANT>","feedback":"<USER_FEEDBACK>","date":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","screen":"design-system","branch":"'$(git branch --show-current 2>/dev/null)'"}' > "$_DESIGN_DIR/approved.json"
-```
+- If the user wants to iterate further: `$D iterate --feedback "<user's feedback>" --output "$_DESIGN_DIR/refined.png"`
 
 **Plan mode vs. implementation mode:**
 - **If in plan mode:** Add the approved mockup path (the full `$_DESIGN_DIR` path) and extracted tokens to the plan file under an "## Approved Design Direction" section. The design system gets written to DESIGN.md when the plan is implemented.
