@@ -24,6 +24,7 @@ import { diffMockups, verifyAgainstMockup } from "./diff";
 import { evolve } from "./evolve";
 import { generateDesignToCodePrompt } from "./design-to-code";
 import { serve } from "./serve";
+import { gallery } from "./gallery";
 
 function parseArgs(argv: string[]): { command: string; flags: Record<string, string | boolean> } {
   const args = argv.slice(2); // skip bun/node and script path
@@ -234,6 +235,13 @@ async function main(): Promise<void> {
         screenshot: flags.screenshot as string,
         brief: flags.brief as string,
         output: (flags.output as string) || "/tmp/gstack-evolved.png",
+      });
+      break;
+
+    case "gallery":
+      gallery({
+        designsDir: flags["designs-dir"] as string,
+        output: (flags.output as string) || "/tmp/gstack-design-gallery.html",
       });
       break;
 

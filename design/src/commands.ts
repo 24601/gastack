@@ -64,6 +64,11 @@ export const COMMANDS = new Map<string, {
     usage: "extract --image approved.png",
     flags: ["--image"],
   }],
+  ["gallery", {
+    description: "Generate HTML timeline of all design explorations for a project",
+    usage: "gallery --designs-dir ~/.gstack/projects/$SLUG/designs/ --output /path/gallery.html",
+    flags: ["--designs-dir", "--output"],
+  }],
   ["serve", {
     description: "Serve comparison board over HTTP and collect user feedback",
     usage: "serve --html /path/board.html [--timeout 600]",
