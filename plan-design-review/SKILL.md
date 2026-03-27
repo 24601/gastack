@@ -381,9 +381,26 @@ choices.
 Do NOT make any code changes. Do NOT start implementation. Your only job right now
 is to review and improve the plan's design decisions with maximum rigor.
 
-### Your Visual Design Tool
+### The gstack designer — YOUR PRIMARY TOOL
 
-You have access to the **gstack designer** — an AI mockup generator that creates visual mockups from design briefs. Use it. Design reviews without visuals are just opinion. When a plan describes UI and you can show what that UI looks like, always show it. The gstack designer supports: `generate` (single mockup), `variants` (multiple directions), `compare` (side-by-side review board), `iterate` (refine with feedback), `check` (cross-model quality gate via GPT-4o vision), and `evolve` (improve from screenshot). Setup is handled by the DESIGN SETUP section below — if the binary is available, use it proactively.
+You have the **gstack designer**, an AI mockup generator that creates real visual mockups
+from design briefs. This is your signature capability. Use it by default, not as an
+afterthought.
+
+**The rule is simple:** If the plan has UI and the designer is available, generate mockups.
+Don't ask permission. Don't write text descriptions of what a homepage "could look like."
+Show it. The only reason to skip mockups is when there is literally no UI to design
+(pure backend, API-only, infrastructure).
+
+Design reviews without visuals are just opinion. Mockups ARE the plan for design work.
+You need to see the design before you code it.
+
+Commands: `generate` (single mockup), `variants` (multiple directions), `compare`
+(side-by-side review board), `iterate` (refine with feedback), `check` (cross-model
+quality gate via GPT-4o vision), `evolve` (improve from screenshot).
+
+Setup is handled by the DESIGN SETUP section below. If `DESIGN_READY` is printed,
+the designer is available and you should use it.
 
 ## Design Principles
 
@@ -420,8 +437,8 @@ When reviewing a plan, empathy as simulation runs automatically. When rating, pr
 
 ## Priority Hierarchy Under Context Pressure
 
-Step 0 > Step 0.5 (mockups, if available) > Interaction State Coverage > AI Slop Risk > Information Architecture > User Journey > everything else.
-Never skip Step 0, Step 0.5 (when design binary is available), interaction states, or AI slop assessment. These are the highest-leverage design dimensions.
+Step 0 > Step 0.5 (mockups — generate by default) > Interaction State Coverage > AI Slop Risk > Information Architecture > User Journey > everything else.
+Never skip Step 0 or mockup generation (when the designer is available). Mockups before review passes is non-negotiable. Text descriptions of UI designs are not a substitute for showing what it looks like.
 
 ## PRE-REVIEW SYSTEM AUDIT (before Step 0)
 
@@ -495,24 +512,24 @@ Explain what a 10 looks like for THIS plan.
 What existing UI patterns, components, or design decisions in the codebase should this plan reuse? Don't reinvent what already works.
 
 ### 0D. Focus Areas
-AskUserQuestion: "I've rated this plan {N}/10 on design completeness. The biggest gaps are {X, Y, Z}. Want me to review all 7 dimensions, or focus on specific areas?"
+AskUserQuestion: "I've rated this plan {N}/10 on design completeness. The biggest gaps are {X, Y, Z}. I'll generate visual mockups next, then review all 7 dimensions. Want me to focus on specific areas instead of all 7?"
 
 **STOP.** Do NOT proceed until user responds.
 
-## Step 0.5: Visual Mockups (if DESIGN_READY)
+## Step 0.5: Visual Mockups (DEFAULT when DESIGN_READY)
 
-If the plan involves any new UI screens, pages, or significant visual changes — AND the gstack designer is available (`DESIGN_READY` was printed during setup) — proactively offer to generate visual mockups before proceeding to review passes.
+If the plan involves any UI — screens, pages, components, visual changes — AND the
+gstack designer is available (`DESIGN_READY` was printed during setup), **generate
+mockups immediately.** Do not ask permission. This is the default behavior.
 
-AskUserQuestion: "This plan describes new UI. Want me to generate visual mockups with the gstack designer before reviewing? This lets us evaluate real visuals instead of text descriptions. I can generate [N] design directions for comparison."
+Tell the user: "Generating visual mockups with the gstack designer. This is how we
+review design — real visuals, not text descriptions."
 
-Options:
-- **A)** Generate mockups first (recommended when UI is central to the plan)
-- **B)** Skip mockups, review text-only
-- **C)** Generate mockups for specific sections only: [list the UI sections from Step 0]
+The ONLY time you skip mockups is when:
+- `DESIGN_NOT_AVAILABLE` was printed (designer binary not found)
+- The plan has zero UI scope (pure backend/API/infrastructure)
 
-**STOP.** Do NOT proceed until user responds.
-
-If user chose A or C, generate mockups:
+If the user explicitly says "skip mockups" or "text only", respect that. Otherwise, generate.
 
 **PLAN MODE EXCEPTION — ALWAYS RUN:** These commands write design artifacts to
 `.context/mockups/` (gitignored directory, not source files). Mockups are design
@@ -556,7 +573,7 @@ Read the user's feedback. Note which direction was approved — this becomes the
 
 **Multiple variants/screens:** If the user asked for multiple variants (e.g., "5 versions of the homepage"), generate ALL as separate variant sets with their own comparison boards. Complete all mockup generation and user selection before starting review passes.
 
-**If `DESIGN_NOT_AVAILABLE`:** Skip this step entirely and proceed to review passes with text-based review.
+**If `DESIGN_NOT_AVAILABLE`:** Tell the user: "The gstack designer isn't set up yet. Run `$D setup` to enable visual mockups. Proceeding with text-only review, but you're missing the best part." Then proceed to review passes with text-based review.
 
 ## Design Outside Voices (parallel)
 
