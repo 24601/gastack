@@ -719,3 +719,132 @@ ${slopItems}
 
 Source: [OpenAI "Designing Delightful Frontends with GPT-5.4"](https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4) (Mar 2026) + gstack design methodology.`;
 }
+
+export function generateDesignSetup(ctx: TemplateContext): string {
+  return `## DESIGN SETUP (run this check BEFORE any design mockup command)
+
+\`\`\`bash
+_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+D=""
+[ -n "$_ROOT" ] && [ -x "$_ROOT/${ctx.paths.localSkillRoot}/design/dist/design" ] && D="$_ROOT/${ctx.paths.localSkillRoot}/design/dist/design"
+[ -z "$D" ] && D=${ctx.paths.designDir}/design
+if [ -x "$D" ]; then
+  echo "DESIGN_READY: $D"
+else
+  echo "DESIGN_NOT_AVAILABLE"
+fi
+\`\`\`
+
+If \`DESIGN_NOT_AVAILABLE\`: skip visual mockup generation and fall back to the
+existing HTML wireframe approach (\`DESIGN_SKETCH\`). Design mockups are a
+progressive enhancement, not a hard requirement.
+
+If \`DESIGN_READY\`: the design binary is available for visual mockup generation.
+Commands:
+- \`$D generate --brief "..." --output /path.png\` — generate a single mockup
+- \`$D variants --brief "..." --count 3 --output-dir /path/\` — generate N style variants
+- \`$D compare --images "a.png,b.png,c.png" --output /path/board.html\` — comparison board
+- \`$D check --image /path.png --brief "..."\` — vision quality gate
+- \`$D iterate --session /path/session.json --feedback "..." --output /path.png\` — iterate`;
+}
+
+export function generateDesignMockup(ctx: TemplateContext): string {
+  return `## Visual Design Exploration
+
+\`\`\`bash
+_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+D=""
+[ -n "$_ROOT" ] && [ -x "$_ROOT/${ctx.paths.localSkillRoot}/design/dist/design" ] && D="$_ROOT/${ctx.paths.localSkillRoot}/design/dist/design"
+[ -z "$D" ] && D=${ctx.paths.designDir}/design
+[ -x "$D" ] && echo "DESIGN_READY" || echo "DESIGN_NOT_AVAILABLE"
+\`\`\`
+
+**If \`DESIGN_NOT_AVAILABLE\`:** Fall back to the HTML wireframe approach below
+(the existing DESIGN_SKETCH section). Visual mockups require the design binary.
+
+**If \`DESIGN_READY\`:** Generate visual mockup explorations for the user.
+
+Generating visual mockups of the proposed design... (say "skip" if you don't need visuals)
+
+**Step 1: Construct the design brief**
+
+Read DESIGN.md if it exists — use it to constrain the visual style. If no DESIGN.md,
+explore wide across diverse directions.
+
+Assemble a structured brief as a JSON file:
+\`\`\`bash
+cat > /tmp/gstack-design-brief.json << 'BRIEF_EOF'
+{
+  "goal": "<what this screen/page does>",
+  "audience": "<who uses it>",
+  "style": "<visual style from DESIGN.md or from the user's description>",
+  "elements": ["<list>", "<of>", "<key UI elements>"],
+  "constraints": "<any size/layout constraints>",
+  "screenType": "<desktop-dashboard|mobile-app|landing-page|settings|etc>"
+}
+BRIEF_EOF
+\`\`\`
+
+**Step 2: Generate 3 variants**
+
+\`\`\`bash
+$D variants --brief-file /tmp/gstack-design-brief.json --count 3 --output-dir /tmp/gstack-mockups/
+\`\`\`
+
+This generates 3 style variations of the same brief (~40 seconds total).
+
+**Step 3: Show the comparison board**
+
+\`\`\`bash
+$D compare --images "/tmp/gstack-mockups/variant-A.png,/tmp/gstack-mockups/variant-B.png,/tmp/gstack-mockups/variant-C.png" --output /tmp/gstack-design-board.html
+\`\`\`
+
+Open the comparison board in headed Chrome for user review:
+
+\`\`\`bash
+$B goto file:///tmp/gstack-design-board.html
+\`\`\`
+
+Tell the user: "I've generated 3 design directions and opened them in Chrome.
+Pick your favorite, rate the others, and click Submit when you're done."
+
+**Step 4: Poll for user feedback**
+
+Poll the page for the user's submission:
+
+\`\`\`bash
+$B eval document.getElementById('status').textContent
+\`\`\`
+
+- If empty: user hasn't submitted yet. Wait 10 seconds and poll again.
+- If "submitted": read the feedback.
+- If "regenerate": user wants new variants. Read the regeneration request,
+  generate new variants with the updated brief, and refresh the comparison board.
+
+When status is "submitted", read the structured feedback:
+
+\`\`\`bash
+$B eval document.getElementById('feedback-result').textContent
+\`\`\`
+
+This returns JSON with the user's preferred variant, star ratings, comments,
+and overall direction.
+
+**Step 5: Save approved mockup**
+
+Copy the user's preferred variant to \`docs/designs/\` (create if needed):
+
+\`\`\`bash
+mkdir -p docs/designs
+cp /tmp/gstack-mockups/variant-<PREFERRED>.png docs/designs/<skill>-<description>-$(date +%Y%m%d).png
+\`\`\`
+
+Reference the saved mockup in the design doc or plan.
+
+**Step 6: Generate HTML wireframe**
+
+After the mockup is approved, generate an HTML wireframe matching the approved
+direction using the existing DESIGN_SKETCH approach. The wireframe is what the
+agent implements from — the mockup is what the human approved.`;
+}
+
