@@ -243,6 +243,43 @@ export function generateCompareHtml(images: string[]): string {
   /* Hidden result elements for agent polling */
   #status, #feedback-result { display: none; }
 
+  /* Remix section */
+  .remix-bar {
+    background: #fafafa;
+    padding: 16px 24px;
+    border-top: 1px solid #e5e5e5;
+  }
+  .remix-bar .inner { max-width: 1200px; margin: 0 auto; }
+  .remix-bar h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .remix-grid {
+    display: grid;
+    grid-template-columns: auto repeat(${images.length}, 1fr);
+    gap: 8px 16px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .remix-grid .remix-header { font-weight: 600; text-align: center; }
+  .remix-grid .remix-label { color: #666; }
+  .remix-grid label {
+    display: flex;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .remix-grid input[type="radio"] { accent-color: #000; }
+  .remix-btn {
+    margin-top: 12px;
+    padding: 8px 18px;
+    background: #000;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .remix-btn:hover { background: #333; }
+  .remix-btn:disabled { background: #ccc; cursor: not-allowed; }
+
   /* Skeleton loading state */
   .skeleton {
     background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
@@ -289,6 +326,21 @@ export function generateCompareHtml(images: string[]): string {
   </div>
 </div>
 
+<div class="remix-bar">
+  <div class="inner">
+    <h3>Remix — mix elements from different variants</h3>
+    <div class="remix-grid">
+      <div></div>
+      ${images.map((_, i) => `<div class="remix-header">${variantLabels[i]}</div>`).join("")}
+      ${["Layout", "Colors", "Typography", "Spacing"].map(element => `
+        <div class="remix-label">${element}</div>
+        ${images.map((_, i) => `<label><input type="radio" name="remix-${element.toLowerCase()}" value="${variantLabels[i]}" /></label>`).join("")}
+      `).join("")}
+    </div>
+    <button class="remix-btn" id="remix-btn" disabled>Remix →</button>
+  </div>
+</div>
+
 <div class="submit-bar">
   <button class="submit-btn" id="submit-btn">✓ Submit</button>
 </div>
@@ -314,6 +366,37 @@ export function generateCompareHtml(images: string[]): string {
           s.classList.toggle('filled', parseInt(s.dataset.value) <= rating);
         });
       });
+    });
+  });
+
+  // Remix radio buttons — enable remix button when at least one element is selected
+  document.querySelectorAll('.remix-grid input[type="radio"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      var anySelected = document.querySelector('.remix-grid input[type="radio"]:checked');
+      document.getElementById('remix-btn').disabled = !anySelected;
+    });
+  });
+
+  // Remix button
+  document.getElementById('remix-btn').addEventListener('click', function() {
+    var remixSpec = {};
+    ['layout', 'colors', 'typography', 'spacing'].forEach(function(element) {
+      var selected = document.querySelector('input[name="remix-' + element + '"]:checked');
+      if (selected) remixSpec[element] = selected.value;
+    });
+    if (Object.keys(remixSpec).length === 0) return;
+    var feedback = collectFeedback();
+    feedback.regenerated = true;
+    feedback.regenerateAction = 'remix';
+    feedback.remixSpec = remixSpec;
+    document.getElementById('feedback-result').textContent = JSON.stringify(feedback);
+    document.getElementById('status').textContent = 'regenerate';
+    postFeedback(feedback).then(function(result) {
+      if (result && result.received) {
+        showRegeneratingState();
+      } else if (window.__GSTACK_SERVER_URL) {
+        showPostFailure(feedback);
+      }
     });
   });
 
