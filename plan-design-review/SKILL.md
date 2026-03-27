@@ -564,8 +564,6 @@ planning phase. Generating mockups during planning is the whole point.
 Allowed commands under this exception:
 - `mkdir -p ~/.gstack/projects/$SLUG/designs/...`
 - `$D generate`, `$D variants`, `$D compare`, `$D iterate`, `$D evolve`, `$D check`
-- `$B goto file:///` (to view comparison board in browser)
-- `$B eval document.getElementById(...)` (to read user feedback from comparison board)
 - `open` (fallback for viewing boards when `$B` is not available)
 
 First, set up the output directory. Name it after the screen/feature being designed and today's date:
@@ -578,6 +576,8 @@ echo "DESIGN_DIR: $_DESIGN_DIR"
 ```
 
 Replace `<screen-name>` with a descriptive kebab-case name (e.g., `homepage-variants`, `settings-page`, `onboarding-flow`).
+
+**Generate mockups ONE AT A TIME. Do not parallelize `$D generate` calls.** The underlying API rate-limits concurrent image generation. When 3 generates run in parallel, 1 succeeds and 2 get aborted.
 
 For each UI screen/section in scope, construct a design brief from the plan's description (and DESIGN.md if present) and generate variants:
 
@@ -683,6 +683,8 @@ Use AskUserQuestion to verify before proceeding.
 ```bash
 echo '{"approved_variant":"<V>","feedback":"<FB>","date":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","screen":"<SCREEN>","branch":"'$(git branch --show-current 2>/dev/null)'"}' > "$_DESIGN_DIR/approved.json"
 ```
+
+**Do NOT use AskUserQuestion to ask which variant the user picked.** Read `feedback.json` — it already contains their preferred variant, ratings, comments, and overall feedback. Only use AskUserQuestion to confirm you understood the feedback correctly, never to re-ask what they chose.
 
 Note which direction was approved. This becomes the visual reference for all subsequent review passes.
 
