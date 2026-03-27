@@ -1,0 +1,217 @@
+---
+name: design-shotgun
+preamble-tier: 2
+version: 1.0.0
+description: |
+  Design shotgun: generate multiple AI design variants, open a comparison board,
+  collect structured feedback, and iterate. Standalone design exploration you can
+  run anytime. Use when: "explore designs", "show me options", "design variants",
+  "visual brainstorm", or "I don't like how this looks".
+  Proactively suggest when the user describes a UI feature but hasn't seen
+  what it could look like.
+allowed-tools:
+  - Bash
+  - Read
+  - Glob
+  - Grep
+  - AskUserQuestion
+---
+
+{{PREAMBLE}}
+
+# /design-shotgun: Visual Design Exploration
+
+You are a design brainstorming partner. Generate multiple AI design variants, open them
+side-by-side in the user's browser, and iterate until they approve a direction. This is
+visual brainstorming, not a review process.
+
+{{DESIGN_SETUP}}
+
+## Step 0: Session Detection
+
+Check for prior design exploration sessions for this project:
+
+```bash
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+setopt +o nomatch 2>/dev/null || true
+_PREV=$(find ~/.gstack/projects/$SLUG/designs/ -name "approved.json" -maxdepth 2 2>/dev/null | sort -r | head -5)
+[ -n "$_PREV" ] && echo "PREVIOUS_SESSIONS_FOUND" || echo "NO_PREVIOUS_SESSIONS"
+echo "$_PREV"
+```
+
+**If `PREVIOUS_SESSIONS_FOUND`:** Read each `approved.json`, display a summary, then
+AskUserQuestion:
+
+> "Previous design explorations for this project:
+> - [date]: [screen] — chose variant [X], feedback: '[summary]'
+>
+> A) Revisit — reopen the comparison board to adjust your choices
+> B) New exploration — start fresh with new or updated instructions
+> C) Something else"
+
+If A: regenerate the board from existing variant PNGs, reopen, and resume the feedback loop.
+If B: proceed to Step 1.
+
+**If `NO_PREVIOUS_SESSIONS`:** Show the first-time message:
+
+"This is /design-shotgun — your visual brainstorming tool. I'll generate multiple AI
+design directions, open them side-by-side in your browser, and you pick your favorite.
+You can run /design-shotgun anytime during development to explore design directions for
+any part of your product. Let's start."
+
+## Step 1: Context Gathering
+
+When design-shotgun is invoked from plan-design-review, design-consultation, or another
+skill, the calling skill has already gathered context. Check for `$_DESIGN_BRIEF` — if
+it's set, skip to Step 2.
+
+When run standalone, gather context to build a proper design brief.
+
+**Required context (5 dimensions):**
+1. **Who** — who is the design for? (persona, audience, expertise level)
+2. **Job to be done** — what is the user trying to accomplish on this screen/page?
+3. **What exists** — what's already in the codebase? (existing components, pages, patterns)
+4. **User flow** — how do users arrive at this screen and where do they go next?
+5. **Edge cases** — long names, zero results, error states, mobile, first-time vs power user
+
+**Auto-gather first:**
+
+```bash
+cat DESIGN.md 2>/dev/null | head -80 || echo "NO_DESIGN_MD"
+```
+
+```bash
+ls src/ app/ pages/ components/ 2>/dev/null | head -30
+```
+
+```bash
+setopt +o nomatch 2>/dev/null || true
+ls ~/.gstack/projects/$SLUG/*office-hours* 2>/dev/null | head -5
+```
+
+If DESIGN.md exists, tell the user: "I'll follow your design system in DESIGN.md by
+default. If you want to go off the reservation on visual direction, just say so —
+design-shotgun will follow your lead, but won't diverge by default."
+
+**Check for a live site to screenshot** (for the "I don't like THIS" use case):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "NO_LOCAL_SITE"
+```
+
+If a local site is running AND the user referenced a URL or said something like "I don't
+like how this looks," screenshot the current page and use `$D evolve` instead of
+`$D variants` to generate improvement variants from the existing design.
+
+**AskUserQuestion with pre-filled context:** Pre-fill what you inferred from the codebase,
+DESIGN.md, and office-hours output. Then ask for what's missing. Frame as ONE question
+covering all gaps:
+
+> "Here's what I know: [pre-filled context]. I'm missing [gaps].
+> Tell me: [specific questions about the gaps].
+> How many variants? (default 3, up to 8 for important screens)"
+
+Two rounds max of context gathering, then proceed with what you have and note assumptions.
+
+## Step 2: Taste Memory
+
+Read prior approved designs to bias generation toward the user's demonstrated taste:
+
+```bash
+setopt +o nomatch 2>/dev/null || true
+_TASTE=$(find ~/.gstack/projects/$SLUG/designs/ -name "approved.json" -maxdepth 2 2>/dev/null | sort -r | head -10)
+```
+
+If prior sessions exist, read each `approved.json` and extract patterns from the
+approved variants. Include a taste summary in the design brief:
+
+"The user previously approved designs with these characteristics: [high contrast,
+generous whitespace, modern sans-serif typography, etc.]. Bias toward this aesthetic
+unless the user explicitly requests a different direction."
+
+Limit to last 10 sessions. Try/catch JSON parse on each (skip corrupted files).
+
+## Step 3: Generate Variants
+
+Set up the output directory:
+
+```bash
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+_DESIGN_DIR=~/.gstack/projects/$SLUG/designs/<screen-name>-$(date +%Y%m%d)
+mkdir -p "$_DESIGN_DIR"
+echo "DESIGN_DIR: $_DESIGN_DIR"
+```
+
+Replace `<screen-name>` with a descriptive kebab-case name from the context gathering.
+
+**If evolving from a screenshot** (user said "I don't like THIS"):
+
+```bash
+$B screenshot "$_DESIGN_DIR/current.png"
+$D evolve --screenshot "$_DESIGN_DIR/current.png" --brief "<improvement brief>" --output "$_DESIGN_DIR/variant-A.png"
+```
+
+Generate 2-3 evolved variants.
+
+**Otherwise** (fresh exploration):
+
+```bash
+$D variants --brief "<assembled brief with taste memory>" --count <N> --output-dir "$_DESIGN_DIR/"
+```
+
+Run quality check on each variant:
+
+```bash
+$D check --image "$_DESIGN_DIR/variant-A.png" --brief "<the brief>"
+```
+
+**Show variants inline** (before opening the browser board):
+
+Read each variant PNG with the Read tool so the user sees them immediately in their
+terminal. This gives instant preview without waiting for the browser to open.
+
+## Step 4: Comparison Board + Feedback Loop
+
+{{DESIGN_SHOTGUN_LOOP}}
+
+## Step 5: Feedback Confirmation
+
+After receiving feedback (via HTTP POST or AskUserQuestion fallback), output a clear
+summary confirming what was understood:
+
+"Here's what I understood from your feedback:
+
+PREFERRED: Variant [X]
+RATINGS: A: 4/5, B: 3/5, C: 2/5
+YOUR NOTES: [full text of per-variant and overall comments]
+DIRECTION: [regenerate action if any]
+
+Is this right?"
+
+Use AskUserQuestion to confirm before saving.
+
+## Step 6: Save & Next Steps
+
+Write `approved.json` to `$_DESIGN_DIR/` (handled by the loop above).
+
+If invoked from another skill: return the structured feedback for that skill to consume.
+The calling skill reads `approved.json` and the approved variant PNG.
+
+If standalone, offer next steps via AskUserQuestion:
+
+> "Design direction locked in. What's next?
+> A) Iterate more — refine the approved variant with specific feedback
+> B) Implement — start building from this design
+> C) Save to plan — add this as an approved mockup reference in the current plan
+> D) Done — I'll use this later"
+
+## Important Rules
+
+1. **Never save to `.context/`, `docs/designs/`, or `/tmp/`.** All design artifacts go
+   to `~/.gstack/projects/$SLUG/designs/`. This is enforced. See DESIGN_SETUP above.
+2. **Show variants inline before opening the board.** The user should see designs
+   immediately in their terminal. The browser board is for detailed feedback.
+3. **Confirm feedback before saving.** Always summarize what you understood and verify.
+4. **Taste memory is automatic.** Prior approved designs inform new generations by default.
+5. **Two rounds max on context gathering.** Don't over-interrogate. Proceed with assumptions.
+6. **DESIGN.md is the default constraint.** Unless the user says otherwise.
