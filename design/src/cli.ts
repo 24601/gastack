@@ -1,0 +1,181 @@
+/**
+ * gstack design CLI — stateless CLI for AI-powered design generation.
+ *
+ * Unlike the browse binary (persistent Chromium daemon), the design binary
+ * is stateless: each invocation makes API calls and writes files. Session
+ * state for multi-turn iteration is a JSON file in /tmp.
+ *
+ * Flow:
+ *   1. Parse command + flags from argv
+ *   2. Resolve auth (~/. gstack/openai.json → OPENAI_API_KEY → guided setup)
+ *   3. Execute command (API call → write PNG/HTML)
+ *   4. Print result JSON to stdout
+ */
+
+import { COMMANDS } from "./commands";
+import { generate } from "./generate";
+import { checkCommand } from "./check";
+import { compare } from "./compare";
+import { resolveApiKey, saveApiKey } from "./auth";
+
+function parseArgs(argv: string[]): { command: string; flags: Record<string, string | boolean> } {
+  const args = argv.slice(2); // skip bun/node and script path
+  if (args.length === 0) {
+    printUsage();
+    process.exit(0);
+  }
+
+  const command = args[0];
+  const flags: Record<string, string | boolean> = {};
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith("--")) {
+      const key = arg.slice(2);
+      const next = args[i + 1];
+      if (next && !next.startsWith("--")) {
+        flags[key] = next;
+        i++;
+      } else {
+        flags[key] = true;
+      }
+    }
+  }
+
+  return { command, flags };
+}
+
+function printUsage(): void {
+  console.log("gstack design — AI-powered UI mockup generation\n");
+  console.log("Commands:");
+  for (const [name, info] of COMMANDS) {
+    console.log(`  ${name.padEnd(12)} ${info.description}`);
+    console.log(`  ${"".padEnd(12)} ${info.usage}`);
+  }
+  console.log("\nAuth: ~/.gstack/openai.json or OPENAI_API_KEY env var");
+  console.log("Setup: $D setup");
+}
+
+async function runSetup(): Promise<void> {
+  const existing = resolveApiKey();
+  if (existing) {
+    console.log("Existing API key found. Running smoke test...");
+  } else {
+    console.log("No API key found. Please enter your OpenAI API key.");
+    console.log("Get one at: https://platform.openai.com/api-keys");
+    console.log("(Needs image generation permissions)\n");
+
+    // Read from stdin
+    process.stdout.write("API key: ");
+    const reader = Bun.stdin.stream().getReader();
+    const { value } = await reader.read();
+    reader.releaseLock();
+    const key = new TextDecoder().decode(value).trim();
+
+    if (!key || !key.startsWith("sk-")) {
+      console.error("Invalid key. Must start with 'sk-'.");
+      process.exit(1);
+    }
+
+    saveApiKey(key);
+    console.log("Key saved to ~/.gstack/openai.json (0600 permissions).");
+  }
+
+  // Smoke test
+  console.log("\nRunning smoke test (generating a simple image)...");
+  try {
+    await generate({
+      brief: "A simple blue square centered on a white background. Minimal, geometric, clean.",
+      output: "/tmp/gstack-design-smoke-test.png",
+      size: "1024x1024",
+      quality: "low",
+    });
+    console.log("\nSmoke test PASSED. Design generation is working.");
+  } catch (err: any) {
+    console.error(`\nSmoke test FAILED: ${err.message}`);
+    console.error("Check your API key and organization verification status.");
+    process.exit(1);
+  }
+}
+
+async function main(): Promise<void> {
+  const { command, flags } = parseArgs(process.argv);
+
+  if (!COMMANDS.has(command)) {
+    console.error(`Unknown command: ${command}`);
+    printUsage();
+    process.exit(1);
+  }
+
+  switch (command) {
+    case "generate":
+      await generate({
+        brief: flags.brief as string,
+        briefFile: flags["brief-file"] as string,
+        output: (flags.output as string) || "/tmp/gstack-mockup.png",
+        check: !!flags.check,
+        retry: flags.retry ? parseInt(flags.retry as string) : 0,
+        size: flags.size as string,
+        quality: flags.quality as string,
+      });
+      break;
+
+    case "check":
+      await checkCommand(flags.image as string, flags.brief as string);
+      break;
+
+    case "compare": {
+      // Parse --images as glob or multiple files
+      const imagesArg = flags.images as string;
+      const images = await resolveImagePaths(imagesArg);
+      compare({
+        images,
+        output: (flags.output as string) || "/tmp/gstack-design-board.html",
+      });
+      break;
+    }
+
+    case "setup":
+      await runSetup();
+      break;
+
+    case "variants":
+    case "iterate":
+    case "diff":
+    case "evolve":
+    case "verify":
+      console.error(`Command '${command}' will be implemented in Commit 2+.`);
+      process.exit(1);
+      break;
+  }
+}
+
+/**
+ * Resolve image paths from a glob pattern or comma-separated list.
+ */
+async function resolveImagePaths(input: string): Promise<string[]> {
+  if (!input) {
+    console.error("--images is required. Provide glob pattern or comma-separated paths.");
+    process.exit(1);
+  }
+
+  // Check if it's a glob pattern
+  if (input.includes("*")) {
+    const glob = new Bun.Glob(input);
+    const paths: string[] = [];
+    for await (const match of glob.scan({ absolute: true })) {
+      if (match.endsWith(".png") || match.endsWith(".jpg") || match.endsWith(".jpeg")) {
+        paths.push(match);
+      }
+    }
+    return paths.sort();
+  }
+
+  // Comma-separated or single path
+  return input.split(",").map(p => p.trim());
+}
+
+main().catch(err => {
+  console.error(err.message || err);
+  process.exit(1);
+});
