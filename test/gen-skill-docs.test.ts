@@ -986,12 +986,18 @@ describe('CODEX_SECOND_OPINION resolver', () => {
   });
 
   test('contains opt-in AskUserQuestion text', () => {
-    expect(content).toContain('second opinion from a different AI model');
+    expect(content).toContain('second opinion from an independent AI perspective');
   });
 
   test('contains cross-model synthesis instructions', () => {
     expect(content).toMatch(/[Ss]ynthesis/);
-    expect(content).toContain('Where Claude agrees with Codex');
+    expect(content).toContain('Where Claude agrees with the second opinion');
+  });
+
+  test('contains Claude subagent fallback', () => {
+    expect(content).toContain('CODEX_NOT_AVAILABLE');
+    expect(content).toContain('Agent tool');
+    expect(content).toContain('SECOND OPINION (Claude subagent)');
   });
 
   test('contains premise revision check', () => {
