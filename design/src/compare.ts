@@ -28,11 +28,16 @@ export function generateCompareHtml(images: string[]): string {
 
     return `
     <div class="variant" data-variant="${label}">
-      <img src="data:image/${ext};base64,${imgData}" alt="Variant ${label}" />
+      <div class="variant-header">
+        <span class="variant-label">Option ${label}</span>
+        <span class="variant-desc" id="variant-desc-${label}">Design direction ${label}</span>
+      </div>
+      <img src="data:image/${ext};base64,${imgData}" alt="Option ${label}" />
       <div class="variant-controls">
         <label class="pick-label">
           <input type="radio" name="preferred" value="${label}" />
           <span class="pick-text">Pick</span>
+          <span class="pick-confirm" style="display:none;">We'll move forward with Option ${label}</span>
         </label>
         <div class="stars" data-variant="${label}">
           ${[1,2,3,4,5].map(n => `<span class="star" data-value="${n}">★</span>`).join("")}
@@ -66,9 +71,78 @@ export function generateCompareHtml(images: string[]): string {
     align-items: center;
   }
   .header h1 { font-size: 16px; font-weight: 600; }
-  .header .meta { font-size: 13px; color: #999; }
+  .header .meta { font-size: 13px; color: #999; display: flex; align-items: center; gap: 12px; }
 
-  .variants { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  .view-toggle {
+    display: flex;
+    gap: 2px;
+    background: #f0f0f0;
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .view-toggle button {
+    padding: 4px 10px;
+    border: none;
+    background: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #666;
+    font-weight: 500;
+  }
+  .view-toggle button.active {
+    background: #fff;
+    color: #333;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+
+  .variants { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+  .variants.grid-view {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .variants.grid-view .variant {
+    border-bottom: none;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .variants.grid-view .variant-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .variants.grid-view .variant-controls .pick-label {
+    padding: 8px 0 4px;
+  }
+  .variants.grid-view .feedback-input { min-width: 0; width: 100%; }
+  .variants.grid-view .more-like-this { align-self: flex-start; }
+  .variants.grid-view .variant-header { margin-bottom: 12px; }
+
+  .variant-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .variant-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111;
+    letter-spacing: -0.01em;
+  }
+  .variant-desc {
+    font-size: 13px;
+    color: #888;
+  }
+
+  .pick-confirm {
+    font-size: 13px;
+    color: #2a7d2a;
+    font-weight: 500;
+    margin-left: 4px;
+  }
 
   .variant {
     border-bottom: 1px solid #e5e5e5;
@@ -135,47 +209,79 @@ export function generateCompareHtml(images: string[]): string {
   }
   .more-like-this:hover { border-color: #999; color: #333; }
 
-  .overall-section {
-    max-width: 1200px;
+  .bottom-section {
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 16px 24px;
-    border-top: 1px solid #e5e5e5;
+    padding: 24px 24px 32px;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
   }
-  .overall-section summary {
-    font-size: 14px;
-    color: #666;
-    cursor: pointer;
-    padding: 8px 0;
+
+  .submit-column {}
+  .submit-column h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 4px;
+  }
+  .submit-column .direction-hint {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 10px;
+    line-height: 1.5;
   }
   .overall-textarea {
     width: 100%;
-    padding: 8px 10px;
+    padding: 10px 12px;
     border: 1px solid #e5e5e5;
-    border-radius: 4px;
+    border-radius: 6px;
     font-size: 13px;
     resize: vertical;
-    min-height: 60px;
-    margin-top: 8px;
+    min-height: 80px;
     outline: none;
     font-family: inherit;
+    line-height: 1.5;
   }
   .overall-textarea:focus { border-color: #999; }
+  .submit-status {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111;
+    margin: 12px 0;
+    min-height: 20px;
+  }
+  .submit-btn {
+    padding: 10px 24px;
+    background: #000;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  .submit-btn:hover { background: #333; }
+  .submit-btn:disabled { background: #ccc; cursor: not-allowed; }
 
-  .regenerate-bar {
+  .regen-column {
     background: #f7f7f7;
-    padding: 16px 24px;
-    margin-top: 8px;
+    border-radius: 8px;
+    padding: 20px;
   }
-  .regenerate-bar .inner {
-    max-width: 1200px;
-    margin: 0 auto;
+  .regen-column h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
   }
-  .regenerate-bar h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
   .regen-controls {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
+    margin-bottom: 10px;
   }
   .regen-chiclet {
     padding: 6px 14px;
@@ -188,45 +294,26 @@ export function generateCompareHtml(images: string[]): string {
   .regen-chiclet:hover { border-color: #999; }
   .regen-chiclet.active { border-color: #000; background: #f0f0f0; }
   .regen-custom {
-    flex: 1;
-    min-width: 150px;
-    padding: 6px 10px;
+    width: 100%;
+    padding: 8px 10px;
     border: 1px solid #e5e5e5;
-    border-radius: 4px;
+    border-radius: 6px;
     font-size: 13px;
     outline: none;
+    margin-bottom: 10px;
   }
   .regen-custom:focus { border-color: #999; }
   .regen-btn {
-    padding: 6px 16px;
+    padding: 8px 16px;
     background: #fff;
-    border: 1px solid #e5e5e5;
-    border-radius: 4px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
     font-size: 13px;
     cursor: pointer;
     font-weight: 600;
+    width: 100%;
   }
   .regen-btn:hover { border-color: #000; }
-
-  .submit-bar {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 16px 24px;
-    display: flex;
-    justify-content: flex-end;
-  }
-  .submit-btn {
-    padding: 10px 24px;
-    background: #000;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .submit-btn:hover { background: #333; }
-  .submit-btn:disabled { background: #ccc; cursor: not-allowed; }
 
   .success-msg {
     display: none;
@@ -242,43 +329,6 @@ export function generateCompareHtml(images: string[]): string {
 
   /* Hidden result elements for agent polling */
   #status, #feedback-result { display: none; }
-
-  /* Remix section */
-  .remix-bar {
-    background: #fafafa;
-    padding: 16px 24px;
-    border-top: 1px solid #e5e5e5;
-  }
-  .remix-bar .inner { max-width: 1200px; margin: 0 auto; }
-  .remix-bar h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
-  .remix-grid {
-    display: grid;
-    grid-template-columns: auto repeat(${images.length}, 1fr);
-    gap: 8px 16px;
-    align-items: center;
-    font-size: 13px;
-  }
-  .remix-grid .remix-header { font-weight: 600; text-align: center; }
-  .remix-grid .remix-label { color: #666; }
-  .remix-grid label {
-    display: flex;
-    justify-content: center;
-    cursor: pointer;
-  }
-  .remix-grid input[type="radio"] { accent-color: #000; }
-  .remix-btn {
-    margin-top: 12px;
-    padding: 8px 18px;
-    background: #000;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .remix-btn:hover { background: #333; }
-  .remix-btn:disabled { background: #ccc; cursor: not-allowed; }
 
   /* Skeleton loading state */
   .skeleton {
@@ -298,51 +348,38 @@ export function generateCompareHtml(images: string[]): string {
 
 <div class="header">
   <h1>Design Exploration</h1>
-  <span class="meta">${images.length} variants</span>
+  <span class="meta">
+    ${images.length} options
+    <span class="view-toggle">
+      <button class="active" data-view="list">Large</button>
+      <button data-view="grid">Grid</button>
+    </span>
+  </span>
 </div>
 
 <div class="variants">
   ${variantCards}
 </div>
 
-<div class="overall-section">
-  <details>
-    <summary>Overall direction (optional)</summary>
+<div class="bottom-section">
+  <div class="submit-column">
+    <h3>Overall direction</h3>
+    <p class="direction-hint">e.g. "Use A's layout with C's fox icon" or "Make it more minimal" or "I want the problem statement text but bigger"</p>
     <textarea class="overall-textarea" id="overall-feedback"
-              placeholder="Any overall notes about direction?"></textarea>
-  </details>
-</div>
-
-<div class="regenerate-bar">
-  <div class="inner">
+              placeholder="Combine elements, request changes, or describe what you want..."></textarea>
+    <div class="submit-status" id="submit-status"></div>
+    <button class="submit-btn" id="submit-btn">Take my feedback and continue →</button>
+  </div>
+  <div class="regen-column">
     <h3>Want to explore more?</h3>
     <div class="regen-controls">
       <button class="regen-chiclet" data-action="different">Totally different</button>
       <button class="regen-chiclet" data-action="match">Match my design</button>
-      <input type="text" class="regen-custom" id="regen-custom-input"
-             placeholder="Tell us what you want different..." />
-      <button class="regen-btn" id="regen-btn">Regenerate →</button>
     </div>
+    <input type="text" class="regen-custom" id="regen-custom-input"
+           placeholder="Tell us what you want different..." />
+    <button class="regen-btn" id="regen-btn">Regenerate →</button>
   </div>
-</div>
-
-<div class="remix-bar">
-  <div class="inner">
-    <h3>Remix — mix elements from different variants</h3>
-    <div class="remix-grid">
-      <div></div>
-      ${images.map((_, i) => `<div class="remix-header">${variantLabels[i]}</div>`).join("")}
-      ${["Layout", "Colors", "Typography", "Spacing"].map(element => `
-        <div class="remix-label">${element}</div>
-        ${images.map((_, i) => `<label><input type="radio" name="remix-${element.toLowerCase()}" value="${variantLabels[i]}" /></label>`).join("")}
-      `).join("")}
-    </div>
-    <button class="remix-btn" id="remix-btn" disabled>Remix →</button>
-  </div>
-</div>
-
-<div class="submit-bar">
-  <button class="submit-btn" id="submit-btn">✓ Submit</button>
 </div>
 
 <div class="success-msg" id="success-msg">
@@ -354,6 +391,35 @@ export function generateCompareHtml(images: string[]): string {
 <div id="feedback-result"></div>
 
 <script>
+  // View toggle
+  document.querySelectorAll('.view-toggle button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      var variants = document.querySelector('.variants');
+      if (btn.dataset.view === 'grid') {
+        variants.classList.add('grid-view');
+      } else {
+        variants.classList.remove('grid-view');
+      }
+    });
+  });
+
+  // Pick confirmation
+  document.querySelectorAll('input[name="preferred"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      // Hide all confirmations first
+      document.querySelectorAll('.pick-confirm').forEach(function(el) { el.style.display = 'none'; });
+      document.querySelectorAll('.pick-text').forEach(function(el) { el.style.display = ''; });
+      // Show confirmation on the selected one
+      var label = radio.closest('.pick-label');
+      label.querySelector('.pick-text').style.display = 'none';
+      label.querySelector('.pick-confirm').style.display = '';
+      // Update submit status
+      document.getElementById('submit-status').textContent = "We'll run with Option " + radio.value;
+    });
+  });
+
   // Star rating
   document.querySelectorAll('.stars').forEach(starsEl => {
     const stars = starsEl.querySelectorAll('.star');
@@ -366,37 +432,6 @@ export function generateCompareHtml(images: string[]): string {
           s.classList.toggle('filled', parseInt(s.dataset.value) <= rating);
         });
       });
-    });
-  });
-
-  // Remix radio buttons — enable remix button when at least one element is selected
-  document.querySelectorAll('.remix-grid input[type="radio"]').forEach(function(radio) {
-    radio.addEventListener('change', function() {
-      var anySelected = document.querySelector('.remix-grid input[type="radio"]:checked');
-      document.getElementById('remix-btn').disabled = !anySelected;
-    });
-  });
-
-  // Remix button
-  document.getElementById('remix-btn').addEventListener('click', function() {
-    var remixSpec = {};
-    ['layout', 'colors', 'typography', 'spacing'].forEach(function(element) {
-      var selected = document.querySelector('input[name="remix-' + element + '"]:checked');
-      if (selected) remixSpec[element] = selected.value;
-    });
-    if (Object.keys(remixSpec).length === 0) return;
-    var feedback = collectFeedback();
-    feedback.regenerated = true;
-    feedback.regenerateAction = 'remix';
-    feedback.remixSpec = remixSpec;
-    document.getElementById('feedback-result').textContent = JSON.stringify(feedback);
-    document.getElementById('status').textContent = 'regenerate';
-    postFeedback(feedback).then(function(result) {
-      if (result && result.received) {
-        showRegeneratingState();
-      } else if (window.__GSTACK_SERVER_URL) {
-        showPostFailure(feedback);
-      }
     });
   });
 
