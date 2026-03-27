@@ -717,12 +717,35 @@ $D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DES
 ```
 
 This command generates the board HTML, starts an HTTP server on a random port,
-and opens it in the user's default browser. It blocks until the user submits
-feedback. The feedback JSON is printed to stdout.
+and opens it in the user's default browser. **Run it in the background** with `&`
+because the agent needs to keep running while the user interacts with the board.
 
-**Reading the result:**
+**IMPORTANT: Reading feedback via file polling (not stdout):**
 
-The agent reads stdout. The JSON has this shape:
+The server writes feedback to files next to the board HTML. The agent polls for these:
+- `$_DESIGN_DIR/feedback.json` — written when user clicks Submit (final choice)
+- `$_DESIGN_DIR/feedback-pending.json` — written when user clicks Regenerate/Remix/More Like This
+
+**Polling loop** (run after launching `$D serve` in background):
+
+```bash
+# Poll for feedback files every 5 seconds (up to 10 minutes)
+for i in $(seq 1 120); do
+  if [ -f "$_DESIGN_DIR/feedback.json" ]; then
+    echo "SUBMIT_RECEIVED"
+    cat "$_DESIGN_DIR/feedback.json"
+    break
+  elif [ -f "$_DESIGN_DIR/feedback-pending.json" ]; then
+    echo "REGENERATE_RECEIVED"
+    cat "$_DESIGN_DIR/feedback-pending.json"
+    rm "$_DESIGN_DIR/feedback-pending.json"
+    break
+  fi
+  sleep 5
+done
+```
+
+The feedback JSON has this shape:
 ```json
 {
   "preferred": "A",
@@ -733,23 +756,23 @@ The agent reads stdout. The JSON has this shape:
 }
 ```
 
-**If `"regenerated": true`:**
+**If `feedback-pending.json` found (`"regenerated": true`):**
 1. Read `regenerateAction` from the JSON (`"different"`, `"match"`, `"more_like_B"`,
    `"remix"`, or custom text)
 2. If `regenerateAction` is `"remix"`, read `remixSpec` (e.g. `{"layout":"A","colors":"B"}`)
 3. Generate new variants with `$D iterate` or `$D variants` using updated brief
 4. Create new board: `$D compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
-5. Reload the running server: parse the port from stderr (`SERVE_STARTED: port=XXXXX`),
-   then POST the new HTML:
-   `curl -s -X POST http://localhost:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
-6. The board auto-refreshes in the same browser tab. Wait for the next stdout line.
-7. Repeat until `"regenerated": false`.
+5. Parse the port from the `$D serve` stderr output (`SERVE_STARTED: port=XXXXX`),
+   then reload the board in the user's browser (same tab):
+   `curl -s -X POST http://127.0.0.1:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
+6. The board auto-refreshes. **Poll again** for the next feedback file.
+7. Repeat until `feedback.json` appears (user clicked Submit).
 
-**If `"regenerated": false`:**
+**If `feedback.json` found (`"regenerated": false`):**
 1. Read `preferred`, `ratings`, `comments`, `overall` from the JSON
 2. Proceed with the approved variant
 
-**If `$D serve` fails or times out:** Fall back to AskUserQuestion:
+**If `$D serve` fails or no feedback within 10 minutes:** Fall back to AskUserQuestion:
 "I've opened the design board. Which variant do you prefer? Any feedback?"
 
 **After receiving feedback (any path):** Output a clear summary confirming
