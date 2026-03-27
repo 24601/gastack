@@ -404,6 +404,32 @@ Analyze the plan. If it involves NONE of: new UI screens/pages, changes to exist
 
 Report findings before proceeding to Step 0.
 
+## DESIGN SETUP (run this check BEFORE any design mockup command)
+
+```bash
+_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+D=""
+[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/design/dist/design" ] && D="$_ROOT/.claude/skills/gstack/design/dist/design"
+[ -z "$D" ] && D=~/.claude/skills/gstack/design/dist/design
+if [ -x "$D" ]; then
+  echo "DESIGN_READY: $D"
+else
+  echo "DESIGN_NOT_AVAILABLE"
+fi
+```
+
+If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation and fall back to the
+existing HTML wireframe approach (`DESIGN_SKETCH`). Design mockups are a
+progressive enhancement, not a hard requirement.
+
+If `DESIGN_READY`: the design binary is available for visual mockup generation.
+Commands:
+- `$D generate --brief "..." --output /path.png` — generate a single mockup
+- `$D variants --brief "..." --count 3 --output-dir /path/` — generate N style variants
+- `$D compare --images "a.png,b.png,c.png" --output /path/board.html` — comparison board
+- `$D check --image /path.png --brief "..."` — vision quality gate
+- `$D iterate --session /path/session.json --feedback "..." --output /path.png` — iterate
+
 ## Step 0: Design Scope Assessment
 
 ### 0A. Initial Design Rating
@@ -545,6 +571,21 @@ Pattern:
 6. Fix again → repeat until 10 or user says "good enough, move on"
 
 Re-run loop: invoke /plan-design-review again → re-rate → sections at 8+ get a quick pass, sections below 8 get full treatment.
+
+### "Show me what 10/10 looks like" (requires design binary)
+
+If `DESIGN_READY` was printed during setup AND a dimension rates below 7/10,
+offer to generate a visual mockup showing what the improved version would look like:
+
+```bash
+$D generate --brief "<description of what 10/10 looks like for this dimension>" --output /tmp/gstack-ideal-<dimension>.png
+```
+
+Show the mockup to the user via the Read tool. This makes the gap between
+"what the plan describes" and "what it should look like" visceral, not abstract.
+
+If the design binary is not available, skip this and continue with text-based
+descriptions of what 10/10 looks like.
 
 ## Review Sections (7 passes, after scope is agreed)
 
