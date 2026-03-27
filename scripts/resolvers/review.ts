@@ -1,3 +1,17 @@
+/**
+ * Cross-model review resolver
+ *
+ * Data sent to external review services (via Codex CLI):
+ *   - Plan markdown content, repository name, branch name, review type
+ * Data NOT sent:
+ *   - Source code files, credentials, environment variables, git history
+ *
+ * Users invoke this explicitly via /plan-eng-review, /plan-ceo-review,
+ * or /plan-design-review. No data is sent without user invocation.
+ *
+ * Review logs are stored locally at ~/.gstack/reviews/review-log.jsonl.
+ * Codex CLI prompts are written to temp files to prevent shell injection.
+ */
 import type { TemplateContext } from './types';
 
 export function generateReviewDashboard(_ctx: TemplateContext): string {
