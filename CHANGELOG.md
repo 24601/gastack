@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.6.0] - 2026-03-27 — Codex No Longer Reviews the Wrong Project
+
+When you run gstack in Conductor with multiple workspaces open, Codex could silently review the wrong project. The `codex exec -C` flag resolved the repo root inline via `$(git rev-parse --show-toplevel)`, which evaluates in whatever cwd the background shell inherits. In multi-workspace environments, that cwd might be a different project entirely.
+
+### Fixed
+
+- **Codex exec resolves repo root eagerly.** All 12 `codex exec` commands across `/codex`, `/autoplan`, and 4 resolver functions now resolve `_REPO_ROOT` at the top of each bash block and reference the stored value in `-C`. No more inline evaluation that races with other workspaces.
+
+### Removed
+
+- **Dead resolver copies in gen-skill-docs.ts.** Six functions that were moved to `scripts/resolvers/` months ago but never deleted. They had already diverged from the live versions and contained the old vulnerable pattern.
+
+### Added
+
+- **Regression test** that scans all `.tmpl` and resolver `.ts` source files for `codex exec` commands using inline `$(git rev-parse --show-toplevel)` in the `-C` flag. Prevents reintroduction.
+
 ## [0.12.5.1] - 2026-03-27 — Eng Review Now Tells You What to Parallelize
 
 `/plan-eng-review` automatically analyzes your plan for parallel execution opportunities. When your plan has independent workstreams, the review outputs a dependency table, parallel lanes, and execution order so you know exactly which tasks to split into separate git worktrees.
