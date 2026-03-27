@@ -583,6 +583,14 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
           browseBin = process.execPath; // the compiled binary itself
         }
 
+        // Kill any existing sidebar-agent processes before starting a new one.
+        // Old agents have stale auth tokens and will silently fail to relay events,
+        // causing the server to mark the agent as "hung".
+        try {
+          const { spawnSync } = require('child_process');
+          spawnSync('pkill', ['-f', 'sidebar-agent\\.ts'], { stdio: 'ignore', timeout: 3000 });
+        } catch {}
+
         const agentProc = Bun.spawn(['bun', 'run', agentScript], {
           cwd: config.projectDir,
           env: {
