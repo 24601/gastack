@@ -168,30 +168,37 @@ The ONLY time you skip mockups is when:
 If the user explicitly says "skip mockups" or "text only", respect that. Otherwise, generate.
 
 **PLAN MODE EXCEPTION — ALWAYS RUN:** These commands write design artifacts to
-`.context/mockups/` (gitignored directory, not source files). Mockups are design
-artifacts that inform the plan, not code changes. The gstack designer outputs PNGs
-and HTML comparison boards for human review during the planning phase. Generating
-mockups during planning is the whole point.
+`~/.gstack/projects/$SLUG/designs/` (user config directory, not project files).
+Mockups are design artifacts that inform the plan, not code changes. The gstack
+designer outputs PNGs and HTML comparison boards for human review during the
+planning phase. Generating mockups during planning is the whole point.
 
 Allowed commands under this exception:
-- `mkdir -p .context/mockups/`
+- `mkdir -p ~/.gstack/projects/$SLUG/designs/...`
 - `$D generate`, `$D variants`, `$D compare`, `$D iterate`, `$D evolve`, `$D check`
 - `$B goto file:///` (to view comparison board in browser)
 
+First, set up the output directory. Name it after the screen/feature being designed and today's date:
+
 ```bash
-mkdir -p .context/mockups
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+_DESIGN_DIR=~/.gstack/projects/$SLUG/designs/<screen-name>-$(date +%Y%m%d)
+mkdir -p "$_DESIGN_DIR"
+echo "DESIGN_DIR: $_DESIGN_DIR"
 ```
+
+Replace `<screen-name>` with a descriptive kebab-case name (e.g., `homepage-variants`, `settings-page`, `onboarding-flow`).
 
 For each UI screen/section in scope, construct a design brief from the plan's description (and DESIGN.md if present) and generate variants:
 
 ```bash
-$D variants --brief "<description assembled from plan + DESIGN.md constraints>" --count 3 --output-dir .context/mockups/
+$D variants --brief "<description assembled from plan + DESIGN.md constraints>" --count 3 --output-dir "$_DESIGN_DIR/"
 ```
 
 After generation, run a cross-model quality check on each variant:
 
 ```bash
-$D check --image .context/mockups/variant-A.png --brief "<the original brief>"
+$D check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
 ```
 
 Flag any variants that fail the quality check. Offer to regenerate failures.
@@ -199,15 +206,21 @@ Flag any variants that fail the quality check. Offer to regenerate failures.
 Create a comparison board and open it for review:
 
 ```bash
-$D compare --images ".context/mockups/variant-A.png,.context/mockups/variant-B.png,.context/mockups/variant-C.png" --output .context/mockups/design-board.html
-$B goto file://$(pwd)/.context/mockups/design-board.html
+$D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html"
+$B goto "file://$_DESIGN_DIR/design-board.html"
 ```
 
 Tell the user: "I've generated design directions and opened the comparison board. Pick your favorite, rate the others, and I'll use your choice to calibrate the review passes."
 
 Read the user's feedback. Note which direction was approved — this becomes the visual reference for all subsequent review passes.
 
-**Multiple variants/screens:** If the user asked for multiple variants (e.g., "5 versions of the homepage"), generate ALL as separate variant sets with their own comparison boards. Complete all mockup generation and user selection before starting review passes.
+After the user picks a direction, write an `approved.json` to record the choice:
+
+```bash
+echo '{"approved_variant":"<VARIANT>","feedback":"<USER_FEEDBACK>","date":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","screen":"<SCREEN_NAME>","branch":"'$(git branch --show-current 2>/dev/null)'"}' > "$_DESIGN_DIR/approved.json"
+```
+
+**Multiple variants/screens:** If the user asked for multiple variants (e.g., "5 versions of the homepage"), generate ALL as separate variant sets with their own comparison boards. Each screen/variant set gets its own subdirectory under `designs/`. Complete all mockup generation and user selection before starting review passes.
 
 **If `DESIGN_NOT_AVAILABLE`:** Tell the user: "The gstack designer isn't set up yet. Run `$D setup` to enable visual mockups. Proceeding with text-only review, but you're missing the best part." Then proceed to review passes with text-based review.
 
@@ -314,7 +327,7 @@ If mockups were generated in Step 0.5 and review passes changed significant desi
 
 AskUserQuestion: "The review passes changed [list major design changes]. Want me to regenerate mockups to reflect the updated plan? This ensures the visual reference matches what we're actually building."
 
-If yes, use `$D iterate` with feedback summarizing the changes, or `$D variants` with an updated brief. Save to `.context/mockups/`.
+If yes, use `$D iterate` with feedback summarizing the changes, or `$D variants` with an updated brief. Save to the same `$_DESIGN_DIR` directory.
 
 ## CRITICAL RULE — How to ask questions
 Follow the AskUserQuestion format from the Preamble above. Additional rules for plan design reviews:
@@ -386,10 +399,10 @@ If visual mockups were generated during this review, add to the plan file:
 
 | Screen/Section | Mockup Path | Direction | Notes |
 |----------------|-------------|-----------|-------|
-| [screen name]  | .context/mockups/[filename].png | [brief description] | [constraints from review] |
+| [screen name]  | ~/.gstack/projects/$SLUG/designs/[folder]/[filename].png | [brief description] | [constraints from review] |
 ```
 
-Include the file path to each approved mockup (the variant the user chose), a one-line description of the direction, and any constraints. The implementer reads this to know exactly which visual to build from. If no mockups were generated, omit this section.
+Include the full path to each approved mockup (the variant the user chose), a one-line description of the direction, and any constraints. The implementer reads this to know exactly which visual to build from. These persist across conversations and workspaces. If no mockups were generated, omit this section.
 
 ## Review Log
 

@@ -661,37 +661,44 @@ This phase generates visual previews of the proposed design system. Two paths de
 Generate AI-rendered mockups showing the proposed design system applied to realistic screens for this product. This is far more powerful than an HTML preview — the user sees what their product could actually look like.
 
 ```bash
-mkdir -p .context/mockups
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+_DESIGN_DIR=~/.gstack/projects/$SLUG/designs/design-system-$(date +%Y%m%d)
+mkdir -p "$_DESIGN_DIR"
+echo "DESIGN_DIR: $_DESIGN_DIR"
 ```
 
 Construct a design brief from the Phase 3 proposal (aesthetic, colors, typography, spacing, layout) and the product context from Phase 1:
 
 ```bash
-$D variants --brief "<product name: [name]. Product type: [type]. Aesthetic: [direction]. Colors: primary [hex], secondary [hex], neutrals [range]. Typography: display [font], body [font]. Layout: [approach]. Show a realistic [page type] screen with [specific content for this product].>" --count 3 --output-dir .context/mockups/
+$D variants --brief "<product name: [name]. Product type: [type]. Aesthetic: [direction]. Colors: primary [hex], secondary [hex], neutrals [range]. Typography: display [font], body [font]. Layout: [approach]. Show a realistic [page type] screen with [specific content for this product].>" --count 3 --output-dir "$_DESIGN_DIR/"
 ```
 
 Run quality check on each variant:
 
 ```bash
-$D check --image .context/mockups/variant-A.png --brief "<the original brief>"
+$D check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
 ```
 
 Create a comparison board and open it:
 
 ```bash
-$D compare --images ".context/mockups/variant-A.png,.context/mockups/variant-B.png,.context/mockups/variant-C.png" --output .context/mockups/design-board.html
-$B goto file://$(pwd)/.context/mockups/design-board.html
+$D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html"
+$B goto "file://$_DESIGN_DIR/design-board.html"
 ```
 
 Tell the user: "I've generated 3 visual directions applying your design system to a realistic [product type] screen. Pick your favorite — I'll use it to refine the design system and extract exact tokens for DESIGN.md."
 
 After the user picks a direction:
 
-- Use `$D extract --image .context/mockups/variant-<CHOSEN>.png` to analyze the approved mockup and extract design tokens (colors, typography, spacing) that will populate DESIGN.md in Phase 6. This grounds the design system in what was actually approved visually, not just what was described in text.
-- If the user wants to iterate: `$D iterate --feedback "<user's feedback>" --output .context/mockups/refined.png`
+- Use `$D extract --image "$_DESIGN_DIR/variant-<CHOSEN>.png"` to analyze the approved mockup and extract design tokens (colors, typography, spacing) that will populate DESIGN.md in Phase 6. This grounds the design system in what was actually approved visually, not just what was described in text.
+- If the user wants to iterate: `$D iterate --feedback "<user's feedback>" --output "$_DESIGN_DIR/refined.png"`
+- Write an `approved.json` to record the choice:
+```bash
+echo '{"approved_variant":"<VARIANT>","feedback":"<USER_FEEDBACK>","date":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","screen":"design-system","branch":"'$(git branch --show-current 2>/dev/null)'"}' > "$_DESIGN_DIR/approved.json"
+```
 
 **Plan mode vs. implementation mode:**
-- **If in plan mode:** Add the approved mockup path and extracted tokens to the plan file under an "## Approved Design Direction" section. The design system gets written to DESIGN.md when the plan is implemented.
+- **If in plan mode:** Add the approved mockup path (the full `$_DESIGN_DIR` path) and extracted tokens to the plan file under an "## Approved Design Direction" section. The design system gets written to DESIGN.md when the plan is implemented.
 - **If NOT in plan mode:** Proceed directly to Phase 6 and write DESIGN.md with the extracted tokens.
 
 ### Path B: HTML Preview Page (fallback if DESIGN_NOT_AVAILABLE)

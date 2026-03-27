@@ -89,8 +89,10 @@ If `DESIGN_NOT_AVAILABLE`: skip mockup generation — the fix loop works without
 **Create output directories:**
 
 ```bash
-REPORT_DIR=".gstack/design-reports"
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+REPORT_DIR=~/.gstack/projects/$SLUG/designs/design-audit-$(date +%Y%m%d)
 mkdir -p "$REPORT_DIR/screenshots"
+echo "REPORT_DIR: $REPORT_DIR"
 ```
 
 ---
@@ -108,8 +110,8 @@ Record baseline design score and AI slop score at end of Phase 6.
 ## Output Structure
 
 ```
-.gstack/design-reports/
-├── design-audit-{domain}-{YYYY-MM-DD}.md    # Structured report
+~/.gstack/projects/$SLUG/designs/design-audit-{YYYYMMDD}/
+├── design-audit-{domain}.md                  # Structured report
 ├── screenshots/
 │   ├── first-impression.png                  # Phase 1
 │   ├── {page}-annotated.png                  # Per-page annotated
@@ -248,15 +250,15 @@ After all fixes are applied:
 
 ## Phase 10: Report
 
-Write the report to both local and project-scoped locations:
+Write the report to `$REPORT_DIR` (already set up in the setup phase):
 
-**Local:** `.gstack/design-reports/design-audit-{domain}-{YYYY-MM-DD}.md`
+**Primary:** `$REPORT_DIR/design-audit-{domain}.md`
 
-**Project-scoped:**
+**Also write a summary to the project index:**
 ```bash
 {{SLUG_SETUP}}
 ```
-Write to `~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md`
+Write a one-line summary to `~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md` with a pointer to the full report in `$REPORT_DIR`.
 
 **Per-finding additions** (beyond standard design audit report):
 - Fix Status: verified / best-effort / reverted / deferred
