@@ -87,7 +87,7 @@ export async function serve(options: ServeOptions): Promise<void> {
   });
 
   const actualPort = server.port;
-  const boardUrl = `http://localhost:${actualPort}`;
+  const boardUrl = `http://127.0.0.1:${actualPort}`;
 
   console.error(`SERVE_STARTED: port=${actualPort} html=${html}`);
 
