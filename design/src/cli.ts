@@ -20,6 +20,7 @@ import { variants } from "./variants";
 import { iterate } from "./iterate";
 import { resolveApiKey, saveApiKey } from "./auth";
 import { extractDesignLanguage, updateDesignMd } from "./memory";
+import { diffMockups, verifyAgainstMockup } from "./diff";
 
 function parseArgs(argv: string[]): { command: string; flags: Record<string, string | boolean> } {
   const args = argv.slice(2); // skip bun/node and script path
@@ -178,10 +179,35 @@ async function main(): Promise<void> {
       break;
     }
 
-    case "diff":
+    case "diff": {
+      const before = flags.before as string;
+      const after = flags.after as string;
+      if (!before || !after) {
+        console.error("--before and --after are required");
+        process.exit(1);
+      }
+      console.error(`Comparing ${before} vs ${after}...`);
+      const diffResult = await diffMockups(before, after);
+      console.log(JSON.stringify(diffResult, null, 2));
+      break;
+    }
+
+    case "verify": {
+      const mockup = flags.mockup as string;
+      const screenshot = flags.screenshot as string;
+      if (!mockup || !screenshot) {
+        console.error("--mockup and --screenshot are required");
+        process.exit(1);
+      }
+      console.error(`Verifying implementation against approved mockup...`);
+      const verifyResult = await verifyAgainstMockup(mockup, screenshot);
+      console.error(`Match: ${verifyResult.matchScore}/100 — ${verifyResult.pass ? "PASS" : "FAIL"}`);
+      console.log(JSON.stringify(verifyResult, null, 2));
+      break;
+    }
+
     case "evolve":
-    case "verify":
-      console.error(`Command '${command}' will be implemented in Commit 7+.`);
+      console.error(`Command 'evolve' will be implemented in Commit 8.`);
       process.exit(1);
       break;
   }
