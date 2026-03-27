@@ -9,7 +9,7 @@ mkdir -p "$GSTACK_HOME/projects/$SLUG"
 
 # Validate: input must be parseable JSON (reject malformed or injection attempts)
 INPUT="$1"
-if ! printf '%s' "$INPUT" | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
+if ! printf '%s' "$INPUT" | bun -e "JSON.parse(await Bun.stdin.text())" 2>/dev/null; then
   # Not valid JSON — refuse to append
   echo "gstack-review-log: invalid JSON, skipping" >&2
   exit 1
