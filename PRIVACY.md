@@ -17,7 +17,7 @@ gstack is an open-source CLI tool. This policy explains what data gstack collect
 
 ### What we collect (if you opt in)
 
-gstack has three telemetry tiers. You choose during first run:
+gstack has four data tiers:
 
 | Tier | What's sent | Identifier |
 |------|------------|------------|
@@ -26,7 +26,7 @@ gstack has three telemetry tiers. You choose during first run:
 | **Community** | Same as anonymous | Random UUID (`~/.gstack/.install-id`) — connects sessions from one device |
 | **Logged in** | Same as community, plus screenshots tied to your account | Email address + GitHub username (via OAuth) |
 
-The **logged in** tier applies when you sign in to gstack.gg to use features like PR screenshots. Your email and GitHub username are associated with your uploaded screenshots and auth session. Telemetry data itself remains anonymous — logging in does not retroactively attach your identity to prior telemetry events.
+The first three tiers are chosen during first run. The **logged in** tier applies when you sign in to gstack.gg to use features like PR screenshots. Your email and GitHub username are associated with your uploaded screenshots and auth session. Logging in does not retroactively attach your identity to prior telemetry events.
 
 ### What we never collect
 
@@ -123,7 +123,7 @@ The full database schema is in [`supabase/migrations/`](supabase/migrations/) �
 - **Opt out:** `gstack-config set telemetry off` — stops all collection and syncing instantly.
 - **Delete local data:** Remove `~/.gstack/analytics/` to clear all local telemetry.
 - **Delete screenshots:** Authenticated DELETE request to the upload API, or contact us.
-- **Delete account:** Contact us at the email below — we'll remove all data associated with your install fingerprint or user account.
+- **Delete account:** Contact us at the email below to deactivate your account. You will lose access to your data, including uploaded screenshots and account features. Previously collected telemetry and usage data may be retained and used by GStack, the GStack core team, or Y Combinator to improve the product.
 
 ---
 
