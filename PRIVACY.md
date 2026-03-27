@@ -105,7 +105,37 @@ The full database schema is in [`supabase/migrations/`](supabase/migrations/) â€
 
 ---
 
-## 5. Data retention
+## 5. Showcase Submissions
+
+When you run `/gstack-submit`, gstack helps you compose a submission for the gstack.gg showcase gallery. This is **user-initiated and user-approved**, different from telemetry (which runs in the background).
+
+### What gets sent (only after you preview and approve)
+
+| Data | Source | You control it |
+|------|--------|---------------|
+| Project title, tagline, description | AI-generated, you edit before sending | Yes, edit or cancel |
+| Screenshot | Browse tool captures your deployed URL | Yes, you provide the URL |
+| Build stats (commit count, LOC, skills used) | Local git + analytics files | Yes, preview before sending |
+| Build story | AI-written from design docs + optionally transcripts | Yes, preview before sending |
+| Repo URL | Your git remote | Yes, can omit |
+
+### What never gets sent
+
+- Raw source code or file contents
+- Claude Code transcripts (read locally, never transmitted, only the AI-generated summary)
+- Private URLs or credentials found in local files
+
+### Transcript reading (opt-in)
+
+If you choose to let gstack read your Claude Code transcripts for a richer build story:
+- Transcripts are read **locally only**, never sent to any server
+- Only pattern-matched excerpts (decision moments, skill usage) are read, not full conversations
+- The AI writes a narrative summary; the raw transcript text is never included in the submission
+- You preview the full build story before it's sent anywhere
+
+---
+
+## 6. Data retention
 
 | Data type | Retention |
 |-----------|-----------|
@@ -117,7 +147,7 @@ The full database schema is in [`supabase/migrations/`](supabase/migrations/) â€
 
 ---
 
-## 6. Your rights
+## 7. Your rights
 
 - **Access:** Run `gstack-analytics` to see all your local telemetry data. The JSONL file at `~/.gstack/analytics/skill-usage.jsonl` is plain text â€” you can read it directly.
 - **Opt out:** `gstack-config set telemetry off` â€” stops all collection and syncing instantly.
@@ -127,7 +157,7 @@ The full database schema is in [`supabase/migrations/`](supabase/migrations/) â€
 
 ---
 
-## 7. Data ownership and use
+## 8. Data ownership and use
 
 GStack is owned by Garry Tan via copyright. Telemetry data collected through GStack may be used by Garry Tan, the GStack core team, or Y Combinator to improve GStack. We will never sell your data.
 
@@ -139,7 +169,7 @@ GStack is owned by Garry Tan via copyright. Telemetry data collected through GSt
 
 ---
 
-## 8. Changes
+## 9. Changes
 
 We'll update this policy as gstack evolves. Material changes will be noted in the [CHANGELOG](CHANGELOG.md). The "Last updated" date at the top always reflects the current version.
 
