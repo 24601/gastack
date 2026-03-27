@@ -125,12 +125,17 @@ The full database schema is in [`supabase/migrations/`](supabase/migrations/) â€
 
 ---
 
-## 7. Third parties
+## 7. Data ownership and use
+
+GStack is owned by Garry Tan via copyright. Telemetry data collected through GStack may be used by Garry Tan or Y Combinator to improve GStack. We do not sell your data and will not sell your data.
+
+### Third-party services
 
 - **Supabase** hosts our database and storage (their privacy policy: https://supabase.com/privacy)
 - **Vercel** hosts gstack.gg (their privacy policy: https://vercel.com/legal/privacy-policy)
 - **GitHub** provides OAuth authentication
-- We do not share, sell, or provide your data to any other third party
+
+We do not share or sell your data to any other third party.
 
 ---
 
