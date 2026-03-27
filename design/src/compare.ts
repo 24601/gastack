@@ -483,7 +483,8 @@ export function generateCompareHtml(images: string[]): string {
 
   function showPostSubmitState() {
     disableAllInputs();
-    document.querySelector('.regenerate-bar').style.display = 'none';
+    var _regenBar = document.querySelector('.regenerate-bar') || document.querySelector('.regen-column');
+    if (_regenBar) _regenBar.style.display = 'none';
     document.getElementById('submit-btn').style.display = 'none';
     document.getElementById('success-msg').style.display = 'block';
     document.getElementById('success-msg').innerHTML =
@@ -498,9 +499,12 @@ export function generateCompareHtml(images: string[]): string {
       '<div style="font-size:24px;margin-bottom:12px;">Generating new designs...</div>' +
       '<div class="skeleton" style="width:60px;height:60px;border-radius:50%;margin:0 auto;"></div>' +
       '</div>';
-    document.querySelector('.regenerate-bar').style.display = 'none';
-    document.querySelector('.submit-bar').style.display = 'none';
-    document.querySelector('.overall-section').style.display = 'none';
+    var _regenBar = document.querySelector('.regenerate-bar') || document.querySelector('.regen-column');
+    if (_regenBar) _regenBar.style.display = 'none';
+    var _submitBar = document.querySelector('.submit-bar') || document.querySelector('.submit-column');
+    if (_submitBar) _submitBar.style.display = 'none';
+    var _overallSec = document.querySelector('.overall-section') || document.querySelector('.bottom-section');
+    if (_overallSec) _overallSec.style.display = 'none';
     startProgressPolling();
   }
 
