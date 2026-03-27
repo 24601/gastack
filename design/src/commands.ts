@@ -36,8 +36,8 @@ export const COMMANDS = new Map<string, {
   }],
   ["compare", {
     description: "Generate HTML comparison board for user review",
-    usage: "compare --images /path/*.png --output /path/board.html",
-    flags: ["--images", "--output"],
+    usage: "compare --images /path/*.png --output /path/board.html [--serve]",
+    flags: ["--images", "--output", "--serve", "--timeout"],
   }],
   ["diff", {
     description: "Visual diff between two mockups",
@@ -63,6 +63,11 @@ export const COMMANDS = new Map<string, {
     description: "Extract design language from approved mockup into DESIGN.md",
     usage: "extract --image approved.png",
     flags: ["--image"],
+  }],
+  ["serve", {
+    description: "Serve comparison board over HTTP and collect user feedback",
+    usage: "serve --html /path/board.html [--timeout 600]",
+    flags: ["--html", "--timeout"],
   }],
   ["setup", {
     description: "Guided API key setup + smoke test",

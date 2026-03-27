@@ -23,6 +23,7 @@ import { extractDesignLanguage, updateDesignMd } from "./memory";
 import { diffMockups, verifyAgainstMockup } from "./diff";
 import { evolve } from "./evolve";
 import { generateDesignToCodePrompt } from "./design-to-code";
+import { serve } from "./serve";
 
 function parseArgs(argv: string[]): { command: string; flags: Record<string, string | boolean> } {
   const args = argv.slice(2); // skip bun/node and script path
@@ -134,10 +135,15 @@ async function main(): Promise<void> {
       // Parse --images as glob or multiple files
       const imagesArg = flags.images as string;
       const images = await resolveImagePaths(imagesArg);
-      compare({
-        images,
-        output: (flags.output as string) || "/tmp/gstack-design-board.html",
-      });
+      const outputPath = (flags.output as string) || "/tmp/gstack-design-board.html";
+      compare({ images, output: outputPath });
+      // If --serve flag is set, start HTTP server for the board
+      if (flags.serve) {
+        await serve({
+          html: outputPath,
+          timeout: flags.timeout ? parseInt(flags.timeout as string) : 600,
+        });
+      }
       break;
     }
 
@@ -228,6 +234,13 @@ async function main(): Promise<void> {
         screenshot: flags.screenshot as string,
         brief: flags.brief as string,
         output: (flags.output as string) || "/tmp/gstack-evolved.png",
+      });
+      break;
+
+    case "serve":
+      await serve({
+        html: flags.html as string,
+        timeout: flags.timeout ? parseInt(flags.timeout as string) : 600,
       });
       break;
   }
