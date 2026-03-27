@@ -10,7 +10,6 @@ gstack is an open-source CLI tool. This policy explains what data gstack collect
 - **We never collect your code, file paths, repo names, prompts, or any content you write.**
 - **You can change your mind anytime:** `gstack-config set telemetry off`
 - **Screenshots you upload are yours.** You can delete them anytime.
-- **We don't sell data.** Period.
 
 ---
 
@@ -127,15 +126,13 @@ The full database schema is in [`supabase/migrations/`](supabase/migrations/) â€
 
 ## 7. Data ownership and use
 
-GStack is owned by Garry Tan via copyright. Telemetry data collected through GStack may be used by Garry Tan or Y Combinator to improve GStack. We do not sell your data and will not sell your data.
+GStack is owned by Garry Tan via copyright. Telemetry data collected through GStack may be used by Garry Tan, the GStack core team, or Y Combinator to improve GStack. We will never sell your data.
 
 ### Third-party services
 
 - **Supabase** hosts our database and storage (their privacy policy: https://supabase.com/privacy)
 - **Vercel** hosts gstack.gg (their privacy policy: https://vercel.com/legal/privacy-policy)
 - **GitHub** provides OAuth authentication
-
-We do not share or sell your data to any other third party.
 
 ---
 
