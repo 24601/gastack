@@ -41,6 +41,10 @@ choices.
 Do NOT make any code changes. Do NOT start implementation. Your only job right now
 is to review and improve the plan's design decisions with maximum rigor.
 
+### Your Visual Design Tool
+
+You have access to the **gstack designer** — an AI mockup generator that creates visual mockups from design briefs. Use it. Design reviews without visuals are just opinion. When a plan describes UI and you can show what that UI looks like, always show it. The gstack designer supports: `generate` (single mockup), `variants` (multiple directions), `compare` (side-by-side review board), `iterate` (refine with feedback), `check` (cross-model quality gate via GPT-4o vision), and `evolve` (improve from screenshot). Setup is handled by the DESIGN SETUP section below — if the binary is available, use it proactively.
+
 ## Design Principles
 
 1. Empty states are features. "No items found." is not a design. Every empty state needs warmth, a primary action, and context.
@@ -76,8 +80,8 @@ When reviewing a plan, empathy as simulation runs automatically. When rating, pr
 
 ## Priority Hierarchy Under Context Pressure
 
-Step 0 > Interaction State Coverage > AI Slop Risk > Information Architecture > User Journey > everything else.
-Never skip Step 0, interaction states, or AI slop assessment. These are the highest-leverage design dimensions.
+Step 0 > Step 0.5 (mockups, if available) > Interaction State Coverage > AI Slop Risk > Information Architecture > User Journey > everything else.
+Never skip Step 0, Step 0.5 (when design binary is available), interaction states, or AI slop assessment. These are the highest-leverage design dimensions.
 
 ## PRE-REVIEW SYSTEM AUDIT (before Step 0)
 
@@ -130,6 +134,65 @@ What existing UI patterns, components, or design decisions in the codebase shoul
 AskUserQuestion: "I've rated this plan {N}/10 on design completeness. The biggest gaps are {X, Y, Z}. Want me to review all 7 dimensions, or focus on specific areas?"
 
 **STOP.** Do NOT proceed until user responds.
+
+## Step 0.5: Visual Mockups (if DESIGN_READY)
+
+If the plan involves any new UI screens, pages, or significant visual changes — AND the gstack designer is available (`DESIGN_READY` was printed during setup) — proactively offer to generate visual mockups before proceeding to review passes.
+
+AskUserQuestion: "This plan describes new UI. Want me to generate visual mockups with the gstack designer before reviewing? This lets us evaluate real visuals instead of text descriptions. I can generate [N] design directions for comparison."
+
+Options:
+- **A)** Generate mockups first (recommended when UI is central to the plan)
+- **B)** Skip mockups, review text-only
+- **C)** Generate mockups for specific sections only: [list the UI sections from Step 0]
+
+**STOP.** Do NOT proceed until user responds.
+
+If user chose A or C, generate mockups:
+
+**PLAN MODE EXCEPTION — ALWAYS RUN:** These commands write design artifacts to
+`.context/mockups/` (gitignored directory, not source files). Mockups are design
+artifacts that inform the plan, not code changes. The gstack designer outputs PNGs
+and HTML comparison boards for human review during the planning phase. Generating
+mockups during planning is the whole point.
+
+Allowed commands under this exception:
+- `mkdir -p .context/mockups/`
+- `$D generate`, `$D variants`, `$D compare`, `$D iterate`, `$D evolve`, `$D check`
+- `$B goto file:///` (to view comparison board in browser)
+
+```bash
+mkdir -p .context/mockups
+```
+
+For each UI screen/section in scope, construct a design brief from the plan's description (and DESIGN.md if present) and generate variants:
+
+```bash
+$D variants --brief "<description assembled from plan + DESIGN.md constraints>" --count 3 --output-dir .context/mockups/
+```
+
+After generation, run a cross-model quality check on each variant:
+
+```bash
+$D check --image .context/mockups/variant-A.png --brief "<the original brief>"
+```
+
+Flag any variants that fail the quality check. Offer to regenerate failures.
+
+Create a comparison board and open it for review:
+
+```bash
+$D compare --images ".context/mockups/variant-A.png,.context/mockups/variant-B.png,.context/mockups/variant-C.png" --output .context/mockups/design-board.html
+$B goto file://$(pwd)/.context/mockups/design-board.html
+```
+
+Tell the user: "I've generated design directions and opened the comparison board. Pick your favorite, rate the others, and I'll use your choice to calibrate the review passes."
+
+Read the user's feedback. Note which direction was approved — this becomes the visual reference for all subsequent review passes.
+
+**Multiple variants/screens:** If the user asked for multiple variants (e.g., "5 versions of the homepage"), generate ALL as separate variant sets with their own comparison boards. Complete all mockup generation and user selection before starting review passes.
+
+**If `DESIGN_NOT_AVAILABLE`:** Skip this step entirely and proceed to review passes with text-based review.
 
 {{DESIGN_OUTSIDE_VOICES}}
 
