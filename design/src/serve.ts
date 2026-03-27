@@ -21,7 +21,14 @@
  *      │
  *      └──(timeout)──► exit 1
  *
- * Stdout: feedback JSON only (one line per feedback event)
+ * Feedback delivery (two channels, both always active):
+ *   Stdout: feedback JSON (one line per event) — for foreground mode
+ *   Disk:   feedback-pending.json (regenerate/remix) or feedback.json (submit)
+ *           written next to the HTML file — for background mode polling
+ *
+ * The agent typically backgrounds $D serve and polls for feedback-pending.json.
+ * When found: read it, delete it, generate new variants, POST /api/reload.
+ *
  * Stderr: structured telemetry (SERVE_STARTED, SERVE_FEEDBACK_RECEIVED, etc.)
  */
 
@@ -120,14 +127,17 @@ export async function serve(options: ServeOptions): Promise<void> {
 
     console.error(`SERVE_FEEDBACK_RECEIVED: type=${action}`);
 
-    // Print feedback JSON to stdout (agent reads this)
+    // Print feedback JSON to stdout (for foreground mode)
     console.log(JSON.stringify(body));
 
-    if (isSubmit) {
-      // Write feedback.json next to the HTML file
-      const feedbackPath = path.join(path.dirname(html), "feedback.json");
-      fs.writeFileSync(feedbackPath, JSON.stringify(body, null, 2));
+    // ALWAYS write feedback to disk so the agent can poll for it
+    // (agent typically backgrounds $D serve, can't read stdout)
+    const feedbackDir = path.dirname(html);
+    const feedbackFile = isSubmit ? "feedback.json" : "feedback-pending.json";
+    const feedbackPath = path.join(feedbackDir, feedbackFile);
+    fs.writeFileSync(feedbackPath, JSON.stringify(body, null, 2));
 
+    if (isSubmit) {
       state = "done";
       if (timeoutTimer) clearTimeout(timeoutTimer);
 

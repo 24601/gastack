@@ -84,10 +84,10 @@ describe('Serve HTTP endpoints', () => {
             try { body = await req.json(); } catch { return Response.json({ error: 'Invalid JSON' }, { status: 400 }); }
             if (typeof body !== 'object' || body === null) return Response.json({ error: 'Expected JSON object' }, { status: 400 });
             const isSubmit = body.regenerated === false;
+            const feedbackFile = isSubmit ? 'feedback.json' : 'feedback-pending.json';
+            fs.writeFileSync(path.join(tmpDir, feedbackFile), JSON.stringify(body, null, 2));
             if (isSubmit) {
               state = 'done';
-              const feedbackPath = path.join(tmpDir, 'feedback.json');
-              fs.writeFileSync(feedbackPath, JSON.stringify(body, null, 2));
               return Response.json({ received: true, action: 'submitted' });
             }
             state = 'regenerating';
@@ -160,8 +160,12 @@ describe('Serve HTTP endpoints', () => {
     expect(written.ratings.A).toBe(4);
   });
 
-  test('POST /api/feedback with regenerate sets state to regenerating', async () => {
+  test('POST /api/feedback with regenerate sets state and writes feedback-pending.json', async () => {
     state = 'serving';
+    // Clean up any prior pending file
+    const pendingPath = path.join(tmpDir, 'feedback-pending.json');
+    if (fs.existsSync(pendingPath)) fs.unlinkSync(pendingPath);
+
     const feedback = {
       preferred: 'B',
       ratings: { A: 3, B: 5, C: 2 },
@@ -185,6 +189,12 @@ describe('Serve HTTP endpoints', () => {
     const progress = await fetch(`${baseUrl}/api/progress`);
     const pd = await progress.json();
     expect(pd.status).toBe('regenerating');
+
+    // Agent can poll for feedback-pending.json
+    expect(fs.existsSync(pendingPath)).toBe(true);
+    const pending = JSON.parse(fs.readFileSync(pendingPath, 'utf-8'));
+    expect(pending.regenerated).toBe(true);
+    expect(pending.regenerateAction).toBe('different');
   });
 
   test('POST /api/feedback with remix contains remixSpec', async () => {
