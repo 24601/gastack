@@ -16,9 +16,6 @@ gstack can generate real UI mockups. Not ASCII art, not text descriptions of hex
 - **Screenshot evolution.** `$D evolve` takes a screenshot of your live site and generates a mockup showing how it should look based on your feedback. Starts from reality, not blank canvas.
 - **Responsive variants.** `$D variants --viewports desktop,tablet,mobile` generates mockups at multiple viewport sizes.
 - **Design-to-code prompt.** `$D prompt` extracts implementation instructions from an approved mockup: exact hex colors, font sizes, spacing values, component structure. Zero interpretation gap.
-- **`{{DESIGN_SHOTGUN_LOOP}}` template resolver.** Shared comparison board feedback loop used by `/design-shotgun`, `/plan-design-review`, and `/design-consultation`.
-- **`{{DESIGN_SETUP}}` template resolver.** Discovery pattern for `$D`, mirrors the existing `$B` browse setup. Includes critical path rule enforcing `~/.gstack/projects/$SLUG/designs/` for all design artifacts.
-
 ### Changed
 
 - **/office-hours** now generates visual mockup explorations by default (skippable). Comparison board opens in your browser for feedback before generating HTML wireframes.
@@ -32,6 +29,7 @@ gstack can generate real UI mockups. Not ASCII art, not text descriptions of hex
 - New files: `serve.ts` (stateful HTTP server), `gallery.ts` (timeline generation)
 - Tests: `design/test/serve.test.ts` (11 tests), `design/test/gallery.test.ts` (7 tests)
 - Full design doc: `docs/designs/DESIGN_TOOLS_V1.md`
+- Template resolvers: `{{DESIGN_SETUP}}` (binary discovery), `{{DESIGN_SHOTGUN_LOOP}}` (shared comparison board loop for /design-shotgun, /plan-design-review, /design-consultation)
 
 ## [0.12.11.0] - 2026-03-27 — Skill Prefix is Now Your Choice
 
