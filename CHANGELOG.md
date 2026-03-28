@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.13.1.0] - 2026-03-27 — Security Hardening
+
+The browse server is now locked down. An independent security audit found 10 issues across the HTTP server, Chrome extension, and shell scripts. All 10 are fixed, plus 2 additional issues found by cross-model adversarial review (Codex + Claude red team).
+
+### Fixed
+
+- **Auth token no longer leaked via `/health`.** Any localhost process could grab the token and get full server control. Now the extension bootstraps via `.auth.json`, and the sidebar agent reads from the state file.
+- **Cookie picker routes require authentication.** Previously any local process could decrypt and exfiltrate cookies from your installed browsers without auth.
+- **Wildcard CORS removed from `/refs` and `/activity/*`.** Any website could read your browsing activity, page URLs, and DOM structure. Now all three endpoints require Bearer auth.
+- **State files auto-expire after 7 days.** Plaintext cookie state files persisted indefinitely. Now they get a TTL warning on load and auto-cleanup on server startup.
+- **innerHTML XSS fixed in extension.** Both `content.js` (ref panel) and `sidepanel.js` (activity feed) used innerHTML with unescaped data. Now uses `textContent` and `escapeHtml()`.
+- **Symlink bypass in path validation fixed.** `validateReadPath` now resolves symlinks via `realpathSync` and always converts to absolute paths first. Handles macOS `/tmp` → `/private/tmp` correctly.
+- **Freeze hook hardened.** Portable POSIX path resolution (works on macOS), plus prefix collision fix (`/project-evil` no longer passes when freeze dir is `/project`).
+- **Shell script injection fixed.** `gstack-config` validates keys and escapes sed patterns. `gstack-telemetry-log` sanitizes branch/repo names in JSON output.
+
+### Added
+
+- 20 security regression tests covering all fixes.
+
 ## [0.13.0.0] - 2026-03-27 — Your Agent Can Design Now
 
 gstack can generate real UI mockups. Not ASCII art, not text descriptions of hex codes, real visual designs you can look at, compare, pick from, and iterate on. Run `/office-hours` on a UI idea and you'll get 3 visual concepts in Chrome with a comparison board where you pick your favorite, rate the others, and tell the agent what to change.
