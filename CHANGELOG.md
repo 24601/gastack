@@ -1,23 +1,23 @@
 # Changelog
 
-## [0.13.1.0] - 2026-03-27 — Security Hardening
+## [0.13.1.0] - 2026-03-28 — Defense in Depth
 
-The browse server is now locked down. An independent security audit found 10 issues across the HTTP server, Chrome extension, and shell scripts. All 10 are fixed, plus 2 additional issues found by cross-model adversarial review (Codex + Claude red team).
+The browse server runs on localhost and requires a token for access, so these issues only matter if a malicious process is already running on your machine (e.g., a compromised npm postinstall script). This release hardens the attack surface so that even in that scenario, the damage is contained.
 
 ### Fixed
 
-- **Auth token no longer leaked via `/health`.** Any localhost process could grab the token and get full server control. Now the extension bootstraps via `.auth.json`, and the sidebar agent reads from the state file.
-- **Cookie picker routes require authentication.** Previously any local process could decrypt and exfiltrate cookies from your installed browsers without auth.
-- **Wildcard CORS removed from `/refs` and `/activity/*`.** Any website could read your browsing activity, page URLs, and DOM structure. Now all three endpoints require Bearer auth.
-- **State files auto-expire after 7 days.** Plaintext cookie state files persisted indefinitely. Now they get a TTL warning on load and auto-cleanup on server startup.
-- **innerHTML XSS fixed in extension.** Both `content.js` (ref panel) and `sidepanel.js` (activity feed) used innerHTML with unescaped data. Now uses `textContent` and `escapeHtml()`.
-- **Symlink bypass in path validation fixed.** `validateReadPath` now resolves symlinks via `realpathSync` and always converts to absolute paths first. Handles macOS `/tmp` → `/private/tmp` correctly.
-- **Freeze hook hardened.** Portable POSIX path resolution (works on macOS), plus prefix collision fix (`/project-evil` no longer passes when freeze dir is `/project`).
-- **Shell script injection fixed.** `gstack-config` validates keys and escapes sed patterns. `gstack-telemetry-log` sanitizes branch/repo names in JSON output.
+- **Auth token removed from `/health` endpoint.** Token now distributed via `.auth.json` file (0o600 permissions) instead of an unauthenticated HTTP response.
+- **Cookie picker data routes now require Bearer auth.** The HTML picker page is still open (it's the UI shell), but all data and action endpoints check the token.
+- **CORS tightened on `/refs` and `/activity/*`.** Removed wildcard origin header so websites can't read browse activity cross-origin.
+- **State files auto-expire after 7 days.** Cookie state files now include a timestamp and warn on load if stale. Server startup cleans up files older than 7 days.
+- **Extension uses `textContent` instead of `innerHTML`.** Prevents DOM injection if server-provided data ever contained markup. Standard defense-in-depth for browser extensions.
+- **Path validation resolves symlinks before boundary checks.** `validateReadPath` now calls `realpathSync` and handles macOS `/tmp` symlink correctly.
+- **Freeze hook uses portable path resolution.** POSIX-compatible (works on macOS without coreutils), fixes edge case where `/project-evil` could match a freeze boundary set to `/project`.
+- **Shell config scripts validate input.** `gstack-config` rejects regex-special keys and escapes sed patterns. `gstack-telemetry-log` sanitizes branch/repo names in JSON output.
 
 ### Added
 
-- 20 security regression tests covering all fixes.
+- 20 regression tests covering all hardening changes.
 
 ## [0.13.0.0] - 2026-03-27 — Your Agent Can Design Now
 
