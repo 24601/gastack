@@ -40,7 +40,7 @@
     h1 { font-size: clamp(28px, 4.5vw, 40px); font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; margin-bottom: 16px; }
     .hero-sub { font-size: 17px; color: var(--text-secondary); max-width: 600px; line-height: 1.55; margin-bottom: 32px; }
 
-    .machine { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 10px; padding: 24px; font-family: var(--font-mono); font-size: 13px; line-height: 2.2; overflow-x: auto; margin-bottom: 8px; }
+    .machine { background: #11151c; border: 1px solid rgba(88,166,255,0.2); border-radius: 10px; padding: 24px; font-family: var(--font-mono); font-size: 13px; line-height: 2.2; overflow-x: auto; margin-bottom: 8px; box-shadow: 0 0 0 1px rgba(88,166,255,0.1), 0 8px 24px rgba(0,0,0,0.4); }
     .machine .stage { color: var(--accent); font-weight: 700; }
     .machine .tool { color: var(--purple); }
     .machine .desc { color: var(--text-secondary); }
@@ -49,9 +49,12 @@
     .machine .human { color: var(--green); font-weight: 600; }
     .machine-note { font-size: 13px; color: var(--text-muted); margin-bottom: 32px; }
 
-    .callout { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--orange); border-radius: 0 10px 10px 0; padding: 18px 22px; margin-bottom: 32px; }
-    .callout p { font-size: 15px; color: var(--text-secondary); line-height: 1.6; }
-    .callout strong { color: var(--text); }
+    .callout { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--orange); border-radius: 0 10px 10px 0; padding: 20px 24px; margin-bottom: 32px; }
+    .callout p { font-size: 16px; color: var(--text-secondary); line-height: 1.65; font-style: italic; }
+    .callout strong { color: var(--text); font-style: normal; }
+
+    section img { box-shadow: 0 4px 24px rgba(0,0,0,0.3); transition: transform 0.2s ease; }
+    section img:hover { transform: translateY(-2px); }
 
     .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 640px) { .compare { grid-template-columns: 1fr; } }
@@ -101,7 +104,7 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-label">gstack-gastown bridge</div>
+    <div class="hero-label">gstack-gastown bridge &middot; ~3K lines &middot; zero npm deps &middot; Bun</div>
     <h1>Less toil between<br>design and deploy.</h1>
     <p class="hero-sub">
       The bridge connects <a href="https://github.com/garrytan/gstack">gstack</a>'s
