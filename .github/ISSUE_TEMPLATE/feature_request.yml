@@ -1,0 +1,51 @@
+name: Feature Request
+description: Suggest an enhancement or new capability
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for gstack? We'd love to hear it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the pain point or workflow gap. The more specific, the better.
+      placeholder: "When I run /qa on authenticated pages, I have to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like it to work? Pseudocode, screenshots, or plain English.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you try or think about?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Is this a tweak to an existing skill or something new?
+      options:
+        - Existing skill enhancement
+        - New skill idea
+        - Browse/browser feature
+        - Infrastructure / DX
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, links, or anything else that helps.

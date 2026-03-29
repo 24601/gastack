@@ -1,0 +1,62 @@
+name: Skill Idea
+description: Propose a new slash-command skill for gstack
+labels: ["skill-idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        gstack skills are Markdown prompts that turn Claude Code into a specialist.
+        Got an idea for a new one? Tell us about it.
+
+  - type: input
+    id: name
+    attributes:
+      label: Skill name
+      description: "What would you call it? (e.g., /migrate, /perf-audit)"
+      placeholder: /my-skill
+    validations:
+      required: true
+
+  - type: input
+    id: role
+    attributes:
+      label: Specialist role
+      description: "What role does this skill play? (e.g., Database Migration Engineer, Performance Analyst)"
+      placeholder: "Performance Analyst"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What does it do?
+      description: Describe the workflow. What inputs, what outputs, what decisions does it make?
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example session
+      description: |
+        Show a realistic conversation. What does the user say, what does the skill do?
+        ```
+        You: /my-skill
+        Claude: [describes what happens]
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this useful?
+      description: What pain does it solve? Who benefits?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links to similar tools, prior art, or related issues.
