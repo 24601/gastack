@@ -16,18 +16,45 @@
  *   T1.3 — gt mail inbox --json returns parseable JSON (array or object)
  *   T1.4 — bd create returns a bead ID, bd close cleans it up
  *   T1.5 — EventTailer reads real events.jsonl with correct structure
+ *
+ * Note: Uses Bun.spawnSync for CLI calls because gt may keep stdout open
+ * with async Bun.spawn (background Dolt watchers hold the pipe).
  */
 
-import { describe, test, expect, afterAll } from 'bun:test';
+import { describe, test, expect, afterAll, setDefaultTimeout } from 'bun:test';
 import * as path from 'path';
-import { gtExec, gtJson, EventTailer } from '../adapters/gastown.js';
+import { EventTailer } from '../adapters/gastown.js';
+
+// gt + bd commands hit Dolt — each call can take 10-20s in test environments
+setDefaultTimeout(30_000);
+
+// --- Helpers ---
+
+/** Run a CLI command synchronously, return parsed result. */
+function runCli(args: string[]): { stdout: string; stderr: string; exitCode: number } {
+  const proc = Bun.spawnSync(args, { stdout: 'pipe', stderr: 'pipe' });
+  return {
+    stdout: new TextDecoder().decode(proc.stdout).trim(),
+    stderr: new TextDecoder().decode(proc.stderr).trim(),
+    exitCode: proc.exitCode,
+  };
+}
+
+/** Run a gt command with --json flag and parse the result. */
+function gtJsonSync<T = unknown>(args: string[]): { data: T; raw: string; exitCode: number } {
+  const result = runCli(['gt', ...args, '--json']);
+  if (result.exitCode !== 0) {
+    throw new Error(`gt ${args[0]} --json failed (exit ${result.exitCode}): ${result.stderr}`);
+  }
+  const data = JSON.parse(result.stdout) as T;
+  return { data, raw: result.stdout, exitCode: result.exitCode };
+}
 
 // --- Skip guard ---
 
 const GT_ON_PATH = (() => {
   try {
-    const r = Bun.spawnSync(['gt', '--version'], { stdout: 'pipe', stderr: 'pipe' });
-    return r.exitCode === 0;
+    return runCli(['gt', '--version']).exitCode === 0;
   } catch {
     return false;
   }
@@ -35,8 +62,7 @@ const GT_ON_PATH = (() => {
 
 const BD_ON_PATH = (() => {
   try {
-    const r = Bun.spawnSync(['bd', '--version'], { stdout: 'pipe', stderr: 'pipe' });
-    return r.exitCode === 0;
+    return runCli(['bd', '--version']).exitCode === 0;
   } catch {
     return false;
   }
@@ -54,14 +80,10 @@ const EVENTS_EXIST = (() => {
 // Cleanup tracker for canary beads created during tests
 const canaryBeadIds: string[] = [];
 
-afterAll(async () => {
-  // Clean up any canary beads that weren't already closed
+afterAll(() => {
   for (const id of canaryBeadIds) {
     try {
-      Bun.spawnSync(
-        ['bd', 'close', id, '--reason=no-changes: contract test cleanup'],
-        { stdout: 'pipe', stderr: 'pipe' },
-      );
+      runCli(['bd', 'close', id, '--reason=no-changes: contract test cleanup']);
     } catch {
       // Best-effort cleanup
     }
@@ -73,15 +95,14 @@ afterAll(async () => {
 describe('T1.1: gt hook --json contract', () => {
   const SKIP = !GT_ON_PATH;
 
-  test.skipIf(SKIP)('returns valid JSON', async () => {
-    const result = await gtJson(['hook']);
-    expect(result.data).toBeDefined();
-    expect(typeof result.raw).toBe('string');
+  test.skipIf(SKIP)('returns valid JSON', () => {
+    const { data, raw } = gtJsonSync(['hook']);
+    expect(data).toBeDefined();
+    expect(typeof raw).toBe('string');
   });
 
-  test.skipIf(SKIP)('has expected top-level keys', async () => {
-    const result = await gtJson<Record<string, unknown>>(['hook']);
-    const data = result.data;
+  test.skipIf(SKIP)('has expected top-level keys', () => {
+    const { data } = gtJsonSync<Record<string, unknown>>(['hook']);
 
     // Keys the adapter and orchestrator rely on
     expect(data).toHaveProperty('has_work');
@@ -94,9 +115,8 @@ describe('T1.1: gt hook --json contract', () => {
     expect(typeof data.role).toBe('string');
   });
 
-  test.skipIf(SKIP)('pinned_bead is an object when work is hooked', async () => {
-    const result = await gtJson<Record<string, unknown>>(['hook']);
-    const data = result.data;
+  test.skipIf(SKIP)('pinned_bead is an object when work is hooked', () => {
+    const { data } = gtJsonSync<Record<string, unknown>>(['hook']);
 
     if (data.has_work) {
       expect(data).toHaveProperty('pinned_bead');
@@ -116,12 +136,12 @@ describe('T1.1: gt hook --json contract', () => {
     }
   });
 
-  test.skipIf(SKIP)('gtExec returns structured GtResult', async () => {
-    const result = await gtExec(['hook', '--json']);
-    expect(typeof result.stdout).toBe('string');
-    expect(typeof result.stderr).toBe('string');
-    expect(typeof result.exitCode).toBe('number');
+  test.skipIf(SKIP)('raw CLI returns exit 0 with non-empty stdout', () => {
+    const result = runCli(['gt', 'hook', '--json']);
     expect(result.exitCode).toBe(0);
+    expect(result.stdout.length).toBeGreaterThan(0);
+    // Must be valid JSON
+    expect(() => JSON.parse(result.stdout)).not.toThrow();
   });
 });
 
@@ -130,15 +150,14 @@ describe('T1.1: gt hook --json contract', () => {
 describe('T1.2: gt mol status --json contract', () => {
   const SKIP = !GT_ON_PATH;
 
-  test.skipIf(SKIP)('returns valid JSON', async () => {
-    const result = await gtJson(['mol', 'status']);
-    expect(result.data).toBeDefined();
-    expect(typeof result.raw).toBe('string');
+  test.skipIf(SKIP)('returns valid JSON', () => {
+    const { data, raw } = gtJsonSync(['mol', 'status']);
+    expect(data).toBeDefined();
+    expect(typeof raw).toBe('string');
   });
 
-  test.skipIf(SKIP)('has expected top-level keys', async () => {
-    const result = await gtJson<Record<string, unknown>>(['mol', 'status']);
-    const data = result.data;
+  test.skipIf(SKIP)('has expected top-level keys', () => {
+    const { data } = gtJsonSync<Record<string, unknown>>(['mol', 'status']);
 
     // mol status shares the hook structure in gt
     expect(data).toHaveProperty('has_work');
@@ -154,15 +173,14 @@ describe('T1.2: gt mol status --json contract', () => {
 describe('T1.3: gt mail inbox --json contract', () => {
   const SKIP = !GT_ON_PATH;
 
-  test.skipIf(SKIP)('returns valid JSON', async () => {
-    const result = await gtJson(['mail', 'inbox']);
-    expect(result.data).toBeDefined();
-    expect(typeof result.raw).toBe('string');
+  test.skipIf(SKIP)('returns valid JSON', () => {
+    const { data, raw } = gtJsonSync(['mail', 'inbox']);
+    expect(data).toBeDefined();
+    expect(typeof raw).toBe('string');
   });
 
-  test.skipIf(SKIP)('returns an array or object with messages', async () => {
-    const result = await gtJson<unknown>(['mail', 'inbox']);
-    const data = result.data;
+  test.skipIf(SKIP)('returns an array or object with messages', () => {
+    const { data } = gtJsonSync<unknown>(['mail', 'inbox']);
 
     // Real gt returns [] when empty, or an array of messages.
     // The adapter must handle both array and object-with-messages forms.
@@ -192,40 +210,32 @@ describe('T1.3: gt mail inbox --json contract', () => {
 describe('T1.4: bd create returns bead ID with cleanup', () => {
   const SKIP = !BD_ON_PATH;
 
-  test.skipIf(SKIP)('creates a bead and extracts ID from output', async () => {
-    // Use bd directly — it's not a gt subcommand
-    const proc = Bun.spawnSync(
+  test.skipIf(SKIP)('creates a bead and extracts ID from output', () => {
+    const proc = runCli(
       ['bd', 'create', '--title', 'contract-test-canary', '--type', 'task'],
-      { stdout: 'pipe', stderr: 'pipe' },
     );
-
-    const stdout = new TextDecoder().decode(proc.stdout).trim();
-    const stderr = new TextDecoder().decode(proc.stderr).trim();
-    const combined = `${stdout}\n${stderr}`;
+    const combined = `${proc.stdout}\n${proc.stderr}`;
 
     expect(proc.exitCode).toBe(0);
 
     // bd create outputs "✓ Created issue: <id> — <title>"
-    const idMatch = combined.match(/Created issue:\s*(ga-\w+)/);
+    // Bead IDs use rig-specific prefixes (ga-, hq-, etc.) — match any prefix
+    const idMatch = combined.match(/Created issue:\s*(\S+)/);
     expect(idMatch).not.toBeNull();
 
     const beadId = idMatch![1];
-    expect(beadId).toMatch(/^ga-\w+$/);
+    // Bead IDs are alphanumeric with a prefix and hyphen (e.g., ga-abc, hq-xyz)
+    expect(beadId).toMatch(/^\w+-\w+$/);
     canaryBeadIds.push(beadId);
 
     // Verify the bead exists via bd show
-    const showProc = Bun.spawnSync(
-      ['bd', 'show', beadId],
-      { stdout: 'pipe', stderr: 'pipe' },
-    );
-    const showOutput = new TextDecoder().decode(showProc.stdout).trim();
+    const showProc = runCli(['bd', 'show', beadId]);
     expect(showProc.exitCode).toBe(0);
-    expect(showOutput).toContain('contract-test-canary');
+    expect(showProc.stdout).toContain('contract-test-canary');
 
     // Clean up immediately
-    const closeProc = Bun.spawnSync(
+    const closeProc = runCli(
       ['bd', 'close', beadId, '--reason=no-changes: contract test canary'],
-      { stdout: 'pipe', stderr: 'pipe' },
     );
     expect(closeProc.exitCode).toBe(0);
 
