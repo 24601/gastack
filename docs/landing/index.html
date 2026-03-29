@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>gstack-gastown bridge — Design doc in, merged code out</title>
-  <meta name="description" content="Event-sourced pipeline connecting AI design tools to multi-agent execution. Crash-recoverable, idempotent, human gates at the right moments.">
-  <meta property="og:title" content="gstack-gastown bridge">
-  <meta property="og:description" content="Event-sourced pipeline connecting AI design tools to multi-agent execution. 3K lines of TypeScript. Zero npm deps.">
+  <title>gstack-gastown bridge — Less toil between design and deploy</title>
+  <meta name="description" content="The bridge connects gstack's design pipeline to gastown's agent execution. It reduces the toil between them — you stay in the loop for taste and judgment.">
+  <meta property="og:title" content="gstack-gastown bridge — Less toil, not less judgment">
+  <meta property="og:description" content="Event-sourced pipeline connecting AI design tools to multi-agent execution. You're still the wisdom in the loop.">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="https://24601.github.io/gastack/social-preview.png">
   <style>
     :root {
       --bg: #0d1117;
@@ -32,15 +33,13 @@
     a:hover { text-decoration: underline; }
     section { max-width: var(--max-width); margin: 0 auto; padding: 0 24px 64px; }
     h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 10px; }
-    .sub { color: var(--text-secondary); font-size: 16px; margin-bottom: 24px; max-width: 600px; }
+    .sub { color: var(--text-secondary); font-size: 16px; margin-bottom: 24px; max-width: 620px; }
 
-    /* Hero: architecture diagram IS the hero */
     .hero { max-width: var(--max-width); margin: 0 auto; padding: 64px 24px 48px; }
     .hero-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 16px; }
     h1 { font-size: clamp(28px, 4.5vw, 40px); font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; margin-bottom: 16px; }
-    .hero-sub { font-size: 17px; color: var(--text-secondary); max-width: 580px; line-height: 1.5; margin-bottom: 32px; }
+    .hero-sub { font-size: 17px; color: var(--text-secondary); max-width: 600px; line-height: 1.55; margin-bottom: 32px; }
 
-    /* Stage machine (the centerpiece) */
     .machine { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 10px; padding: 24px; font-family: var(--font-mono); font-size: 13px; line-height: 2.2; overflow-x: auto; margin-bottom: 8px; }
     .machine .stage { color: var(--accent); font-weight: 700; }
     .machine .tool { color: var(--purple); }
@@ -50,7 +49,10 @@
     .machine .human { color: var(--green); font-weight: 600; }
     .machine-note { font-size: 13px; color: var(--text-muted); margin-bottom: 32px; }
 
-    /* Before/After */
+    .callout { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--orange); border-radius: 0 10px 10px 0; padding: 18px 22px; margin-bottom: 32px; }
+    .callout p { font-size: 15px; color: var(--text-secondary); line-height: 1.6; }
+    .callout strong { color: var(--text); }
+
     .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 640px) { .compare { grid-template-columns: 1fr; } }
     .compare-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
@@ -64,14 +66,12 @@
     .compare-card.before li::before { content: "- "; color: var(--red); }
     .compare-card.after li::before { content: "+ "; color: var(--green); }
 
-    /* Engineering details */
     .eng-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     @media (max-width: 640px) { .eng-grid { grid-template-columns: 1fr; } }
     .eng-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
     .eng-card strong { color: var(--text); font-size: 14px; display: block; margin-bottom: 4px; }
     .eng-card span { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 
-    /* File table */
     .file-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 12px; }
     .file-table th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
     .file-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
@@ -79,7 +79,6 @@
     .file-table td:nth-child(2) { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); text-align: right; }
     .file-table td:nth-child(3) { color: var(--text-secondary); }
 
-    /* Integration */
     .int-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: start; }
     @media (max-width: 640px) { .int-grid { grid-template-columns: 1fr; } .int-label { writing-mode: horizontal-tb; padding: 8px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: center; } }
     .int-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
@@ -88,12 +87,10 @@
     .int-card .note { font-size: 12px; color: var(--text-muted); margin-top: 10px; font-style: italic; }
     .int-label { display: flex; align-items: center; justify-content: center; writing-mode: vertical-rl; color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; }
 
-    /* CLI */
     .cli { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; font-family: var(--font-mono); font-size: 13px; color: var(--text); overflow-x: auto; margin-bottom: 10px; }
     .cli .comment { color: var(--text-muted); }
     .cli .prompt { color: var(--green); }
 
-    /* Footer */
     footer { max-width: var(--max-width); margin: 0 auto; padding: 32px 24px 48px; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted); font-size: 13px; }
     footer a { color: var(--text-secondary); }
 
@@ -102,68 +99,84 @@
 </head>
 <body>
 
-  <!-- Hero: architecture first -->
+  <!-- Hero -->
   <div class="hero">
     <div class="hero-label">gstack-gastown bridge</div>
-    <h1>Design doc in.<br>Merged code out.</h1>
+    <h1>Less toil between<br>design and deploy.</h1>
     <p class="hero-sub">
-      Event-sourced pipeline connecting
-      <a href="https://github.com/garrytan/gstack">gstack</a> design tools to
-      gastown agent execution. Crash-recoverable. Idempotent.
-      Human gates at the right moments.
+      The bridge connects <a href="https://github.com/garrytan/gstack">gstack</a>'s
+      design pipeline to gastown's agent execution. It doesn't replace your judgment &mdash;
+      it removes the manual translation work between them so you can focus on
+      taste and decisions instead of toil.
     </p>
 
     <div class="machine">
-      <span class="stage">PLAN</span> <span class="desc">&mdash; extract tasks from design doc (regex + Haiku LLM)</span><br>
+      <span class="stage">PLAN</span> <span class="desc">&mdash; extract tasks from design doc (regex + LLM)</span><br>
       <span class="arrow">&nbsp; &darr;</span><br>
-      <span class="stage">EXECUTE</span> <span class="desc">&mdash;</span> <span class="tool">gt convoy create</span> <span class="desc">+</span> <span class="tool">gt sling</span> <span class="desc">per task &rarr; polecats work</span><br>
+      <span class="stage">EXECUTE</span> <span class="desc">&mdash;</span> <span class="tool">gt convoy create</span> <span class="desc">+</span> <span class="tool">gt sling</span> <span class="desc">per task &rarr; agents work</span><br>
       <span class="arrow">&nbsp; &darr;</span><br>
-      <span class="stage">REVIEW</span> <span class="desc">&mdash;</span> <span class="tool">claude -p /review</span> <span class="desc">+</span> <span class="tool">claude -p /cso</span> <span class="desc">in parallel (Promise.all)</span><br>
+      <span class="stage">REVIEW</span> <span class="desc">&mdash;</span> <span class="tool">claude -p /review</span> <span class="desc">+</span> <span class="tool">claude -p /cso</span> <span class="desc">in parallel</span><br>
       <span class="arrow">&nbsp; &darr;</span><br>
       <span class="desc">&nbsp; </span><span class="gate">quality.ts &rarr; PASS / WARN / BLOCKED</span><br>
       <span class="arrow">&nbsp; &darr;</span><br>
-      <span class="stage">REFINE</span> <span class="desc">&mdash;</span> <span class="human">human approves / rejects / retries</span> <span class="desc">(scoped signals)</span><br>
+      <span class="stage">REFINE</span> <span class="desc">&mdash;</span> <span class="human">you approve / reject / retry</span> <span class="desc">(scoped signals)</span><br>
       <span class="arrow">&nbsp; &darr;</span><br>
-      <span class="stage">DEPLOY</span> <span class="desc">&mdash;</span> <span class="tool">gt convoy land</span> <span class="desc">&rarr; refinery merge queue</span><br>
+      <span class="stage">DEPLOY</span> <span class="desc">&mdash;</span> <span class="tool">gt convoy land</span> <span class="desc">&rarr; merge queue</span><br>
       <span class="arrow">&nbsp; &darr;</span><br>
       <span class="stage">DONE</span>
     </div>
-    <div class="machine-note">Six stages. One event log. Kill the process mid-run, restart, it resumes.</div>
+    <div class="machine-note">Six stages. One event log. Crash &rarr; restart &rarr; resume where you left off.</div>
   </div>
+
+  <!-- Philosophy callout -->
+  <section>
+    <div class="callout">
+      <p>
+        <strong>You're still the wisdom in the loop.</strong> The bridge reduces toil, not judgment.
+        Mapping gstack's design pipeline to gastown's execution layer is not trivial &mdash;
+        the bridge encodes awareness of both stacks so the interfacing is done right.
+        gstack's quality standards flow into dispatch decisions. gastown's execution reality
+        flows back into review gates. The non-trivial part is making them more together.
+        Your time goes to taste and decisions, not the mechanical translation between tools.
+      </p>
+    </div>
+  </section>
 
   <!-- The problem -->
   <section>
-    <h2>The manual handoff tax</h2>
+    <h2>What the bridge handles for you</h2>
+    <p class="sub">
+      The gap between where gstack leaves off (reviewed design) and where it picks up again
+      (code review) is full of mechanical work. That's what the bridge automates.
+    </p>
     <div class="compare">
       <div class="compare-card before">
-        <h3>Without the bridge</h3>
+        <h3>The toil (without bridge)</h3>
         <ul>
-          <li>Read design doc</li>
-          <li>Manually create work items</li>
-          <li>Manually dispatch to agents</li>
-          <li>Wait for completion</li>
-          <li>Manually run code review</li>
-          <li>Manually run security audit</li>
-          <li>Interpret findings</li>
-          <li>Decide: approve, reject, retry</li>
-          <li>Manually trigger merge</li>
+          <li>Read design doc, extract tasks manually</li>
+          <li>Create work items in gastown</li>
+          <li>Dispatch to agents one by one</li>
+          <li>Poll for completion</li>
+          <li>Run /review manually</li>
+          <li>Run /cso manually</li>
+          <li>Interpret findings, decide next step</li>
+          <li>Trigger merge manually</li>
         </ul>
-        <p style="margin-top: 10px;">Every step loses context. Every step invites shortcuts.</p>
+        <p style="margin-top: 10px;">Mechanical. Repetitive. Easy to shortcut.</p>
       </div>
       <div class="compare-card after">
-        <h3>With the bridge</h3>
+        <h3>What stays with you</h3>
         <ul>
-          <li>Point at design doc + rig</li>
-          <li>Tasks extracted automatically</li>
-          <li>Convoy created, agents dispatched</li>
-          <li>Event stream tailed in real time</li>
-          <li>Review + CSO run in parallel</li>
-          <li>Quality policy applied</li>
-          <li>Blocks when human judgment needed</li>
-          <li>You decide once, at the right moment</li>
-          <li>Merge lands through refinery</li>
+          <li>Reviewing the design before it ships</li>
+          <li>Approving or rejecting quality findings</li>
+          <li>Overriding security gates with reason</li>
+          <li>Deciding when to retry vs. ship</li>
+          <li>Watching the event stream if you want</li>
+          <li>Setting quality policy thresholds</li>
+          <li>Tuning which reviews matter</li>
+          <li>Choosing when to run the pipeline</li>
         </ul>
-        <p style="margin-top: 10px;">One command. One approval (if needed). Done.</p>
+        <p style="margin-top: 10px;">Taste. Judgment. Final say.</p>
       </div>
     </div>
   </section>
@@ -171,31 +184,34 @@
   <!-- Engineering decisions -->
   <section>
     <h2>How it works</h2>
-    <p class="sub">The interesting engineering problems in building a reliable pipeline between two CLIs.</p>
+    <p class="sub">
+      The interesting part of the bridge isn't connecting two CLIs &mdash;
+      it's doing so reliably while keeping you in control.
+    </p>
     <div class="eng-grid">
       <div class="eng-card">
         <strong>Event log is the state</strong>
-        <span>Zero mutable fields on the Orchestrator. Everything derived from append-only JSONL. Crash &rarr; replay log &rarr; reconstruct stage, tasks, pending approvals.</span>
+        <span>Zero mutable fields. Everything derived from append-only JSONL. Crash &rarr; replay log &rarr; reconstruct stage, tasks, pending approvals.</span>
       </div>
       <div class="eng-card">
         <strong>Idempotency tokens</strong>
-        <span>SHA-256 of (adapter, command, args). Written to log before result processing. Prevents duplicate convoys and reviews on restart.</span>
+        <span>SHA-256 of (adapter, command, args). Written to log before result processing. No duplicate dispatches or reviews on restart.</span>
       </div>
       <div class="eng-card">
         <strong>Scoped approval signals</strong>
-        <span>Decisions carry {runId, stage, reviewCycle}. Stale approvals from previous review cycles are ignored. No leaked permissions.</span>
+        <span>Your decisions carry {runId, stage, reviewCycle}. Stale approvals from previous review cycles are ignored. Your latest judgment is always what counts.</span>
       </div>
       <div class="eng-card">
         <strong>Fail closed on parsing</strong>
-        <span>gt --json returns non-JSON &rarr; BLOCKED. Never falls back to text scraping. All CLI calls via Bun.spawn with array args. No shell interpolation.</span>
+        <span>gt --json returns non-JSON &rarr; BLOCKED and surfaced to you. Never falls back to text scraping. All CLI calls via Bun.spawn with array args.</span>
       </div>
       <div class="eng-card">
-        <strong>Parallel review execution</strong>
-        <span>/review and /cso run simultaneously via Promise.all through the gstack adapter. Halves review time.</span>
+        <strong>Quality gates encode both stacks</strong>
+        <span>gstack's /review and /cso run in parallel. gastown's execution results feed back. The policy reflects what both tools consider important.</span>
       </div>
       <div class="eng-card">
         <strong>Adaptive output</strong>
-        <span>3&times;3 grid: detail (minimal/standard/detailed) &times; style (terse/balanced/expressive). Reads filesystem signals. Progresses from verbose to minimal over time.</span>
+        <span>3&times;3 grid: detail &times; style. Verbose on your first run, minimal by run 10. --verbose/--quiet override. It learns how you work.</span>
       </div>
     </div>
   </section>
@@ -211,10 +227,10 @@
         <tr><td>events.ts</td><td>266</td><td>13-event schema. Append-only JSONL log. Idempotency key lookup.</td></tr>
         <tr><td>adapters/gastown.ts</td><td>406</td><td>gt CLI wrapper (Bun.spawn). Event tailer with offset/inode tracking.</td></tr>
         <tr><td>adapters/gstack.ts</td><td>282</td><td>claude -p executor. Grade + finding parser. Parallel review suite.</td></tr>
-        <tr><td>quality.ts</td><td>350</td><td>Quality policy engine. Grade comparison, security gates, combined eval.</td></tr>
-        <tr><td>output.ts</td><td>360</td><td>Adaptive output calibration. Signal reading. Run-count progression.</td></tr>
-        <tr><td>cli.ts</td><td>571</td><td>start, status, list, watch, approve, reject. Scoped signal matching.</td></tr>
-        <tr><td>notify.ts</td><td>307</td><td>Slack/Discord webhooks. Retry with exponential backoff. Fire-and-forget.</td></tr>
+        <tr><td>quality.ts</td><td>350</td><td>Quality policy engine. Encodes both stacks' standards.</td></tr>
+        <tr><td>output.ts</td><td>360</td><td>Adaptive output. Learns your preferred verbosity over time.</td></tr>
+        <tr><td>cli.ts</td><td>571</td><td>start, status, list, watch, approve, reject. Your control surface.</td></tr>
+        <tr><td>notify.ts</td><td>307</td><td>Slack/Discord webhooks. Tells you when your judgment is needed.</td></tr>
       </tbody>
     </table>
   </section>
@@ -222,7 +238,10 @@
   <!-- Integration points -->
   <section>
     <h2>What it connects</h2>
-    <p class="sub">Two adapters. Two CLIs. The bridge doesn't modify either.</p>
+    <p class="sub">
+      Two adapters that understand the opinionation of each stack.
+      The bridge doesn't modify either tool &mdash; it speaks both languages.
+    </p>
     <div class="int-grid">
       <div class="int-card">
         <h3>gstack adapter</h3>
@@ -248,25 +267,25 @@
   <!-- Quick start -->
   <section>
     <h2>Quick start</h2>
-    <p class="sub">Requires gstack and gastown installed independently. Both CLIs on PATH.</p>
+    <p class="sub">
+      Requires <a href="https://github.com/garrytan/gstack">gstack</a> and gastown
+      installed independently. Both CLIs on PATH. The bridge inherits their credentials
+      from your shell environment.
+    </p>
     <div class="cli">
-      <span class="comment"># Install the bridge CLI (requires Bun v1.0+)</span><br>
+      <span class="comment"># Install (requires Bun v1.0+)</span><br>
       <span class="prompt">$</span> bun install &amp;&amp; bun run build
     </div>
     <div class="cli">
-      <span class="comment"># Start a pipeline from a design doc</span><br>
+      <span class="comment"># Start the design-to-deploy pipeline</span><br>
       <span class="prompt">$</span> bridge start --design-doc ~/.gstack/projects/my-design.md --rig myproject
     </div>
     <div class="cli">
-      <span class="comment"># Watch events in real time</span><br>
+      <span class="comment"># Watch the event stream (optional &mdash; the bridge notifies you when needed)</span><br>
       <span class="prompt">$</span> bridge watch &lt;run-id&gt;
     </div>
     <div class="cli">
-      <span class="comment"># Check pipeline status</span><br>
-      <span class="prompt">$</span> bridge status &lt;run-id&gt;
-    </div>
-    <div class="cli">
-      <span class="comment"># Approve a blocked finding (scoped to stage + review cycle)</span><br>
+      <span class="comment"># When the quality gate blocks, it's your call</span><br>
       <span class="prompt">$</span> bridge approve &lt;run-id&gt; --stage REVIEW --cycle 1 --reason "accepted risk"
     </div>
   </section>
@@ -274,12 +293,12 @@
   <!-- Footer -->
   <footer>
     <p style="margin-bottom: 8px;">
-      Phase B1 spike &middot; TypeScript &middot; Bun &middot; MIT license
+      Phase B1 &middot; TypeScript &middot; Bun &middot; MIT license
     </p>
     <p>
       The bridge connects
       <a href="https://github.com/garrytan/gstack">gstack</a> and gastown.
-      It doesn't replace either.
+      It handles the toil. You handle the judgment.
     </p>
     <p style="margin-top: 8px;">
       <a href="https://github.com/24601/gastack/tree/main/bridge">View source on GitHub</a>
