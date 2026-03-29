@@ -221,6 +221,16 @@ function loadSession(): SidebarSession | null {
     const activeData = JSON.parse(fs.readFileSync(activeFile, 'utf-8'));
     const sessionFile = path.join(SESSIONS_DIR, activeData.id, 'session.json');
     const session = JSON.parse(fs.readFileSync(sessionFile, 'utf-8')) as SidebarSession;
+    // Validate worktree still exists — crash may have left stale path
+    if (session.worktreePath && !fs.existsSync(session.worktreePath)) {
+      console.log(`[browse] Stale worktree path: ${session.worktreePath} — clearing`);
+      session.worktreePath = null;
+    }
+    // Clear stale claude session ID — can't resume across server restarts
+    if (session.claudeSessionId) {
+      console.log(`[browse] Clearing stale claude session: ${session.claudeSessionId}`);
+      session.claudeSessionId = null;
+    }
     // Load chat history
     const chatFile = path.join(SESSIONS_DIR, session.id, 'chat.jsonl');
     try {
