@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { EventLog, STAGES, idempotencyKey } from './events.ts';
+import { EventLog, STAGES, idempotencyKey, type LoadResult, type CorruptionDiagnostic } from './events.ts';
 import { Orchestrator, type Adapter } from './orchestrate.ts';
 
 let tmpDir: string;
@@ -74,6 +74,141 @@ describe('EventLog', () => {
     expect(entered).toHaveLength(2);
     expect(entered[0].stage).toBe('PLAN');
     expect(entered[1].stage).toBe('EXECUTE');
+  });
+
+  test('load skips malformed lines (backward compat)', () => {
+    const log = new EventLog(tmpDir, 'malformed-test');
+    log.append({ type: 'STAGE_ENTERED', stage: 'PLAN' });
+    // Inject garbage between valid lines
+    fs.appendFileSync(log.path, 'not json at all\n');
+    log.append({ type: 'STAGE_ENTERED', stage: 'EXECUTE' });
+
+    const envelopes = EventLog.load(log.path);
+    expect(envelopes).toHaveLength(2);
+    expect(envelopes[0].event.type).toBe('STAGE_ENTERED');
+    expect(envelopes[1].event.type).toBe('STAGE_ENTERED');
+  });
+
+  test('load repairs truncated JSON (missing closing braces)', () => {
+    const logPath = path.join(tmpDir, 'truncated.jsonl');
+    const validEnvelope = JSON.stringify({
+      id: 'e1',
+      timestamp: '2026-01-01T00:00:00Z',
+      event: { type: 'STAGE_ENTERED', stage: 'PLAN' },
+    });
+    // Simulate truncation: valid envelope with missing closing brace
+    const truncated = validEnvelope.slice(0, -1); // remove final }
+    fs.writeFileSync(logPath, truncated + '\n');
+
+    const envelopes = EventLog.load(logPath);
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0].event.type).toBe('STAGE_ENTERED');
+  });
+
+  test('load repairs truncated JSON (missing closing bracket and brace)', () => {
+    const logPath = path.join(tmpDir, 'truncated2.jsonl');
+    // Envelope with array value truncated
+    const line = '{"id":"e2","timestamp":"2026-01-01T00:00:00Z","event":{"type":"SESSION_CREATED","sessionId":"s1","projectDir":"/tmp","config":{"items":[1,2,3';
+    fs.writeFileSync(logPath, line + '\n');
+
+    const envelopes = EventLog.load(logPath);
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0].event.type).toBe('SESSION_CREATED');
+  });
+
+  test('load repairs truncated string value', () => {
+    const logPath = path.join(tmpDir, 'truncated-str.jsonl');
+    // Truncated mid-string
+    const line = '{"id":"e3","timestamp":"2026-01-01T00:00:00Z","event":{"type":"STAGE_ENTERED","stage":"PLA';
+    fs.writeFileSync(logPath, line + '\n');
+
+    const envelopes = EventLog.load(logPath);
+    expect(envelopes).toHaveLength(1);
+    // Stage will be "PLA" (truncated) but it still parses
+    expect(envelopes[0].id).toBe('e3');
+  });
+
+  test('load diagnostics mode returns corruption details', () => {
+    const logPath = path.join(tmpDir, 'diag.jsonl');
+    const valid = JSON.stringify({
+      id: 'e1',
+      timestamp: '2026-01-01T00:00:00Z',
+      event: { type: 'STAGE_ENTERED', stage: 'PLAN' },
+    });
+    const garbage = 'not json at all';
+    const truncated = valid.slice(0, -1);
+    fs.writeFileSync(logPath, [valid, garbage, truncated].join('\n') + '\n');
+
+    const result = EventLog.load(logPath, { diagnostics: true });
+    expect(result.envelopes).toHaveLength(2); // valid + repaired truncated
+    expect(result.diagnostics).toHaveLength(2); // garbage + repaired truncated
+
+    // Garbage line diagnosed correctly
+    const garbageDiag = result.diagnostics.find(d => d.kind === 'garbage');
+    expect(garbageDiag).toBeDefined();
+    expect(garbageDiag!.repaired).toBe(false);
+    expect(garbageDiag!.lineNumber).toBe(2);
+    expect(garbageDiag!.line).toBe(garbage);
+
+    // Truncated line diagnosed and repaired
+    const truncDiag = result.diagnostics.find(d => d.kind === 'truncation');
+    expect(truncDiag).toBeDefined();
+    expect(truncDiag!.repaired).toBe(true);
+    expect(truncDiag!.lineNumber).toBe(3);
+  });
+
+  test('load rejects valid JSON that is not an EventEnvelope', () => {
+    const logPath = path.join(tmpDir, 'bad-envelope.jsonl');
+    fs.writeFileSync(logPath, '{"foo":"bar"}\n');
+
+    const result = EventLog.load(logPath, { diagnostics: true });
+    expect(result.envelopes).toHaveLength(0);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0].kind).toBe('garbage');
+    expect(result.diagnostics[0].detail).toContain('missing required EventEnvelope fields');
+  });
+
+  test('load handles binary garbage (non-printable chars)', () => {
+    const logPath = path.join(tmpDir, 'binary.jsonl');
+    const binaryGarbage = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe]).toString('utf-8');
+    const valid = JSON.stringify({
+      id: 'e1',
+      timestamp: '2026-01-01T00:00:00Z',
+      event: { type: 'STAGE_ENTERED', stage: 'PLAN' },
+    });
+    fs.writeFileSync(logPath, binaryGarbage + '\n' + valid + '\n');
+
+    const result = EventLog.load(logPath, { diagnostics: true });
+    expect(result.envelopes).toHaveLength(1);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0].kind).toBe('garbage');
+  });
+
+  test('load handles truncation after colon (key with no value)', () => {
+    const logPath = path.join(tmpDir, 'trunc-colon.jsonl');
+    const line = '{"id":"e5","timestamp":"2026-01-01T00:00:00Z","event":';
+    fs.writeFileSync(logPath, line + '\n');
+
+    // This truncation can't produce a valid envelope (event becomes null)
+    const result = EventLog.load(logPath, { diagnostics: true });
+    // Repair may succeed structurally but fail envelope validation
+    expect(result.diagnostics.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('replay works with repaired events', () => {
+    const logPath = path.join(tmpDir, 'replay-repair.jsonl');
+    const env1 = JSON.stringify({
+      id: 'e1',
+      timestamp: '2026-01-01T00:00:00Z',
+      event: { type: 'SESSION_CREATED', sessionId: 's1', projectDir: '/tmp', config: {} },
+    });
+    // Truncated second event
+    const env2 = '{"id":"e2","timestamp":"2026-01-01T00:00:01Z","event":{"type":"STAGE_ENTERED","stage":"PLAN"}';
+    fs.writeFileSync(logPath, env1 + '\n' + env2 + '\n');
+
+    const replayed = EventLog.replay(logPath);
+    expect(replayed.length).toBe(2);
+    expect(replayed.latest('STAGE_ENTERED')?.stage).toBe('PLAN');
   });
 });
 

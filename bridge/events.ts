@@ -146,6 +146,120 @@ export interface EventEnvelope {
   event: BridgeEvent;
 }
 
+// --- Corruption diagnosis ---
+
+export type CorruptionKind = 'truncation' | 'garbage';
+
+export interface CorruptionDiagnostic {
+  line: string;
+  lineNumber: number;
+  byteOffset: number;
+  kind: CorruptionKind;
+  repaired: boolean;
+  detail: string;
+}
+
+/** Result from EventLog.load() — envelopes plus any corruption diagnostics. */
+export interface LoadResult {
+  envelopes: EventEnvelope[];
+  diagnostics: CorruptionDiagnostic[];
+}
+
+/**
+ * Check if a line looks like truncated JSON (vs garbage/binary data).
+ * Truncated JSON starts with valid JSON structure but is incomplete.
+ */
+function isTruncationPattern(line: string): boolean {
+  // Must start like JSON (object opening)
+  if (!line.trimStart().startsWith('{')) return false;
+  // Check that the first ~20 chars are printable ASCII/UTF-8 (not binary garbage)
+  const sample = line.slice(0, Math.min(line.length, 40));
+  // eslint-disable-next-line no-control-regex
+  return !/[\x00-\x08\x0e-\x1f]/.test(sample);
+}
+
+/**
+ * Attempt heuristic repair of truncated JSON.
+ * Handles common truncation patterns: missing closing braces, brackets, quotes.
+ * Returns the repaired string or null if repair failed.
+ */
+function attemptJsonRepair(line: string): string | null {
+  let s = line.trim();
+  if (!s.startsWith('{')) return null;
+
+  // Track open structural characters
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') {
+      if (stack.length > 0 && stack[stack.length - 1] === ch) {
+        stack.pop();
+      }
+    }
+  }
+
+  // If we ended inside a string, close it
+  if (inString) {
+    s += '"';
+  }
+
+  // If the line ends with a key or value separator, add a null placeholder
+  const trimEnd = s.replace(/\s+$/, '');
+  if (trimEnd.endsWith(':') || trimEnd.endsWith(',')) {
+    s = trimEnd + 'null';
+  }
+
+  // Close any remaining open braces/brackets in reverse order
+  while (stack.length > 0) {
+    s += stack.pop();
+  }
+
+  // Verify the repair actually produces valid JSON
+  try {
+    JSON.parse(s);
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validate that a parsed object has the required EventEnvelope fields.
+ */
+function isValidEnvelope(obj: unknown): obj is EventEnvelope {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  if (typeof o.id !== 'string') return false;
+  if (typeof o.timestamp !== 'string') return false;
+  if (typeof o.event !== 'object' || o.event === null) return false;
+  const ev = o.event as Record<string, unknown>;
+  if (typeof ev.type !== 'string') return false;
+  return true;
+}
+
 // --- Event log (append-only, file-backed) ---
 
 export class EventLog {
@@ -170,19 +284,101 @@ export class EventLog {
     return envelope;
   }
 
-  /** Load all events from disk. Used for replay on restart. */
-  static load(logPath: string): EventEnvelope[] {
-    if (!fs.existsSync(logPath)) return [];
-    const lines = fs.readFileSync(logPath, 'utf-8').split('\n').filter(Boolean);
-    const envelopes: EventEnvelope[] = [];
-    for (const line of lines) {
-      try {
-        envelopes.push(JSON.parse(line) as EventEnvelope);
-      } catch {
-        // Malformed/truncated line — skip (e.g. process killed mid-write).
-      }
+  /**
+   * Load all events from disk. Used for replay on restart.
+   *
+   * Attempts JSON repair on malformed lines before skipping them.
+   * Diagnoses corruption type (truncation vs garbage) and records
+   * diagnostics for each corrupted line.
+   */
+  static load(logPath: string): EventEnvelope[];
+  static load(logPath: string, opts: { diagnostics: true }): LoadResult;
+  static load(logPath: string, opts?: { diagnostics: true }): EventEnvelope[] | LoadResult {
+    if (!fs.existsSync(logPath)) {
+      return opts?.diagnostics ? { envelopes: [], diagnostics: [] } : [];
     }
-    return envelopes;
+    const content = fs.readFileSync(logPath, 'utf-8');
+    const lines = content.split('\n').filter(Boolean);
+    const envelopes: EventEnvelope[] = [];
+    const diagnostics: CorruptionDiagnostic[] = [];
+
+    let byteOffset = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      try {
+        const parsed = JSON.parse(line);
+        if (isValidEnvelope(parsed)) {
+          envelopes.push(parsed);
+        } else {
+          // Valid JSON but not a valid envelope — treat as corruption
+          const diag: CorruptionDiagnostic = {
+            line,
+            lineNumber: i + 1,
+            byteOffset,
+            kind: 'garbage',
+            repaired: false,
+            detail: 'Valid JSON but missing required EventEnvelope fields (id, timestamp, event.type)',
+          };
+          diagnostics.push(diag);
+          if (process.env.NODE_ENV !== 'test') {
+            console.warn(
+              `WARNING: Corrupted event at line ${i + 1}, offset ${byteOffset}: ${diag.detail}`,
+            );
+          }
+        }
+      } catch {
+        // JSON parse failed — attempt repair
+        const kind: CorruptionKind = isTruncationPattern(line) ? 'truncation' : 'garbage';
+
+        if (kind === 'truncation') {
+          const repaired = attemptJsonRepair(line);
+          if (repaired) {
+            const parsed = JSON.parse(repaired);
+            if (isValidEnvelope(parsed)) {
+              envelopes.push(parsed);
+              const diag: CorruptionDiagnostic = {
+                line,
+                lineNumber: i + 1,
+                byteOffset,
+                kind,
+                repaired: true,
+                detail: 'Truncated JSON repaired (likely process kill mid-write)',
+              };
+              diagnostics.push(diag);
+              if (process.env.NODE_ENV !== 'test') {
+                console.warn(
+                  `WARNING: Repaired truncated event at line ${i + 1}, offset ${byteOffset}`,
+                );
+              }
+              byteOffset += Buffer.byteLength(line, 'utf-8') + 1;
+              continue;
+            }
+          }
+        }
+
+        // Unrecoverable — skip with diagnostic
+        const isGarbage = kind === 'garbage';
+        const diag: CorruptionDiagnostic = {
+          line,
+          lineNumber: i + 1,
+          byteOffset,
+          kind,
+          repaired: false,
+          detail: isGarbage
+            ? 'Non-JSON data (possible concurrent writer or disk issue — investigate lock file)'
+            : 'Truncated JSON repair failed (data loss — missing closing structures unrecoverable)',
+        };
+        diagnostics.push(diag);
+        if (process.env.NODE_ENV !== 'test') {
+          console.warn(
+            `WARNING: Skipped ${isGarbage ? 'garbage' : 'unrecoverable truncated'} event at line ${i + 1}, offset ${byteOffset}: ${diag.detail}`,
+          );
+        }
+      }
+      byteOffset += Buffer.byteLength(line, 'utf-8') + 1; // +1 for newline
+    }
+
+    return opts?.diagnostics ? { envelopes, diagnostics } : envelopes;
   }
 
   /** Replay events into a fresh log instance (for crash recovery). */
