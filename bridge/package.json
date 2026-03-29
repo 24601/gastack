@@ -1,0 +1,36 @@
+{
+  "name": "gstack-gastown-bridge",
+  "version": "0.1.0",
+  "description": "Bridge between gstack (AI code review) and Gas Town (multi-agent orchestration)",
+  "type": "module",
+  "main": "cli.ts",
+  "bin": {
+    "gstack-bridge": "cli.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "start": "bun run cli.ts"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/24601/gastack.git",
+    "directory": "bridge"
+  },
+  "keywords": [
+    "gstack",
+    "gastown",
+    "bridge",
+    "code-review",
+    "multi-agent",
+    "orchestration",
+    "claude-code"
+  ],
+  "license": "MIT"
+}
