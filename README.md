@@ -1,5 +1,10 @@
 # gstack
 
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Claude Code Skills](https://img.shields.io/badge/Claude_Code-skills-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
+[![Codex Compatible](https://img.shields.io/badge/Codex-compatible-green)](https://github.com/openai/codex)
+[![Bun 1.0+](https://img.shields.io/badge/Bun-1.0%2B-f9f1e1)](https://bun.sh)
+
 > "I don't think I've typed like a line of code probably since December, basically, which is an extremely large change." — [Andrej Karpathy](https://fortune.com/2026/03/21/andrej-karpathy-openai-cofounder-ai-agents-coding-state-of-psychosis-openclaw/), No Priors podcast, March 2026
 
 When I heard Karpathy say this, I wanted to find out how. How does one person ship like a team of twenty? Peter Steinberger built [OpenClaw](https://github.com/openclaw/openclaw) — 247K GitHub stars — essentially solo with AI agents. The revolution is here. A single builder with the right tooling can move faster than a traditional team.
