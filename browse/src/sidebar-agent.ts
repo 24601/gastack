@@ -160,8 +160,10 @@ async function askClaude(queueEntry: any): Promise<void> {
 
   return new Promise((resolve) => {
     // Build args fresh — don't trust --resume from queue (session may be stale)
+    // Write doesn't expand attack surface beyond what Bash already provides.
+    // The security boundary is the localhost-only message path, not the tool allowlist.
     let claudeArgs = ['-p', prompt, '--output-format', 'stream-json', '--verbose',
-      '--allowedTools', 'Bash,Read,Glob,Grep'];
+      '--allowedTools', 'Bash,Read,Glob,Grep,Write'];
 
     // Validate cwd exists — queue may reference a stale worktree
     let effectiveCwd = cwd || process.cwd();
@@ -187,20 +189,30 @@ async function askClaude(queueEntry: any): Promise<void> {
       }
     });
 
-    proc.stderr.on('data', () => {}); // Claude logs to stderr, ignore
+    let stderrBuffer = '';
+    proc.stderr.on('data', (data: Buffer) => {
+      stderrBuffer += data.toString();
+    });
 
     proc.on('close', (code) => {
       if (buffer.trim()) {
         try { handleStreamEvent(JSON.parse(buffer)); } catch {}
       }
-      sendEvent({ type: 'agent_done' }).then(() => {
+      const doneEvent: Record<string, any> = { type: 'agent_done' };
+      if (code !== 0 && stderrBuffer.trim()) {
+        doneEvent.stderr = stderrBuffer.trim().slice(-500);
+      }
+      sendEvent(doneEvent).then(() => {
         isProcessing = false;
         resolve();
       });
     });
 
     proc.on('error', (err) => {
-      sendEvent({ type: 'agent_error', error: err.message }).then(() => {
+      const errorMsg = stderrBuffer.trim()
+        ? `${err.message}\nstderr: ${stderrBuffer.trim().slice(-500)}`
+        : err.message;
+      sendEvent({ type: 'agent_error', error: errorMsg }).then(() => {
         isProcessing = false;
         resolve();
       });
@@ -210,7 +222,10 @@ async function askClaude(queueEntry: any): Promise<void> {
     const timeoutMs = parseInt(process.env.SIDEBAR_AGENT_TIMEOUT || '300000', 10);
     setTimeout(() => {
       try { proc.kill(); } catch {}
-      sendEvent({ type: 'agent_error', error: `Timed out after ${timeoutMs / 1000}s` }).then(() => {
+      const timeoutMsg = stderrBuffer.trim()
+        ? `Timed out after ${timeoutMs / 1000}s\nstderr: ${stderrBuffer.trim().slice(-500)}`
+        : `Timed out after ${timeoutMs / 1000}s`;
+      sendEvent({ type: 'agent_error', error: timeoutMsg }).then(() => {
         isProcessing = false;
         resolve();
       });

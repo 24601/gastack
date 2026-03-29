@@ -404,7 +404,7 @@ function spawnClaude(userMessage: string, extensionUrl?: string | null): void {
 
   const prompt = `${systemPrompt}\n\nUser: ${userMessage}`;
   const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose',
-    '--allowedTools', 'Bash,Read,Glob,Grep'];
+    '--allowedTools', 'Bash,Read,Glob,Grep,Write'];
   if (sidebarSession?.claudeSessionId) {
     args.push('--resume', sidebarSession.claudeSessionId);
   }
