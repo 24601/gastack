@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <rect width="1280" height="640" fill="#0d1117"/>
+  <!-- Title -->
+  <text x="640" y="180" text-anchor="middle" fill="#e6edf3" font-family="SF Mono, Fira Code, Consolas, monospace" font-size="48" font-weight="800">gstack-gastown bridge</text>
+  <!-- Subtitle -->
+  <text x="640" y="240" text-anchor="middle" fill="#8b949e" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="24">Less toil between design and deploy</text>
+  <!-- Pipeline -->
+  <text x="640" y="340" text-anchor="middle" fill="#58a6ff" font-family="SF Mono, Consolas, monospace" font-size="20" font-weight="700">PLAN → EXECUTE → REVIEW → REFINE → DEPLOY → DONE</text>
+  <!-- Left label -->
+  <text x="240" y="420" text-anchor="middle" fill="#bc8cff" font-family="SF Mono, Consolas, monospace" font-size="18">gstack</text>
+  <text x="240" y="450" text-anchor="middle" fill="#6e7681" font-family="SF Mono, Consolas, monospace" font-size="14">design + review</text>
+  <!-- Bridge label -->
+  <text x="640" y="420" text-anchor="middle" fill="#d29922" font-family="SF Mono, Consolas, monospace" font-size="18" font-weight="700">BRIDGE</text>
+  <text x="640" y="450" text-anchor="middle" fill="#6e7681" font-family="SF Mono, Consolas, monospace" font-size="14">event-sourced · idempotent · human gates</text>
+  <!-- Right label -->
+  <text x="1040" y="420" text-anchor="middle" fill="#bc8cff" font-family="SF Mono, Consolas, monospace" font-size="18">gastown</text>
+  <text x="1040" y="450" text-anchor="middle" fill="#6e7681" font-family="SF Mono, Consolas, monospace" font-size="14">agents + merge</text>
+  <!-- Connectors -->
+  <line x1="340" y1="430" x2="540" y2="430" stroke="#30363d" stroke-width="2"/>
+  <line x1="740" y1="430" x2="940" y2="430" stroke="#30363d" stroke-width="2"/>
+  <!-- Bottom tagline -->
+  <text x="640" y="560" text-anchor="middle" fill="#3fb950" font-family="-apple-system, Helvetica, sans-serif" font-size="18">You handle the judgment. The bridge handles the toil.</text>
+  <!-- Badges -->
+  <text x="640" y="600" text-anchor="middle" fill="#6e7681" font-family="SF Mono, Consolas, monospace" font-size="14">TypeScript · Bun · MIT · ~3K lines</text>
+</svg>
