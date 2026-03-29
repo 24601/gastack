@@ -1,0 +1,14 @@
+{
+  "hooked": true,
+  "bead_id": "ga-b04",
+  "title": "Test: fixture infrastructure — design docs, review outputs, event logs, helpers",
+  "status": "hooked",
+  "assignee": "gastack/polecats/nux",
+  "molecule": {
+    "id": "ga-wisp-2c0c",
+    "formula": "mol-polecat-work",
+    "attached_at": "2026-03-29T20:45:23Z"
+  },
+  "priority": 2,
+  "type": "task"
+}

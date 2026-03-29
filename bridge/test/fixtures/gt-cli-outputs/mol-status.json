@@ -1,0 +1,10 @@
+{
+  "molecule_id": "ga-wisp-2c0c",
+  "formula": "mol-polecat-work",
+  "bead_id": "ga-b04",
+  "steps_total": 8,
+  "steps_completed": 2,
+  "current_step": 3,
+  "current_step_title": "Implement the solution",
+  "status": "in_progress"
+}

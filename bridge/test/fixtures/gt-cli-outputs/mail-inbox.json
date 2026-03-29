@@ -1,0 +1,22 @@
+{
+  "messages": [
+    {
+      "id": "mail-001",
+      "from": "gastack/witness",
+      "to": "gastack/polecats/nux",
+      "subject": "Work assignment: ga-b04",
+      "timestamp": "2026-03-29T20:45:30Z",
+      "read": false
+    },
+    {
+      "id": "mail-002",
+      "from": "gastack/refinery",
+      "to": "gastack/polecats/nux",
+      "subject": "MR merged: ga-a12 (previous work)",
+      "timestamp": "2026-03-29T18:30:00Z",
+      "read": true
+    }
+  ],
+  "count": 2,
+  "unread": 1
+}

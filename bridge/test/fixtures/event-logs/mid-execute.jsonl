@@ -1,0 +1,12 @@
+{"id":"evt-001","timestamp":"2026-03-29T10:00:00.000Z","event":{"type":"SESSION_CREATED","sessionId":"sess-mid-exec","projectDir":"/tmp/test-project","config":{"branch":"feature/review-automation"}}}
+{"id":"evt-002","timestamp":"2026-03-29T10:00:01.000Z","event":{"type":"STAGE_ENTERED","stage":"PLAN"}}
+{"id":"evt-003","timestamp":"2026-03-29T10:00:05.000Z","event":{"type":"TASK_QUEUED","taskId":"t1","description":"Parse design doc for tasks","stage":"PLAN"}}
+{"id":"evt-004","timestamp":"2026-03-29T10:00:06.000Z","event":{"type":"TASK_STARTED","taskId":"t1"}}
+{"id":"evt-005","timestamp":"2026-03-29T10:00:10.000Z","event":{"type":"TASK_COMPLETED","taskId":"t1","result":"3 tasks extracted"}}
+{"id":"evt-006","timestamp":"2026-03-29T10:00:11.000Z","event":{"type":"STAGE_COMPLETED","stage":"PLAN","summary":"3 tasks planned"}}
+{"id":"evt-007","timestamp":"2026-03-29T10:00:12.000Z","event":{"type":"STAGE_ENTERED","stage":"EXECUTE"}}
+{"id":"evt-008","timestamp":"2026-03-29T10:00:13.000Z","event":{"type":"TASK_QUEUED","taskId":"t2","description":"Wire review-suite adapter command","stage":"EXECUTE"}}
+{"id":"evt-009","timestamp":"2026-03-29T10:00:14.000Z","event":{"type":"TASK_QUEUED","taskId":"t3","description":"Implement quality policy evaluation","stage":"EXECUTE"}}
+{"id":"evt-010","timestamp":"2026-03-29T10:00:15.000Z","event":{"type":"TASK_STARTED","taskId":"t2"}}
+{"id":"evt-011","timestamp":"2026-03-29T10:00:30.000Z","event":{"type":"TASK_COMPLETED","taskId":"t2","result":"review-suite command wired"}}
+{"id":"evt-012","timestamp":"2026-03-29T10:00:31.000Z","event":{"type":"TASK_STARTED","taskId":"t3"}}

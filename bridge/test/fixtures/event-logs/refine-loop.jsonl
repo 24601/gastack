@@ -1,0 +1,19 @@
+{"id":"evt-001","timestamp":"2026-03-29T12:00:00.000Z","event":{"type":"SESSION_CREATED","sessionId":"sess-refine","projectDir":"/tmp/test-project","config":{}}}
+{"id":"evt-002","timestamp":"2026-03-29T12:00:01.000Z","event":{"type":"STAGE_ENTERED","stage":"PLAN"}}
+{"id":"evt-003","timestamp":"2026-03-29T12:00:05.000Z","event":{"type":"STAGE_COMPLETED","stage":"PLAN"}}
+{"id":"evt-004","timestamp":"2026-03-29T12:00:06.000Z","event":{"type":"STAGE_ENTERED","stage":"EXECUTE"}}
+{"id":"evt-005","timestamp":"2026-03-29T12:00:30.000Z","event":{"type":"STAGE_COMPLETED","stage":"EXECUTE"}}
+{"id":"evt-006","timestamp":"2026-03-29T12:00:31.000Z","event":{"type":"STAGE_ENTERED","stage":"REVIEW"}}
+{"id":"evt-007","timestamp":"2026-03-29T12:00:45.000Z","event":{"type":"STAGE_COMPLETED","stage":"REVIEW","summary":"Grade C- — needs fixes"}}
+{"id":"evt-008","timestamp":"2026-03-29T12:00:46.000Z","event":{"type":"STAGE_ENTERED","stage":"REFINE"}}
+{"id":"evt-009","timestamp":"2026-03-29T12:00:47.000Z","event":{"type":"TASK_QUEUED","taskId":"r1","description":"Fix XSS vulnerability in error page","stage":"REFINE"}}
+{"id":"evt-010","timestamp":"2026-03-29T12:00:48.000Z","event":{"type":"TASK_STARTED","taskId":"r1"}}
+{"id":"evt-011","timestamp":"2026-03-29T12:01:00.000Z","event":{"type":"TASK_COMPLETED","taskId":"r1","result":"XSS fixed with HTML escaping"}}
+{"id":"evt-012","timestamp":"2026-03-29T12:01:01.000Z","event":{"type":"STAGE_COMPLETED","stage":"REFINE","summary":"1 fix applied"}}
+{"id":"evt-013","timestamp":"2026-03-29T12:01:02.000Z","event":{"type":"STAGE_ENTERED","stage":"EXECUTE"}}
+{"id":"evt-014","timestamp":"2026-03-29T12:01:10.000Z","event":{"type":"STAGE_COMPLETED","stage":"EXECUTE","summary":"Re-executed after refine"}}
+{"id":"evt-015","timestamp":"2026-03-29T12:01:11.000Z","event":{"type":"STAGE_ENTERED","stage":"REVIEW"}}
+{"id":"evt-016","timestamp":"2026-03-29T12:01:25.000Z","event":{"type":"STAGE_COMPLETED","stage":"REVIEW","summary":"Grade B+ — passes"}}
+{"id":"evt-017","timestamp":"2026-03-29T12:01:26.000Z","event":{"type":"STAGE_ENTERED","stage":"REFINE"}}
+{"id":"evt-018","timestamp":"2026-03-29T12:01:27.000Z","event":{"type":"STAGE_COMPLETED","stage":"REFINE","summary":"No fixes needed"}}
+{"id":"evt-019","timestamp":"2026-03-29T12:01:28.000Z","event":{"type":"STAGE_ENTERED","stage":"DEPLOY"}}
