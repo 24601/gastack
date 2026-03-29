@@ -353,9 +353,12 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
     throw new Error(`Unresolved placeholders in ${relTmplPath}: ${remaining.join(', ')}`);
   }
 
+  // For Claude: strip sensitive: field (only Factory uses it)
   // For external hosts: route output, transform frontmatter, rewrite paths
   let symlinkLoop = false;
-  if (host !== 'claude') {
+  if (host === 'claude') {
+    content = transformFrontmatter(content, host);
+  } else {
     const result = processExternalHost(content, tmplContent, host, skillDir, extractedDescription, ctx);
     content = result.content;
     outputPath = result.outputPath;
