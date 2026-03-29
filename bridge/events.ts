@@ -174,7 +174,15 @@ export class EventLog {
   static load(logPath: string): EventEnvelope[] {
     if (!fs.existsSync(logPath)) return [];
     const lines = fs.readFileSync(logPath, 'utf-8').split('\n').filter(Boolean);
-    return lines.map((line) => JSON.parse(line) as EventEnvelope);
+    const envelopes: EventEnvelope[] = [];
+    for (const line of lines) {
+      try {
+        envelopes.push(JSON.parse(line) as EventEnvelope);
+      } catch {
+        // Malformed/truncated line — skip (e.g. process killed mid-write).
+      }
+    }
+    return envelopes;
   }
 
   /** Replay events into a fresh log instance (for crash recovery). */
