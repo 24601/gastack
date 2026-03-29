@@ -1318,7 +1318,7 @@ describe('Codex generation (--host codex)', () => {
     expect(content).toContain('allow_implicit_invocation: true');
   });
 
-  test('codexSkillName mapping: root is gstack, others are gstack-{dir}', () => {
+  test('externalSkillName mapping: root is gstack, others are gstack-{dir}', () => {
     // Root → gstack
     expect(fs.existsSync(path.join(AGENTS_DIR, 'gstack', 'SKILL.md'))).toBe(true);
     // Subdirectories → gstack-{dir}

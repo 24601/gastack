@@ -17,7 +17,7 @@ import * as path from 'path';
 import type { Host, TemplateContext } from './resolvers/types';
 import { HOST_PATHS } from './resolvers/types';
 import { RESOLVERS } from './resolvers/index';
-import { codexSkillName, transformFrontmatter, extractHookSafetyProse, extractNameAndDescription, condenseOpenAIShortDescription, generateOpenAIYaml } from './resolvers/codex-helpers';
+import { externalSkillName, extractHookSafetyProse as _extractHookSafetyProse, extractNameAndDescription as _extractNameAndDescription, condenseOpenAIShortDescription as _condenseOpenAIShortDescription, generateOpenAIYaml as _generateOpenAIYaml } from './resolvers/codex-helpers';
 import { generatePlanCompletionAuditShip, generatePlanCompletionAuditReview, generatePlanVerificationExec } from './resolvers/review';
 
 const ROOT = path.resolve(import.meta.dir, '..');
@@ -74,9 +74,10 @@ const OPENAI_LITMUS_CHECKS = [
   'Would design feel premium with all decorative shadows removed?',
 ];
 
-// ─── Codex Helpers ───────────────────────────────────────────
+// ─── External Host Helpers ───────────────────────────────────
 
-function codexSkillName(skillDir: string): string {
+// Re-export local copy for use in this file (matches codex-helpers.ts)
+function externalSkillName(skillDir: string): string {
   if (skillDir === '.' || skillDir === '') return 'gstack';
   // Don't double-prefix: gstack-upgrade → gstack-upgrade (not gstack-gstack-upgrade)
   if (skillDir.startsWith('gstack-')) return skillDir;
@@ -205,9 +206,84 @@ function extractHookSafetyProse(tmplContent: string): string | null {
   return `> **Safety Advisory:** This skill includes safety checks that ${safetyChecks}. When using this skill, always pause and verify before executing potentially destructive operations. If uncertain about a command's safety, ask the user for confirmation before proceeding.`;
 }
 
+// ─── External Host Config ────────────────────────────────────
+
+interface ExternalHostConfig {
+  hostSubdir: string;          // '.agents' | '.factory'
+  generateMetadata: boolean;   // true for codex (openai.yaml), false for factory
+  descriptionLimit?: number;   // 1024 for codex, undefined for factory
+}
+
+const EXTERNAL_HOST_CONFIG: Record<string, ExternalHostConfig> = {
+  codex:   { hostSubdir: '.agents',  generateMetadata: true,  descriptionLimit: 1024 },
+  factory: { hostSubdir: '.factory', generateMetadata: false },
+};
+
 // ─── Template Processing ────────────────────────────────────
 
 const GENERATED_HEADER = `<!-- AUTO-GENERATED from {{SOURCE}} — do not edit directly -->\n<!-- Regenerate: bun run gen:skill-docs -->\n`;
+
+/**
+ * Process external host output: routing, frontmatter, path rewrites, metadata.
+ * Shared between Codex and Factory (and future external hosts).
+ */
+function processExternalHost(
+  content: string,
+  tmplContent: string,
+  host: Host,
+  skillDir: string,
+  extractedDescription: string,
+  ctx: TemplateContext,
+): { content: string; outputPath: string; outputDir: string; symlinkLoop: boolean } {
+  const config = EXTERNAL_HOST_CONFIG[host];
+  if (!config) throw new Error(`No external host config for: ${host}`);
+
+  const name = externalSkillName(skillDir === '.' ? '' : skillDir);
+  const outputDir = path.join(ROOT, config.hostSubdir, 'skills', name);
+  fs.mkdirSync(outputDir, { recursive: true });
+  const outputPath = path.join(outputDir, 'SKILL.md');
+
+  // Guard against symlink loops
+  let symlinkLoop = false;
+  const claudePath = ctx.tmplPath.replace(/\.tmpl$/, '');
+  try {
+    const resolvedClaude = fs.realpathSync(claudePath);
+    const resolvedExternal = fs.realpathSync(path.dirname(outputPath)) + '/' + path.basename(outputPath);
+    if (resolvedClaude === resolvedExternal) {
+      symlinkLoop = true;
+    }
+  } catch {
+    // realpathSync fails if file doesn't exist yet — no symlink loop
+  }
+
+  // Extract hook safety prose BEFORE transforming frontmatter (which strips hooks)
+  const safetyProse = extractHookSafetyProse(tmplContent);
+
+  // Transform frontmatter (host-aware)
+  let result = transformFrontmatter(content, host);
+
+  // Insert safety advisory at the top of the body (after frontmatter)
+  if (safetyProse) {
+    const bodyStart = result.indexOf('\n---') + 4;
+    result = result.slice(0, bodyStart) + '\n' + safetyProse + '\n' + result.slice(bodyStart);
+  }
+
+  // Replace hardcoded Claude paths with host-appropriate paths
+  result = result.replace(/~\/\.claude\/skills\/gstack/g, ctx.paths.skillRoot);
+  result = result.replace(/\.claude\/skills\/gstack/g, ctx.paths.localSkillRoot);
+  result = result.replace(/\.claude\/skills\/review/g, `${config.hostSubdir}/skills/gstack/review`);
+  result = result.replace(/\.claude\/skills/g, `${config.hostSubdir}/skills`);
+
+  // Codex-only: generate openai.yaml metadata
+  if (config.generateMetadata && !symlinkLoop) {
+    const agentsDir = path.join(outputDir, 'agents');
+    fs.mkdirSync(agentsDir, { recursive: true });
+    const shortDescription = condenseOpenAIShortDescription(extractedDescription);
+    fs.writeFileSync(path.join(agentsDir, 'openai.yaml'), generateOpenAIYaml(name, shortDescription));
+  }
+
+  return { content: result, outputPath, outputDir, symlinkLoop };
+}
 
 function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath: string; content: string; symlinkLoop?: boolean } {
   const tmplContent = fs.readFileSync(tmplPath, 'utf-8');
@@ -216,32 +292,6 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
 
   // Determine skill directory relative to ROOT
   const skillDir = path.relative(ROOT, path.dirname(tmplPath));
-
-  let outputDir: string | null = null;
-
-  // For codex host, route output to .agents/skills/{codexSkillName}/SKILL.md
-  let symlinkLoop = false;
-  if (host === 'codex') {
-    const codexName = codexSkillName(skillDir === '.' ? '' : skillDir);
-    outputDir = path.join(ROOT, '.agents', 'skills', codexName);
-    fs.mkdirSync(outputDir, { recursive: true });
-    outputPath = path.join(outputDir, 'SKILL.md');
-
-    // Guard against symlink loops: if .agents/skills/gstack → repo root,
-    // writing to .agents/skills/gstack/SKILL.md would overwrite the Claude version.
-    // Skip the write entirely for this skill — the codex content is still generated
-    // for token budget tracking.
-    const claudePath = tmplPath.replace(/\.tmpl$/, '');
-    try {
-      const resolvedClaude = fs.realpathSync(claudePath);
-      const resolvedCodex = fs.realpathSync(path.dirname(outputPath)) + '/' + path.basename(outputPath);
-      if (resolvedClaude === resolvedCodex) {
-        symlinkLoop = true;
-      }
-    } catch {
-      // realpathSync fails if file doesn't exist yet — that's fine, no symlink loop
-    }
-  }
 
   // Extract skill name from frontmatter for TemplateContext
   const { name: extractedName, description: extractedDescription } = extractNameAndDescription(tmplContent);
@@ -272,34 +322,13 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
     throw new Error(`Unresolved placeholders in ${relTmplPath}: ${remaining.join(', ')}`);
   }
 
-  // For codex host: transform frontmatter and replace Claude-specific paths
-  if (host === 'codex') {
-    // Extract hook safety prose BEFORE transforming frontmatter (which strips hooks)
-    const safetyProse = extractHookSafetyProse(tmplContent);
-
-    // Transform frontmatter: keep only name + description
-    content = transformFrontmatter(content, host);
-
-    // Insert safety advisory at the top of the body (after frontmatter)
-    if (safetyProse) {
-      const bodyStart = content.indexOf('\n---') + 4;
-      content = content.slice(0, bodyStart) + '\n' + safetyProse + '\n' + content.slice(bodyStart);
-    }
-
-    // Replace remaining hardcoded Claude paths with host-appropriate paths
-    content = content.replace(/~\/\.claude\/skills\/gstack/g, ctx.paths.skillRoot);
-    content = content.replace(/\.claude\/skills\/gstack/g, ctx.paths.localSkillRoot);
-    content = content.replace(/\.claude\/skills\/review/g, '.agents/skills/gstack/review');
-    content = content.replace(/\.claude\/skills/g, '.agents/skills');
-
-    if (outputDir && !symlinkLoop) {
-      const codexName = codexSkillName(skillDir === '.' ? '' : skillDir);
-      const agentsDir = path.join(outputDir, 'agents');
-      fs.mkdirSync(agentsDir, { recursive: true });
-      const displayName = codexName;
-      const shortDescription = condenseOpenAIShortDescription(extractedDescription);
-      fs.writeFileSync(path.join(agentsDir, 'openai.yaml'), generateOpenAIYaml(displayName, shortDescription));
-    }
+  // For external hosts: route output, transform frontmatter, rewrite paths
+  let symlinkLoop = false;
+  if (host !== 'claude') {
+    const result = processExternalHost(content, tmplContent, host, skillDir, extractedDescription, ctx);
+    content = result.content;
+    outputPath = result.outputPath;
+    symlinkLoop = result.symlinkLoop;
   }
 
   // Prepend generated header (after frontmatter)
@@ -325,8 +354,8 @@ let hasChanges = false;
 const tokenBudget: Array<{ skill: string; lines: number; tokens: number }> = [];
 
 for (const tmplPath of findTemplates()) {
-  // Skip /codex skill for codex host (self-referential — it's a Claude wrapper around codex exec)
-  if (HOST === 'codex') {
+  // Skip /codex skill for non-Claude hosts (it's a Claude wrapper around codex exec)
+  if (HOST !== 'claude') {
     const dir = path.basename(path.dirname(tmplPath));
     if (dir === 'codex') continue;
   }
@@ -370,7 +399,7 @@ if (!DRY_RUN && tokenBudget.length > 0) {
   console.log(`Token Budget (${HOST} host)`);
   console.log('═'.repeat(60));
   for (const t of tokenBudget) {
-    const name = t.skill.replace(/\/SKILL\.md$/, '').replace(/^\.agents\/skills\//, '');
+    const name = t.skill.replace(/\/SKILL\.md$/, '').replace(/^\.(agents|factory)\/skills\//, '');
     console.log(`  ${name.padEnd(30)} ${String(t.lines).padStart(5)} lines  ~${String(t.tokens).padStart(6)} tokens`);
   }
   console.log('─'.repeat(60));
