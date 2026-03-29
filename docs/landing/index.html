@@ -128,6 +128,11 @@
     <div class="machine-note">Six stages. One event log. Crash &rarr; restart &rarr; resume where you left off.</div>
   </div>
 
+  <!-- Gap diagram -->
+  <section>
+    <img src="../images/gap-diagram.svg" alt="The gap between gstack and gastown — the bridge fills it" style="width:100%; max-width:900px; border-radius:12px; border:1px solid var(--border);">
+  </section>
+
   <!-- Philosophy callout -->
   <section>
     <div class="callout">
@@ -180,6 +185,25 @@
         <p style="margin-top: 10px;">Taste. Judgment. Final say.</p>
       </div>
     </div>
+  </section>
+
+  <!-- Event flow diagram -->
+  <section>
+    <h2>Event-sourced crash recovery</h2>
+    <p class="sub">
+      The event log IS the state. On crash, replay the log and pick up where you left off.
+      Idempotency tokens prevent duplicate dispatches.
+    </p>
+    <img src="../images/event-flow.svg" alt="Event log timeline showing crash recovery" style="width:100%; max-width:900px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px;">
+  </section>
+
+  <!-- Quality gate diagram -->
+  <section>
+    <h2>Quality gates</h2>
+    <p class="sub">
+      Review findings flow through quality.ts. Blocking decisions stay with you.
+    </p>
+    <img src="../images/quality-gate.svg" alt="Quality gate decision tree showing PASS, WARN, and BLOCKED paths" style="width:100%; max-width:900px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px;">
   </section>
 
   <!-- Engineering decisions -->
@@ -236,13 +260,14 @@
     </table>
   </section>
 
-  <!-- Integration points -->
+  <!-- Integration architecture diagram -->
   <section>
     <h2>What it connects</h2>
     <p class="sub">
       Two adapters that understand the opinionation of each stack.
       The bridge doesn't modify either tool &mdash; it speaks both languages.
     </p>
+    <img src="../images/integration-arch.svg" alt="Integration architecture showing CLI calls through adapters" style="width:100%; max-width:900px; border-radius:12px; border:1px solid var(--border); margin-bottom:32px;">
     <div class="int-grid">
       <div class="int-card">
         <h3>gstack adapter</h3>

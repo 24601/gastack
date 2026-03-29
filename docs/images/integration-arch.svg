@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400" font-family="'SF Mono', 'Fira Code', Consolas, monospace">
+  <rect width="900" height="400" fill="#0d1117" rx="12"/>
+  <defs>
+    <marker id="ia" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#8b949e"/></marker>
+    <marker id="ia-p" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#bc8cff"/></marker>
+  </defs>
+
+  <text x="450" y="30" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Integration architecture — CLI calls through adapters</text>
+
+  <!-- gstack side -->
+  <rect x="30" y="60" width="200" height="280" rx="8" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="130" y="88" text-anchor="middle" fill="#bc8cff" font-size="14" font-weight="700">gstack</text>
+  <line x1="50" y1="100" x2="210" y2="100" stroke="#30363d" stroke-width="1"/>
+
+  <!-- gstack CLI calls -->
+  <rect x="50" y="115" width="160" height="28" rx="4" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+  <text x="130" y="134" text-anchor="middle" fill="#bc8cff" font-size="11">claude -p "/review"</text>
+
+  <rect x="50" y="155" width="160" height="28" rx="4" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+  <text x="130" y="174" text-anchor="middle" fill="#bc8cff" font-size="11">claude -p "/cso"</text>
+
+  <text x="130" y="210" text-anchor="middle" fill="#6e7681" font-size="10">Promise.all()</text>
+  <text x="130" y="226" text-anchor="middle" fill="#6e7681" font-size="10">↓</text>
+  <rect x="50" y="235" width="160" height="28" rx="4" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+  <text x="130" y="254" text-anchor="middle" fill="#8b949e" font-size="10">parseGrade() + parseFindings()</text>
+
+  <rect x="50" y="280" width="160" height="40" rx="4" fill="#1c2128" stroke="#3fb950" stroke-width="1"/>
+  <text x="130" y="298" text-anchor="middle" fill="#3fb950" font-size="11">ReviewResult</text>
+  <text x="130" y="312" text-anchor="middle" fill="#6e7681" font-size="9">{ grade, findings[], raw }</text>
+
+  <!-- BRIDGE center -->
+  <rect x="310" y="60" width="280" height="280" rx="10" fill="#161b22" stroke="#d29922" stroke-width="2"/>
+  <text x="450" y="88" text-anchor="middle" fill="#d29922" font-size="16" font-weight="800">BRIDGE</text>
+  <line x1="330" y1="100" x2="570" y2="100" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Orchestrator -->
+  <rect x="330" y="112" width="220" height="36" rx="5" fill="#1c2128" stroke="#58a6ff" stroke-width="1"/>
+  <text x="440" y="135" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="600">orchestrate.ts</text>
+
+  <!-- Event log -->
+  <rect x="330" y="160" width="220" height="36" rx="5" fill="#1c2128" stroke="#58a6ff" stroke-width="1"/>
+  <text x="440" y="176" text-anchor="middle" fill="#58a6ff" font-size="11">events.jsonl</text>
+  <text x="440" y="190" text-anchor="middle" fill="#6e7681" font-size="9">append-only · 13 event types</text>
+
+  <!-- Quality -->
+  <rect x="330" y="208" width="105" height="36" rx="5" fill="#1c2128" stroke="#d29922" stroke-width="1"/>
+  <text x="382" y="230" text-anchor="middle" fill="#d29922" font-size="11">quality.ts</text>
+
+  <!-- Output -->
+  <rect x="445" y="208" width="105" height="36" rx="5" fill="#1c2128" stroke="#8b949e" stroke-width="1"/>
+  <text x="497" y="230" text-anchor="middle" fill="#8b949e" font-size="11">output.ts</text>
+
+  <!-- CLI -->
+  <rect x="330" y="256" width="105" height="36" rx="5" fill="#1c2128" stroke="#8b949e" stroke-width="1"/>
+  <text x="382" y="278" text-anchor="middle" fill="#8b949e" font-size="11">cli.ts</text>
+
+  <!-- Notify -->
+  <rect x="445" y="256" width="105" height="36" rx="5" fill="#1c2128" stroke="#8b949e" stroke-width="1"/>
+  <text x="497" y="278" text-anchor="middle" fill="#8b949e" font-size="11">notify.ts</text>
+
+  <!-- Human -->
+  <rect x="345" y="305" width="190" height="25" rx="4" fill="#3fb95020" stroke="#3fb950" stroke-width="1"/>
+  <text x="440" y="322" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="600">YOU (approve / reject / retry)</text>
+
+  <!-- gastown side -->
+  <rect x="670" y="60" width="200" height="280" rx="8" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="770" y="88" text-anchor="middle" fill="#bc8cff" font-size="14" font-weight="700">gastown</text>
+  <line x1="690" y1="100" x2="850" y2="100" stroke="#30363d" stroke-width="1"/>
+
+  <!-- gastown CLI calls -->
+  <rect x="690" y="115" width="160" height="28" rx="4" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+  <text x="770" y="134" text-anchor="middle" fill="#bc8cff" font-size="11">gt convoy create</text>
+
+  <rect x="690" y="155" width="160" height="28" rx="4" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+  <text x="770" y="174" text-anchor="middle" fill="#bc8cff" font-size="11">gt sling &lt;bead&gt; &lt;rig&gt;</text>
+
+  <rect x="690" y="195" width="160" height="28" rx="4" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+  <text x="770" y="214" text-anchor="middle" fill="#bc8cff" font-size="11">gt convoy land &lt;id&gt;</text>
+
+  <rect x="690" y="240" width="160" height="28" rx="4" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+  <text x="770" y="259" text-anchor="middle" fill="#8b949e" font-size="10">EventTailer.poll()</text>
+
+  <rect x="690" y="280" width="160" height="40" rx="4" fill="#1c2128" stroke="#3fb950" stroke-width="1"/>
+  <text x="770" y="298" text-anchor="middle" fill="#3fb950" font-size="11">events.jsonl</text>
+  <text x="770" y="312" text-anchor="middle" fill="#6e7681" font-size="9">offset + inode tracking</text>
+
+  <!-- Connection arrows: gstack → bridge -->
+  <line x1="230" y1="130" x2="310" y2="130" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ia-p)"/>
+  <line x1="230" y1="170" x2="310" y2="170" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ia-p)"/>
+
+  <!-- Connection arrows: bridge → gastown -->
+  <line x1="590" y1="130" x2="670" y2="130" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ia-p)"/>
+  <line x1="590" y1="170" x2="670" y2="170" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ia-p)"/>
+  <line x1="590" y1="210" x2="670" y2="210" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ia-p)"/>
+
+  <!-- All via Bun.spawn note -->
+  <text x="450" y="380" text-anchor="middle" fill="#6e7681" font-size="10">All external calls: Bun.spawn with array args · JSON-only parsing · fail closed</text>
+  <text x="450" y="395" text-anchor="middle" fill="#6e7681" font-size="10">Auth inherited from shell environment — no separate configuration</text>
+</svg>

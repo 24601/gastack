@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="900" height="480" font-family="'SF Mono', 'Fira Code', Consolas, monospace">
+  <rect width="900" height="480" fill="#0d1117" rx="12"/>
+
+  <text x="450" y="32" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Event log timeline — crash recovery in action</text>
+
+  <!-- Timeline line -->
+  <line x1="80" y1="60" x2="80" y2="440" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Event entries -->
+  <!-- SESSION_CREATED -->
+  <circle cx="80" cy="75" r="5" fill="#58a6ff"/>
+  <text x="100" y="72" fill="#58a6ff" font-size="11" font-weight="600">SESSION_CREATED</text>
+  <text x="100" y="86" fill="#6e7681" font-size="10">runId: "a1b2c3" · projectDir: ./myproject</text>
+
+  <!-- STAGE_ENTERED PLAN -->
+  <circle cx="80" cy="115" r="5" fill="#58a6ff"/>
+  <text x="100" y="112" fill="#58a6ff" font-size="11" font-weight="600">STAGE_ENTERED</text>
+  <text x="260" y="112" fill="#3fb950" font-size="11">PLAN</text>
+  <text x="100" y="126" fill="#6e7681" font-size="10">extracting 5 tasks from design doc</text>
+
+  <!-- STAGE_COMPLETED PLAN -->
+  <circle cx="80" cy="152" r="4" fill="#3fb950"/>
+  <text x="100" y="152" fill="#3fb950" font-size="11">STAGE_COMPLETED</text>
+  <text x="290" y="152" fill="#6e7681" font-size="10">PLAN · 5 tasks extracted</text>
+
+  <!-- STAGE_ENTERED EXECUTE -->
+  <circle cx="80" cy="182" r="5" fill="#58a6ff"/>
+  <text x="100" y="179" fill="#58a6ff" font-size="11" font-weight="600">STAGE_ENTERED</text>
+  <text x="260" y="179" fill="#3fb950" font-size="11">EXECUTE</text>
+
+  <!-- EXTERNAL_CALL convoy create -->
+  <circle cx="80" cy="212" r="4" fill="#bc8cff"/>
+  <text x="100" y="209" fill="#bc8cff" font-size="11">EXTERNAL_CALL_INITIATED</text>
+  <text x="100" y="223" fill="#6e7681" font-size="10">adapter: gastown · cmd: convoy create · key: sha256:e4f5...</text>
+
+  <circle cx="80" cy="248" r="4" fill="#bc8cff"/>
+  <text x="100" y="245" fill="#bc8cff" font-size="11">EXTERNAL_CALL_COMPLETED</text>
+  <text x="100" y="259" fill="#6e7681" font-size="10">success: true · result: "convoy-7x9"</text>
+
+  <!-- Sling 1 -->
+  <circle cx="80" cy="285" r="4" fill="#bc8cff"/>
+  <text x="100" y="282" fill="#bc8cff" font-size="11">EXTERNAL_CALL_COMPLETED</text>
+  <text x="100" y="296" fill="#6e7681" font-size="10">gt sling task-1 → polecat-alpha ✓</text>
+
+  <!-- Sling 2 -->
+  <circle cx="80" cy="318" r="4" fill="#bc8cff"/>
+  <text x="100" y="315" fill="#bc8cff" font-size="11">EXTERNAL_CALL_COMPLETED</text>
+  <text x="100" y="329" fill="#6e7681" font-size="10">gt sling task-2 → polecat-beta ✓</text>
+
+  <!-- CRASH -->
+  <rect x="55" y="345" width="790" height="32" rx="4" fill="#f8514915" stroke="#f85149" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="80" y="366" fill="#f85149" font-size="12" font-weight="700">⚡ PROCESS CRASH</text>
+  <text x="270" y="366" fill="#f85149" font-size="11">task-3, task-4, task-5 not yet dispatched</text>
+
+  <!-- RESUME -->
+  <circle cx="80" cy="400" r="6" fill="#d29922"/>
+  <text x="100" y="397" fill="#d29922" font-size="11" font-weight="700">SESSION_RESUMED</text>
+  <text x="100" y="411" fill="#6e7681" font-size="10">replayed 8 events · resumed at EXECUTE</text>
+
+  <!-- Idempotency skip -->
+  <circle cx="80" cy="437" r="4" fill="#3fb950"/>
+  <text x="100" y="434" fill="#3fb950" font-size="11">convoy create → CACHED</text>
+  <text x="310" y="434" fill="#3fb950" font-size="11">sling task-1 → CACHED</text>
+  <text x="530" y="434" fill="#3fb950" font-size="11">sling task-2 → CACHED</text>
+  <text x="100" y="450" fill="#d29922" font-size="11" font-weight="600">↳ continues from task-3 (no duplicates)</text>
+
+  <!-- Stage color bar on right -->
+  <rect x="840" y="60" width="12" height="90" rx="3" fill="#58a6ff" opacity="0.3"/>
+  <text x="860" y="105" fill="#58a6ff" font-size="9" transform="rotate(90, 860, 105)">PLAN</text>
+  <rect x="840" y="155" width="12" height="185" rx="3" fill="#bc8cff" opacity="0.3"/>
+  <text x="860" y="247" fill="#bc8cff" font-size="9" transform="rotate(90, 860, 247)">EXECUTE</text>
+  <rect x="840" y="390" width="12" height="55" rx="3" fill="#d29922" opacity="0.3"/>
+  <text x="860" y="417" fill="#d29922" font-size="9" transform="rotate(90, 860, 417)">RESUME</text>
+</svg>

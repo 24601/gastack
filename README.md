@@ -13,6 +13,10 @@ Design Doc → PLAN → EXECUTE → REVIEW → REFINE → DEPLOY → DONE
                (agent fleet)        (review + security)
 ```
 
+### The gap the bridge fills
+
+![The gap between gstack and gastown](docs/images/gap-diagram.svg)
+
 ---
 
 ## Find your entry point
@@ -138,6 +142,8 @@ The orchestrator has zero mutable state fields. Everything is derived from an ap
 
 Every external call gets an idempotency token (SHA-256 of adapter + command + args) written to the log before the result is processed. On restart, completed calls return cached results — no duplicate convoys, reviews, or merges.
 
+![Event log timeline with crash recovery](docs/images/event-flow.svg)
+
 ### Quality policy
 
 | Gate | PASS | WARN | BLOCKED |
@@ -147,9 +153,13 @@ Every external call gets an idempotency token (SHA-256 of adapter + command + ar
 
 Security CRITICAL+ requires explicit human approval with a reason. The bridge fail-closes: if `gt --json` returns non-JSON, it blocks. No text scraping as fallback.
 
+![Quality gate decision tree](docs/images/quality-gate.svg)
+
 ---
 
 ## Architecture
+
+![Integration architecture — CLI calls through adapters](docs/images/integration-arch.svg)
 
 ~3K lines source + ~2K lines tests. Zero npm dependencies.
 

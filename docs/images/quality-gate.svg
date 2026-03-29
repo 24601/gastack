@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" width="900" height="360" font-family="'SF Mono', 'Fira Code', Consolas, monospace">
+  <rect width="900" height="360" fill="#0d1117" rx="12"/>
+  <defs>
+    <marker id="qa" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#8b949e"/></marker>
+    <marker id="qa-red" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#f85149"/></marker>
+    <marker id="qa-green" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#3fb950"/></marker>
+    <marker id="qa-orange" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#d29922"/></marker>
+  </defs>
+
+  <text x="450" y="30" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Quality gate flow — quality.ts decision tree</text>
+
+  <!-- Review inputs -->
+  <rect x="40" y="65" width="160" height="55" rx="6" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="120" y="88" text-anchor="middle" fill="#bc8cff" font-size="12" font-weight="600">/review</text>
+  <text x="120" y="105" text-anchor="middle" fill="#6e7681" font-size="10">Grade: A-F</text>
+
+  <rect x="40" y="140" width="160" height="55" rx="6" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="120" y="163" text-anchor="middle" fill="#bc8cff" font-size="12" font-weight="600">/cso</text>
+  <text x="120" y="180" text-anchor="middle" fill="#6e7681" font-size="10">Findings: severity[]</text>
+
+  <!-- Arrows to quality.ts -->
+  <line x1="200" y1="92" x2="280" y2="130" stroke="#8b949e" stroke-width="1.5" marker-end="url(#qa)"/>
+  <line x1="200" y1="167" x2="280" y2="148" stroke="#8b949e" stroke-width="1.5" marker-end="url(#qa)"/>
+
+  <!-- quality.ts box -->
+  <rect x="280" y="105" width="170" height="70" rx="8" fill="#161b22" stroke="#d29922" stroke-width="2"/>
+  <text x="365" y="133" text-anchor="middle" fill="#d29922" font-size="14" font-weight="700">quality.ts</text>
+  <text x="365" y="153" text-anchor="middle" fill="#6e7681" font-size="10">evaluate(review, cso)</text>
+  <text x="365" y="166" text-anchor="middle" fill="#6e7681" font-size="10">→ { overall, gates[] }</text>
+
+  <!-- Three outcome paths -->
+  <!-- PASS -->
+  <line x1="450" y1="120" x2="560" y2="80" stroke="#3fb950" stroke-width="2" marker-end="url(#qa-green)"/>
+  <rect x="560" y="55" width="130" height="50" rx="6" fill="#3fb95015" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="625" y="77" text-anchor="middle" fill="#3fb950" font-size="13" font-weight="700">PASS</text>
+  <text x="625" y="93" text-anchor="middle" fill="#3fb950" font-size="10">→ DEPLOY</text>
+
+  <!-- Condition labels -->
+  <text x="510" y="68" text-anchor="middle" fill="#3fb950" font-size="9">grade ≥ C</text>
+  <text x="510" y="80" text-anchor="middle" fill="#3fb950" font-size="9">no CRITICAL/MAJOR</text>
+
+  <!-- WARN -->
+  <line x1="450" y1="140" x2="560" y2="155" stroke="#d29922" stroke-width="2" marker-end="url(#qa-orange)"/>
+  <rect x="560" y="130" width="130" height="50" rx="6" fill="#d2992215" stroke="#d29922" stroke-width="1.5"/>
+  <text x="625" y="152" text-anchor="middle" fill="#d29922" font-size="13" font-weight="700">WARN</text>
+  <text x="625" y="168" text-anchor="middle" fill="#d29922" font-size="10">→ DEPLOY (noted)</text>
+
+  <text x="510" y="143" text-anchor="middle" fill="#d29922" font-size="9">MINOR findings</text>
+
+  <!-- BLOCKED -->
+  <line x1="450" y1="160" x2="560" y2="230" stroke="#f85149" stroke-width="2" marker-end="url(#qa-red)"/>
+  <rect x="560" y="205" width="130" height="50" rx="6" fill="#f8514915" stroke="#f85149" stroke-width="1.5"/>
+  <text x="625" y="227" text-anchor="middle" fill="#f85149" font-size="13" font-weight="700">BLOCKED</text>
+  <text x="625" y="243" text-anchor="middle" fill="#f85149" font-size="10">→ REFINE</text>
+
+  <text x="510" y="205" text-anchor="middle" fill="#f85149" font-size="9">CRITICAL/MAJOR</text>
+  <text x="510" y="217" text-anchor="middle" fill="#f85149" font-size="9">or grade &lt; C</text>
+
+  <!-- Human decision box -->
+  <line x1="690" y1="230" x2="730" y2="230" stroke="#f85149" stroke-width="1.5" marker-end="url(#qa-red)"/>
+  <rect x="730" y="195" width="140" height="100" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+  <text x="800" y="222" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">YOUR CALL</text>
+  <line x1="750" y1="235" x2="860" y2="235" stroke="#30363d" stroke-width="1"/>
+  <text x="800" y="254" text-anchor="middle" fill="#3fb950" font-size="10">approve → DEPLOY</text>
+  <text x="800" y="270" text-anchor="middle" fill="#f85149" font-size="10">reject → CANCELLED</text>
+  <text x="800" y="286" text-anchor="middle" fill="#d29922" font-size="10">retry → REVIEW</text>
+
+  <!-- Scoped signal note -->
+  <text x="800" y="320" text-anchor="middle" fill="#6e7681" font-size="9">signal: {runId, stage, cycle}</text>
+  <text x="800" y="335" text-anchor="middle" fill="#6e7681" font-size="9">stale approvals ignored</text>
+</svg>
