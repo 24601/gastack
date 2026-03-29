@@ -191,3 +191,93 @@ describe('gstack-learnings-search', () => {
     expect(output).toContain('also-valid');
   });
 });
+
+describe('gstack-learnings-log edge cases', () => {
+  test('preserves existing timestamp when ts is present', () => {
+    const input = '{"skill":"review","type":"pattern","key":"ts-preserve","insight":"test","confidence":5,"source":"observed","ts":"2025-06-15T10:00:00Z"}';
+    runLog(input);
+
+    const f = findLearningsFile();
+    expect(f).not.toBeNull();
+    const parsed = JSON.parse(fs.readFileSync(f!, 'utf-8').trim());
+    expect(parsed.ts).toBe('2025-06-15T10:00:00Z');
+  });
+
+  test('handles JSON with special characters in insight', () => {
+    const input = JSON.stringify({ skill: 'review', type: 'pattern', key: 'special-chars', insight: 'Use "quotes" and \\backslashes', confidence: 7, source: 'observed' });
+    runLog(input);
+
+    const f = findLearningsFile();
+    expect(f).not.toBeNull();
+    const parsed = JSON.parse(fs.readFileSync(f!, 'utf-8').trim());
+    expect(parsed.insight).toContain('quotes');
+    expect(parsed.insight).toContain('backslashes');
+  });
+
+  test('handles JSON with files array field', () => {
+    const input = JSON.stringify({ skill: 'review', type: 'architecture', key: 'with-files', insight: 'test', confidence: 8, source: 'observed', files: ['src/auth.ts', 'src/db.ts'] });
+    runLog(input);
+
+    const f = findLearningsFile();
+    expect(f).not.toBeNull();
+    const parsed = JSON.parse(fs.readFileSync(f!, 'utf-8').trim());
+    expect(parsed.files).toEqual(['src/auth.ts', 'src/db.ts']);
+  });
+});
+
+describe('gstack-learnings-search edge cases', () => {
+  test('sorts by confidence then recency', () => {
+    // Two entries: one high confidence old, one lower confidence recent
+    runLog(JSON.stringify({ skill: 'review', type: 'pattern', key: 'high-conf', insight: 'high confidence entry', confidence: 9, source: 'user-stated', ts: '2026-01-01T00:00:00Z' }));
+    runLog(JSON.stringify({ skill: 'review', type: 'pattern', key: 'recent', insight: 'recent entry', confidence: 5, source: 'observed', ts: '2026-03-28T00:00:00Z' }));
+
+    const output = runSearch();
+    const highIdx = output.indexOf('high-conf');
+    const recentIdx = output.indexOf('recent');
+    // High confidence should appear first
+    expect(highIdx).toBeLessThan(recentIdx);
+  });
+
+  test('groups output by type', () => {
+    runLog(JSON.stringify({ skill: 'review', type: 'pattern', key: 'p1', insight: 'a pattern', confidence: 7, source: 'observed' }));
+    runLog(JSON.stringify({ skill: 'review', type: 'pitfall', key: 'pit1', insight: 'a pitfall', confidence: 7, source: 'observed' }));
+
+    const output = runSearch();
+    expect(output).toContain('## Patterns');
+    expect(output).toContain('## Pitfalls');
+  });
+
+  test('combined --type and --query filtering', () => {
+    runLog(JSON.stringify({ skill: 'review', type: 'pattern', key: 'auth-token', insight: 'check token expiry', confidence: 7, source: 'observed' }));
+    runLog(JSON.stringify({ skill: 'review', type: 'pitfall', key: 'auth-leak', insight: 'auth token in logs', confidence: 7, source: 'observed' }));
+    runLog(JSON.stringify({ skill: 'review', type: 'pattern', key: 'cache-key', insight: 'cache invalidation', confidence: 7, source: 'observed' }));
+
+    const output = runSearch('--type pattern --query auth');
+    expect(output).toContain('auth-token');
+    expect(output).not.toContain('auth-leak');  // wrong type
+    expect(output).not.toContain('cache-key');  // wrong query
+  });
+
+  test('entries with missing key or type are skipped', () => {
+    runLog(JSON.stringify({ skill: 'review', type: 'pattern', key: 'valid', insight: 'valid entry', confidence: 7, source: 'observed' }));
+    const f = findLearningsFile();
+    expect(f).not.toBeNull();
+    // Append entries missing key and type
+    fs.appendFileSync(f!, JSON.stringify({ skill: 'review', type: 'pattern', insight: 'no key', confidence: 7, source: 'observed' }) + '\n');
+    fs.appendFileSync(f!, JSON.stringify({ skill: 'review', key: 'no-type', insight: 'no type', confidence: 7, source: 'observed' }) + '\n');
+
+    const output = runSearch();
+    expect(output).toContain('valid');
+    expect(output).not.toContain('no key');
+    expect(output).not.toContain('no-type');
+  });
+
+  test('confidence decay floors at 0 (never negative)', () => {
+    // Entry from 1 year ago with confidence 3 — decay would be 12, clamped to 0
+    const ts = new Date(Date.now() - 365 * 86400000).toISOString();
+    runLog(JSON.stringify({ skill: 'review', type: 'pattern', key: 'ancient', insight: 'very old', confidence: 3, source: 'observed', ts }));
+
+    const output = runSearch();
+    expect(output).toContain('confidence: 0/10');
+  });
+});
