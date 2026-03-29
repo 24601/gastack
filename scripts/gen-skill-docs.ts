@@ -26,13 +26,19 @@ const DRY_RUN = process.argv.includes('--dry-run');
 // ─── Host Detection ─────────────────────────────────────────
 
 const HOST_ARG = process.argv.find(a => a.startsWith('--host'));
-const HOST: Host = (() => {
+type HostArg = Host | 'all';
+const HOST_ARG_VAL: HostArg = (() => {
   if (!HOST_ARG) return 'claude';
   const val = HOST_ARG.includes('=') ? HOST_ARG.split('=')[1] : process.argv[process.argv.indexOf(HOST_ARG) + 1];
   if (val === 'codex' || val === 'agents') return 'codex';
+  if (val === 'factory' || val === 'droid') return 'factory';
   if (val === 'claude') return 'claude';
-  throw new Error(`Unknown host: ${val}. Use claude, codex, or agents.`);
+  if (val === 'all') return 'all';
+  throw new Error(`Unknown host: ${val}. Use claude, codex, factory, droid, agents, or all.`);
 })();
+
+// For single-host mode, HOST is the host. For --host all, it's set per iteration below.
+let HOST: Host = HOST_ARG_VAL === 'all' ? 'claude' : HOST_ARG_VAL;
 
 // HostPaths, HOST_PATHS, and TemplateContext imported from ./resolvers/types (line 7-8)
 
@@ -146,33 +152,48 @@ policy:
 }
 
 /**
- * Transform frontmatter for Codex: keep only name + description.
- * Strips allowed-tools, hooks, version, and all other fields.
- * Handles multiline block scalar descriptions (YAML | syntax).
+ * Transform frontmatter for external hosts.
+ * Claude: strips `sensitive:` field (only Factory uses it).
+ * Codex: keeps name + description only, enforces 1024-char limit.
+ * Factory: keeps name + description + user-invocable, conditionally adds disable-model-invocation.
  */
 function transformFrontmatter(content: string, host: Host): string {
-  if (host === 'claude') return content;
+  if (host === 'claude') {
+    // Strip sensitive: field from Claude output (only Factory uses it)
+    return content.replace(/^sensitive:\s*true\n/m, '');
+  }
 
   const fmStart = content.indexOf('---\n');
   if (fmStart !== 0) return content;
   const fmEnd = content.indexOf('\n---', fmStart + 4);
   if (fmEnd === -1) return content;
+  const frontmatter = content.slice(fmStart + 4, fmEnd);
   const body = content.slice(fmEnd + 4); // includes the leading \n after ---
   const { name, description } = extractNameAndDescription(content);
 
-  // Codex 1024-char description limit — fail build, don't ship broken skills
-  const MAX_DESC = 1024;
-  if (description.length > MAX_DESC) {
-    throw new Error(
-      `Codex description for "${name}" is ${description.length} chars (max ${MAX_DESC}). ` +
-      `Compress the description in the .tmpl file.`
-    );
+  if (host === 'codex') {
+    // Codex 1024-char description limit — fail build, don't ship broken skills
+    const MAX_DESC = 1024;
+    if (description.length > MAX_DESC) {
+      throw new Error(
+        `Codex description for "${name}" is ${description.length} chars (max ${MAX_DESC}). ` +
+        `Compress the description in the .tmpl file.`
+      );
+    }
+    const indentedDesc = description.split('\n').map(l => `  ${l}`).join('\n');
+    return `---\nname: ${name}\ndescription: |\n${indentedDesc}\n---` + body;
   }
 
-  // Re-emit Codex frontmatter (name + description only)
-  const indentedDesc = description.split('\n').map(l => `  ${l}`).join('\n');
-  const codexFm = `---\nname: ${name}\ndescription: |\n${indentedDesc}\n---`;
-  return codexFm + body;
+  if (host === 'factory') {
+    const sensitive = /^sensitive:\s*true/m.test(frontmatter);
+    const indentedDesc = description.split('\n').map(l => `  ${l}`).join('\n');
+    let fm = `---\nname: ${name}\ndescription: |\n${indentedDesc}\nuser-invocable: true\n`;
+    if (sensitive) fm += `disable-model-invocation: true\n`;
+    fm += '---';
+    return fm + body;
+  }
+
+  return content; // unknown host: passthrough
 }
 
 /**
@@ -274,6 +295,16 @@ function processExternalHost(
   result = result.replace(/\.claude\/skills\/review/g, `${config.hostSubdir}/skills/gstack/review`);
   result = result.replace(/\.claude\/skills/g, `${config.hostSubdir}/skills`);
 
+  // Factory-only: translate Claude Code tool names to generic phrasing
+  if (host === 'factory') {
+    result = result.replace(/use the Bash tool/g, 'run this command');
+    result = result.replace(/use the Write tool/g, 'create this file');
+    result = result.replace(/use the Read tool/g, 'read the file');
+    result = result.replace(/use the Agent tool/g, 'dispatch a subagent');
+    result = result.replace(/use the Grep tool/g, 'search for');
+    result = result.replace(/use the Glob tool/g, 'find files matching');
+  }
+
   // Codex-only: generate openai.yaml metadata
   if (config.generateMetadata && !symlinkLoop) {
     const agentsDir = path.join(outputDir, 'agents');
@@ -350,59 +381,80 @@ function findTemplates(): string[] {
   return discoverTemplates(ROOT).map(t => path.join(ROOT, t.tmpl));
 }
 
-let hasChanges = false;
-const tokenBudget: Array<{ skill: string; lines: number; tokens: number }> = [];
+const ALL_HOSTS: Host[] = ['claude', 'codex', 'factory'];
+const hostsToRun: Host[] = HOST_ARG_VAL === 'all' ? ALL_HOSTS : [HOST];
+const failures: { host: string; error: Error }[] = [];
 
-for (const tmplPath of findTemplates()) {
-  // Skip /codex skill for non-Claude hosts (it's a Claude wrapper around codex exec)
-  if (HOST !== 'claude') {
-    const dir = path.basename(path.dirname(tmplPath));
-    if (dir === 'codex') continue;
-  }
+for (const currentHost of hostsToRun) {
+  HOST = currentHost;
 
-  const { outputPath, content, symlinkLoop } = processTemplate(tmplPath, HOST);
-  const relOutput = path.relative(ROOT, outputPath);
+  try {
+    let hasChanges = false;
+    const tokenBudget: Array<{ skill: string; lines: number; tokens: number }> = [];
 
-  if (symlinkLoop) {
-    console.log(`SKIPPED (symlink loop): ${relOutput}`);
-  } else if (DRY_RUN) {
-    const existing = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf-8') : '';
-    if (existing !== content) {
-      console.log(`STALE: ${relOutput}`);
-      hasChanges = true;
-    } else {
-      console.log(`FRESH: ${relOutput}`);
+    for (const tmplPath of findTemplates()) {
+      // Skip /codex skill for non-Claude hosts (it's a Claude wrapper around codex exec)
+      if (currentHost !== 'claude') {
+        const dir = path.basename(path.dirname(tmplPath));
+        if (dir === 'codex') continue;
+      }
+
+      const { outputPath, content, symlinkLoop } = processTemplate(tmplPath, currentHost);
+      const relOutput = path.relative(ROOT, outputPath);
+
+      if (symlinkLoop) {
+        console.log(`SKIPPED (symlink loop): ${relOutput}`);
+      } else if (DRY_RUN) {
+        const existing = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf-8') : '';
+        if (existing !== content) {
+          console.log(`STALE: ${relOutput}`);
+          hasChanges = true;
+        } else {
+          console.log(`FRESH: ${relOutput}`);
+        }
+      } else {
+        fs.writeFileSync(outputPath, content);
+        console.log(`GENERATED: ${relOutput}`);
+      }
+
+      // Track token budget
+      const lines = content.split('\n').length;
+      const tokens = Math.round(content.length / 4); // ~4 chars per token
+      tokenBudget.push({ skill: relOutput, lines, tokens });
     }
-  } else {
-    fs.writeFileSync(outputPath, content);
-    console.log(`GENERATED: ${relOutput}`);
+
+    if (DRY_RUN && hasChanges) {
+      console.error(`\nGenerated SKILL.md files are stale (${currentHost} host). Run: bun run gen:skill-docs --host ${currentHost}`);
+      if (HOST_ARG_VAL !== 'all') process.exit(1);
+      failures.push({ host: currentHost, error: new Error('Stale files detected') });
+    }
+
+    // Print token budget summary
+    if (!DRY_RUN && tokenBudget.length > 0) {
+      tokenBudget.sort((a, b) => b.lines - a.lines);
+      const totalLines = tokenBudget.reduce((s, t) => s + t.lines, 0);
+      const totalTokens = tokenBudget.reduce((s, t) => s + t.tokens, 0);
+
+      console.log('');
+      console.log(`Token Budget (${currentHost} host)`);
+      console.log('═'.repeat(60));
+      for (const t of tokenBudget) {
+        const name = t.skill.replace(/\/SKILL\.md$/, '').replace(/^\.(agents|factory)\/skills\//, '');
+        console.log(`  ${name.padEnd(30)} ${String(t.lines).padStart(5)} lines  ~${String(t.tokens).padStart(6)} tokens`);
+      }
+      console.log('─'.repeat(60));
+      console.log(`  ${'TOTAL'.padEnd(30)} ${String(totalLines).padStart(5)} lines  ~${String(totalTokens).padStart(6)} tokens`);
+      console.log('');
+    }
+  } catch (e) {
+    failures.push({ host: currentHost, error: e as Error });
+    console.error(`WARNING: ${currentHost} generation failed: ${(e as Error).message}`);
   }
-
-  // Track token budget
-  const lines = content.split('\n').length;
-  const tokens = Math.round(content.length / 4); // ~4 chars per token
-  tokenBudget.push({ skill: relOutput, lines, tokens });
 }
 
-if (DRY_RUN && hasChanges) {
-  console.error('\nGenerated SKILL.md files are stale. Run: bun run gen:skill-docs');
-  process.exit(1);
+// --host all: report failures. Only exit(1) if claude failed.
+if (failures.length > 0 && HOST_ARG_VAL === 'all') {
+  console.error(`\n${failures.length} host(s) failed: ${failures.map(f => f.host).join(', ')}`);
+  if (failures.some(f => f.host === 'claude')) process.exit(1);
 }
-
-// Print token budget summary
-if (!DRY_RUN && tokenBudget.length > 0) {
-  tokenBudget.sort((a, b) => b.lines - a.lines);
-  const totalLines = tokenBudget.reduce((s, t) => s + t.lines, 0);
-  const totalTokens = tokenBudget.reduce((s, t) => s + t.tokens, 0);
-
-  console.log('');
-  console.log(`Token Budget (${HOST} host)`);
-  console.log('═'.repeat(60));
-  for (const t of tokenBudget) {
-    const name = t.skill.replace(/\/SKILL\.md$/, '').replace(/^\.(agents|factory)\/skills\//, '');
-    console.log(`  ${name.padEnd(30)} ${String(t.lines).padStart(5)} lines  ~${String(t.tokens).padStart(6)} tokens`);
-  }
-  console.log('─'.repeat(60));
-  console.log(`  ${'TOTAL'.padEnd(30)} ${String(totalLines).padStart(5)} lines  ~${String(totalTokens).padStart(6)} tokens`);
-  console.log('');
-}
+// Single host dry-run failure already handled above
