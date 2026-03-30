@@ -1,12 +1,21 @@
 ---
-name: canary
+name: learn
+preamble-tier: 2
+version: 1.0.0
 description: |
-  Post-deploy canary monitoring. Watches the live app for console errors,
-  performance regressions, and page failures using the browse daemon. Takes
-  periodic screenshots, compares against pre-deploy baselines, and alerts
-  on anomalies. Use when: "monitor deploy", "canary", "post-deploy check",
-  "watch production", "verify deploy".
-user-invocable: true
+  Manage project learnings. Review, search, prune, and export what gstack
+  has learned across sessions. Use when asked to "what have we learned",
+  "show learnings", "prune stale learnings", or "export learnings".
+  Proactively suggest when the user asks about past patterns or wonders
+  "didn't we fix this before?"
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - Edit
+  - AskUserQuestion
+  - Glob
+  - Grep
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -14,50 +23,53 @@ user-invocable: true
 ## Preamble (run first)
 
 ```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-GSTACK_ROOT="$HOME/.factory/skills/gstack"
-[ -n "$_ROOT" ] && [ -d "$_ROOT/.factory/skills/gstack" ] && GSTACK_ROOT="$_ROOT/.factory/skills/gstack"
-GSTACK_BIN="$GSTACK_ROOT/bin"
-GSTACK_BROWSE="$GSTACK_ROOT/browse/dist"
-GSTACK_DESIGN="$GSTACK_ROOT/design/dist"
-_UPD=$($GSTACK_BIN/gstack-update-check 2>/dev/null || .factory/skills/gstack/bin/gstack-update-check 2>/dev/null || true)
+_UPD=$(~/.claude/skills/gstack/bin/gstack-update-check 2>/dev/null || .claude/skills/gstack/bin/gstack-update-check 2>/dev/null || true)
 [ -n "$_UPD" ] && echo "$_UPD" || true
 mkdir -p ~/.gstack/sessions
 touch ~/.gstack/sessions/"$PPID"
 _SESSIONS=$(find ~/.gstack/sessions -mmin -120 -type f 2>/dev/null | wc -l | tr -d ' ')
 find ~/.gstack/sessions -mmin +120 -type f -delete 2>/dev/null || true
-_CONTRIB=$($GSTACK_BIN/gstack-config get gstack_contributor 2>/dev/null || true)
-_PROACTIVE=$($GSTACK_BIN/gstack-config get proactive 2>/dev/null || echo "true")
+_CONTRIB=$(~/.claude/skills/gstack/bin/gstack-config get gstack_contributor 2>/dev/null || true)
+_PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null || echo "true")
 _PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
 _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 echo "BRANCH: $_BRANCH"
-_SKILL_PREFIX=$($GSTACK_BIN/gstack-config get skill_prefix 2>/dev/null || echo "false")
+_SKILL_PREFIX=$(~/.claude/skills/gstack/bin/gstack-config get skill_prefix 2>/dev/null || echo "false")
 echo "PROACTIVE: $_PROACTIVE"
 echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
 echo "SKILL_PREFIX: $_SKILL_PREFIX"
-source <($GSTACK_BIN/gstack-repo-mode 2>/dev/null) || true
+source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
 REPO_MODE=${REPO_MODE:-unknown}
 echo "REPO_MODE: $REPO_MODE"
 _LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
 echo "LAKE_INTRO: $_LAKE_SEEN"
-_TEL=$($GSTACK_BIN/gstack-config get telemetry 2>/dev/null || true)
+_TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || true)
 _TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
 _TEL_START=$(date +%s)
 _SESSION_ID="$$-$(date +%s)"
 echo "TELEMETRY: ${_TEL:-off}"
 echo "TEL_PROMPTED: $_TEL_PROMPTED"
 mkdir -p ~/.gstack/analytics
-echo '{"skill":"canary","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
+echo '{"skill":"learn","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
 # zsh-compatible: use find instead of glob to avoid NOMATCH error
 for _PF in $(find ~/.gstack/analytics -maxdepth 1 -name '.pending-*' 2>/dev/null); do
   if [ -f "$_PF" ]; then
-    if [ "$_TEL" != "off" ] && [ -x "$GSTACK_BIN/gstack-telemetry-log" ]; then
-      $GSTACK_BIN/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true
+    if [ "$_TEL" != "off" ] && [ -x "~/.claude/skills/gstack/bin/gstack-telemetry-log" ]; then
+      ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true
     fi
     rm -f "$_PF" 2>/dev/null || true
   fi
   break
 done
+# Learnings count
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" 2>/dev/null || true
+_LEARN_FILE="${GSTACK_HOME:-$HOME/.gstack}/projects/${SLUG:-unknown}/learnings.jsonl"
+if [ -f "$_LEARN_FILE" ]; then
+  _LEARN_COUNT=$(wc -l < "$_LEARN_FILE" 2>/dev/null | tr -d ' ')
+  echo "LEARNINGS: $_LEARN_COUNT entries loaded"
+else
+  echo "LEARNINGS: 0"
+fi
 ```
 
 If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills AND do not
@@ -69,9 +81,9 @@ The user opted out of proactive behavior.
 If `SKILL_PREFIX` is `"true"`, the user has namespaced skill names. When suggesting
 or invoking other gstack skills, use the `/gstack-` prefix (e.g., `/gstack-qa` instead
 of `/qa`, `/gstack-ship` instead of `/ship`). Disk paths are unaffected — always use
-`$GSTACK_ROOT/[skill-name]/SKILL.md` for reading skill files.
+`~/.claude/skills/gstack/[skill-name]/SKILL.md` for reading skill files.
 
-If output shows `UPGRADE_AVAILABLE <old> <new>`: read `$GSTACK_ROOT/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
+If output shows `UPGRADE_AVAILABLE <old> <new>`: read `~/.claude/skills/gstack/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
 
 If `LAKE_INTRO` is `no`: Before continuing, introduce the Completeness Principle.
 Tell the user: "gstack follows the **Boil the Lake** principle — always do the complete
@@ -97,7 +109,7 @@ Options:
 - A) Help gstack get better! (recommended)
 - B) No thanks
 
-If A: run `$GSTACK_BIN/gstack-config set telemetry community`
+If A: run `~/.claude/skills/gstack/bin/gstack-config set telemetry community`
 
 If B: ask a follow-up AskUserQuestion:
 
@@ -108,8 +120,8 @@ Options:
 - A) Sure, anonymous is fine
 - B) No thanks, fully off
 
-If B→A: run `$GSTACK_BIN/gstack-config set telemetry anonymous`
-If B→B: run `$GSTACK_BIN/gstack-config set telemetry off`
+If B→A: run `~/.claude/skills/gstack/bin/gstack-config set telemetry anonymous`
+If B→B: run `~/.claude/skills/gstack/bin/gstack-config set telemetry off`
 
 Always run:
 ```bash
@@ -129,8 +141,8 @@ Options:
 - A) Keep it on (recommended)
 - B) Turn it off — I'll type /commands myself
 
-If A: run `$GSTACK_BIN/gstack-config set proactive true`
-If B: run `$GSTACK_BIN/gstack-config set proactive false`
+If A: run `~/.claude/skills/gstack/bin/gstack-config set proactive true`
+If B: run `~/.claude/skills/gstack/bin/gstack-config set proactive false`
 
 Always run:
 ```bash
@@ -276,8 +288,8 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 # Local analytics (always available, no binary needed)
 echo '{"skill":"SKILL_NAME","duration_s":"'"$_TEL_DUR"'","outcome":"OUTCOME","browse":"USED_BROWSE","session":"'"$_SESSION_ID"'","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
 # Remote telemetry (opt-in, requires binary)
-if [ "$_TEL" != "off" ] && [ -x $GSTACK_ROOT/bin/gstack-telemetry-log ]; then
-  $GSTACK_ROOT/bin/gstack-telemetry-log \
+if [ "$_TEL" != "off" ] && [ -x ~/.claude/skills/gstack/bin/gstack-telemetry-log ]; then
+  ~/.claude/skills/gstack/bin/gstack-telemetry-log \
     --skill "SKILL_NAME" --duration "$_TEL_DUR" --outcome "OUTCOME" \
     --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" 2>/dev/null &
 fi
@@ -297,7 +309,7 @@ When you are in plan mode and about to call ExitPlanMode:
 3. If it does NOT — run this command:
 
 \`\`\`bash
-$GSTACK_ROOT/bin/gstack-review-read
+~/.claude/skills/gstack/bin/gstack-review-read
 \`\`\`
 
 Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
@@ -324,263 +336,174 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
-## SETUP (run this check BEFORE any browse command)
+# Project Learnings Manager
 
-```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-B=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.factory/skills/gstack/browse/dist/browse" ] && B="$_ROOT/.factory/skills/gstack/browse/dist/browse"
-[ -z "$B" ] && B=$GSTACK_BROWSE/browse
-if [ -x "$B" ]; then
-  echo "READY: $B"
-else
-  echo "NEEDS_SETUP"
-fi
-```
+You are a **Staff Engineer who maintains the team wiki**. Your job is to help the user
+see what gstack has learned across sessions on this project, search for relevant
+knowledge, and prune stale or contradictory entries.
 
-If `NEEDS_SETUP`:
-1. Tell the user: "gstack browse needs a one-time build (~10 seconds). OK to proceed?" Then STOP and wait.
-2. Run: `cd <SKILL_DIR> && ./setup`
-3. If `bun` is not installed:
-   ```bash
-   if ! command -v bun >/dev/null 2>&1; then
-     curl -fsSL https://bun.sh/install | BUN_VERSION=1.3.10 bash
-   fi
-   ```
-
-## Step 0: Detect platform and base branch
-
-First, detect the git hosting platform from the remote URL:
-
-```bash
-git remote get-url origin 2>/dev/null
-```
-
-- If the URL contains "github.com" → platform is **GitHub**
-- If the URL contains "gitlab" → platform is **GitLab**
-- Otherwise, check CLI availability:
-  - `gh auth status 2>/dev/null` succeeds → platform is **GitHub** (covers GitHub Enterprise)
-  - `glab auth status 2>/dev/null` succeeds → platform is **GitLab** (covers self-hosted)
-  - Neither → **unknown** (use git-native commands only)
-
-Determine which branch this PR/MR targets, or the repo's default branch if no
-PR/MR exists. Use the result as "the base branch" in all subsequent steps.
-
-**If GitHub:**
-1. `gh pr view --json baseRefName -q .baseRefName` — if succeeds, use it
-2. `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` — if succeeds, use it
-
-**If GitLab:**
-1. `glab mr view -F json 2>/dev/null` and extract the `target_branch` field — if succeeds, use it
-2. `glab repo view -F json 2>/dev/null` and extract the `default_branch` field — if succeeds, use it
-
-**Git-native fallback (if unknown platform, or CLI commands fail):**
-1. `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'`
-2. If that fails: `git rev-parse --verify origin/main 2>/dev/null` → use `main`
-3. If that fails: `git rev-parse --verify origin/master 2>/dev/null` → use `master`
-
-If all fail, fall back to `main`.
-
-Print the detected base branch name. In every subsequent `git diff`, `git log`,
-`git fetch`, `git merge`, and PR/MR creation command, substitute the detected
-branch name wherever the instructions say "the base branch" or `<default>`.
+**HARD GATE:** Do NOT implement code changes. This skill manages learnings only.
 
 ---
 
-# /canary — Post-Deploy Visual Monitor
+## Detect command
 
-You are a **Release Reliability Engineer** watching production after a deploy. You've seen deploys that pass CI but break in production — a missing environment variable, a CDN cache serving stale assets, a database migration that's slower than expected on real data. Your job is to catch these in the first 10 minutes, not 10 hours.
+Parse the user's input to determine which command to run:
 
-You use the browse daemon to watch the live app, take screenshots, check console errors, and compare against baselines. You are the safety net between "shipped" and "verified."
+- `/learn` (no arguments) → **Show recent**
+- `/learn search <query>` → **Search**
+- `/learn prune` → **Prune**
+- `/learn export` → **Export**
+- `/learn stats` → **Stats**
+- `/learn add` → **Manual add**
 
-## User-invocable
-When the user types `/canary`, run this skill.
+---
 
-## Arguments
-- `/canary <url>` — monitor a URL for 10 minutes after deploy
-- `/canary <url> --duration 5m` — custom monitoring duration (1m to 30m)
-- `/canary <url> --baseline` — capture baseline screenshots (run BEFORE deploying)
-- `/canary <url> --pages /,/dashboard,/settings` — specify pages to monitor
-- `/canary <url> --quick` — single-pass health check (no continuous monitoring)
+## Show recent (default)
 
-## Instructions
-
-### Phase 1: Setup
+Show the most recent 20 learnings, grouped by type.
 
 ```bash
-eval "$($GSTACK_ROOT/bin/gstack-slug 2>/dev/null || echo "SLUG=unknown")"
-mkdir -p .gstack/canary-reports
-mkdir -p .gstack/canary-reports/baselines
-mkdir -p .gstack/canary-reports/screenshots
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+~/.claude/skills/gstack/bin/gstack-learnings-search --limit 20 2>/dev/null || echo "No learnings yet."
 ```
 
-Parse the user's arguments. Default duration is 10 minutes. Default pages: auto-discover from the app's navigation.
+Present the output in a readable format. If no learnings exist, tell the user:
+"No learnings recorded yet. As you use /review, /ship, /investigate, and other skills,
+gstack will automatically capture patterns, pitfalls, and insights it discovers."
 
-### Phase 2: Baseline Capture (--baseline mode)
+---
 
-If the user passed `--baseline`, capture the current state BEFORE deploying.
-
-For each page (either from `--pages` or the homepage):
+## Search
 
 ```bash
-$B goto <page-url>
-$B snapshot -i -a -o ".gstack/canary-reports/baselines/<page-name>.png"
-$B console --errors
-$B perf
-$B text
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+~/.claude/skills/gstack/bin/gstack-learnings-search --query "USER_QUERY" --limit 20 2>/dev/null || echo "No matches."
 ```
 
-Collect for each page: screenshot path, console error count, page load time from `perf`, and a text content snapshot.
+Replace USER_QUERY with the user's search terms. Present results clearly.
 
-Save the baseline manifest to `.gstack/canary-reports/baseline.json`:
+---
 
-```json
-{
-  "url": "<url>",
-  "timestamp": "<ISO>",
-  "branch": "<current branch>",
-  "pages": {
-    "/": {
-      "screenshot": "baselines/home.png",
-      "console_errors": 0,
-      "load_time_ms": 450
+## Prune
+
+Check learnings for staleness and contradictions.
+
+```bash
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+~/.claude/skills/gstack/bin/gstack-learnings-search --limit 100 2>/dev/null
+```
+
+For each learning in the output:
+
+1. **File existence check:** If the learning has a `files` field, check whether those
+   files still exist in the repo using Glob. If any referenced files are deleted, flag:
+   "STALE: [key] references deleted file [path]"
+
+2. **Contradiction check:** Look for learnings with the same `key` but different or
+   opposite `insight` values. Flag: "CONFLICT: [key] has contradicting entries —
+   [insight A] vs [insight B]"
+
+Present each flagged entry via AskUserQuestion:
+- A) Remove this learning
+- B) Keep it
+- C) Update it (I'll tell you what to change)
+
+For removals, read the learnings.jsonl file and remove the matching line, then write
+back. For updates, append a new entry with the corrected insight (append-only, the
+latest entry wins).
+
+---
+
+## Export
+
+Export learnings as markdown suitable for adding to CLAUDE.md or project documentation.
+
+```bash
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+~/.claude/skills/gstack/bin/gstack-learnings-search --limit 50 2>/dev/null
+```
+
+Format the output as a markdown section:
+
+```markdown
+## Project Learnings
+
+### Patterns
+- **[key]**: [insight] (confidence: N/10)
+
+### Pitfalls
+- **[key]**: [insight] (confidence: N/10)
+
+### Preferences
+- **[key]**: [insight]
+
+### Architecture
+- **[key]**: [insight] (confidence: N/10)
+```
+
+Present the formatted output to the user. Ask if they want to append it to CLAUDE.md
+or save it as a separate file.
+
+---
+
+## Stats
+
+Show summary statistics about the project's learnings.
+
+```bash
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+GSTACK_HOME="${GSTACK_HOME:-$HOME/.gstack}"
+LEARN_FILE="$GSTACK_HOME/projects/$SLUG/learnings.jsonl"
+if [ -f "$LEARN_FILE" ]; then
+  TOTAL=$(wc -l < "$LEARN_FILE" | tr -d ' ')
+  echo "TOTAL: $TOTAL entries"
+  # Count by type (after dedup)
+  cat "$LEARN_FILE" | bun -e "
+    const lines = (await Bun.stdin.text()).trim().split('\n').filter(Boolean);
+    const seen = new Map();
+    for (const line of lines) {
+      try {
+        const e = JSON.parse(line);
+        const dk = (e.key||'') + '|' + (e.type||'');
+        const existing = seen.get(dk);
+        if (!existing || new Date(e.ts) > new Date(existing.ts)) seen.set(dk, e);
+      } catch {}
     }
-  }
-}
+    const byType = {};
+    const bySource = {};
+    let totalConf = 0;
+    for (const e of seen.values()) {
+      byType[e.type] = (byType[e.type]||0) + 1;
+      bySource[e.source] = (bySource[e.source]||0) + 1;
+      totalConf += e.confidence || 0;
+    }
+    console.log('UNIQUE: ' + seen.size + ' (after dedup)');
+    console.log('RAW_ENTRIES: ' + lines.length);
+    console.log('BY_TYPE: ' + JSON.stringify(byType));
+    console.log('BY_SOURCE: ' + JSON.stringify(bySource));
+    console.log('AVG_CONFIDENCE: ' + (totalConf / seen.size).toFixed(1));
+  " 2>/dev/null
+else
+  echo "NO_LEARNINGS"
+fi
 ```
 
-Then STOP and tell the user: "Baseline captured. Deploy your changes, then run `/canary <url>` to monitor."
+Present the stats in a readable table format.
 
-### Phase 3: Page Discovery
+---
 
-If no `--pages` were specified, auto-discover pages to monitor:
+## Manual add
+
+The user wants to manually add a learning. Use AskUserQuestion to gather:
+1. Type (pattern / pitfall / preference / architecture / tool)
+2. A short key (2-5 words, kebab-case)
+3. The insight (one sentence)
+4. Confidence (1-10)
+5. Related files (optional)
+
+Then log it:
 
 ```bash
-$B goto <url>
-$B links
-$B snapshot -i
+~/.claude/skills/gstack/bin/gstack-learnings-log '{"skill":"learn","type":"TYPE","key":"KEY","insight":"INSIGHT","confidence":N,"source":"user-stated","files":["FILE1"]}'
 ```
-
-Extract the top 5 internal navigation links from the `links` output. Always include the homepage. Present the page list via AskUserQuestion:
-
-- **Context:** Monitoring the production site at the given URL after a deploy.
-- **Question:** Which pages should the canary monitor?
-- **RECOMMENDATION:** Choose A — these are the main navigation targets.
-- A) Monitor these pages: [list the discovered pages]
-- B) Add more pages (user specifies)
-- C) Monitor homepage only (quick check)
-
-### Phase 4: Pre-Deploy Snapshot (if no baseline exists)
-
-If no `baseline.json` exists, take a quick snapshot now as a reference point.
-
-For each page to monitor:
-
-```bash
-$B goto <page-url>
-$B snapshot -i -a -o ".gstack/canary-reports/screenshots/pre-<page-name>.png"
-$B console --errors
-$B perf
-```
-
-Record the console error count and load time for each page. These become the reference for detecting regressions during monitoring.
-
-### Phase 5: Continuous Monitoring Loop
-
-Monitor for the specified duration. Every 60 seconds, check each page:
-
-```bash
-$B goto <page-url>
-$B snapshot -i -a -o ".gstack/canary-reports/screenshots/<page-name>-<check-number>.png"
-$B console --errors
-$B perf
-```
-
-After each check, compare results against the baseline (or pre-deploy snapshot):
-
-1. **Page load failure** — `goto` returns error or timeout → CRITICAL ALERT
-2. **New console errors** — errors not present in baseline → HIGH ALERT
-3. **Performance regression** — load time exceeds 2x baseline → MEDIUM ALERT
-4. **Broken links** — new 404s not in baseline → LOW ALERT
-
-**Alert on changes, not absolutes.** A page with 3 console errors in the baseline is fine if it still has 3. One NEW error is an alert.
-
-**Don't cry wolf.** Only alert on patterns that persist across 2 or more consecutive checks. A single transient network blip is not an alert.
-
-**If a CRITICAL or HIGH alert is detected**, immediately notify the user via AskUserQuestion:
-
-```
-CANARY ALERT
-════════════
-Time:     [timestamp, e.g., check #3 at 180s]
-Page:     [page URL]
-Type:     [CRITICAL / HIGH / MEDIUM]
-Finding:  [what changed — be specific]
-Evidence: [screenshot path]
-Baseline: [baseline value]
-Current:  [current value]
-```
-
-- **Context:** Canary monitoring detected an issue on [page] after [duration].
-- **RECOMMENDATION:** Choose based on severity — A for critical, B for transient.
-- A) Investigate now — stop monitoring, focus on this issue
-- B) Continue monitoring — this might be transient (wait for next check)
-- C) Rollback — revert the deploy immediately
-- D) Dismiss — false positive, continue monitoring
-
-### Phase 6: Health Report
-
-After monitoring completes (or if the user stops early), produce a summary:
-
-```
-CANARY REPORT — [url]
-═════════════════════
-Duration:     [X minutes]
-Pages:        [N pages monitored]
-Checks:       [N total checks performed]
-Status:       [HEALTHY / DEGRADED / BROKEN]
-
-Per-Page Results:
-─────────────────────────────────────────────────────
-  Page            Status      Errors    Avg Load
-  /               HEALTHY     0         450ms
-  /dashboard      DEGRADED    2 new     1200ms (was 400ms)
-  /settings       HEALTHY     0         380ms
-
-Alerts Fired:  [N] (X critical, Y high, Z medium)
-Screenshots:   .gstack/canary-reports/screenshots/
-
-VERDICT: [DEPLOY IS HEALTHY / DEPLOY HAS ISSUES — details above]
-```
-
-Save report to `.gstack/canary-reports/{date}-canary.md` and `.gstack/canary-reports/{date}-canary.json`.
-
-Log the result for the review dashboard:
-
-```bash
-eval "$($GSTACK_BIN/gstack-slug 2>/dev/null)"
-mkdir -p ~/.gstack/projects/$SLUG
-```
-
-Write a JSONL entry: `{"skill":"canary","timestamp":"<ISO>","status":"<HEALTHY/DEGRADED/BROKEN>","url":"<url>","duration_min":<N>,"alerts":<N>}`
-
-### Phase 7: Baseline Update
-
-If the deploy is healthy, offer to update the baseline:
-
-- **Context:** Canary monitoring completed. The deploy is healthy.
-- **RECOMMENDATION:** Choose A — deploy is healthy, new baseline reflects current production.
-- A) Update baseline with current screenshots
-- B) Keep old baseline
-
-If the user chooses A, copy the latest screenshots to the baselines directory and update `baseline.json`.
-
-## Important Rules
-
-- **Speed matters.** Start monitoring within 30 seconds of invocation. Don't over-analyze before monitoring.
-- **Alert on changes, not absolutes.** Compare against baseline, not industry standards.
-- **Screenshots are evidence.** Every alert includes a screenshot path. No exceptions.
-- **Transient tolerance.** Only alert on patterns that persist across 2+ consecutive checks.
-- **Baseline is king.** Without a baseline, canary is a health check. Encourage `--baseline` before deploying.
-- **Performance thresholds are relative.** 2x baseline is a regression. 1.5x might be normal variance.
-- **Read-only.** Observe and report. Don't modify code unless the user explicitly asks to investigate and fix.
