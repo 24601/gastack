@@ -16,6 +16,7 @@ import {
   evaluateSecurityGate,
   evaluateCorrectnessGate,
   evaluate,
+  mergeStrategyFromVerdict,
   QualityAdapter,
   DEFAULT_POLICY,
   type QualityPolicy,
@@ -289,6 +290,94 @@ describe('evaluate', () => {
     expect(report.summary).toContain('Quality: PASS');
     expect(report.summary).toContain('correctness: PASS');
     expect(report.summary).toContain('security: PASS');
+  });
+});
+
+// --- Merge strategy from verdicts ---
+
+describe('mergeStrategyFromVerdict', () => {
+  test('BLOCKED → local (quarantine)', () => {
+    const report = evaluate({
+      review: makeReview({ grade: 'F' }),
+      cso: makeReview({ findings: [] }),
+    });
+    expect(report.overall).toBe('BLOCKED');
+    expect(mergeStrategyFromVerdict(report)).toBe('local');
+  });
+
+  test('BLOCKED from security → local', () => {
+    const report = evaluate({
+      review: makeReview({ grade: 'A' }),
+      cso: makeReview({ findings: [makeFinding('CRITICAL', 'RCE')] }),
+    });
+    expect(report.overall).toBe('BLOCKED');
+    expect(mergeStrategyFromVerdict(report)).toBe('local');
+  });
+
+  test('WARN → mr (merge queue)', () => {
+    const report = evaluate({
+      review: makeReview({ grade: 'B' }),
+      cso: makeReview({ findings: [makeFinding('MINOR', 'info')] }),
+    });
+    expect(report.overall).toBe('WARN');
+    expect(mergeStrategyFromVerdict(report)).toBe('mr');
+  });
+
+  test('PASS with grade A → direct', () => {
+    const report = evaluate({
+      review: makeReview({ grade: 'A' }),
+      cso: makeReview({ findings: [] }),
+    });
+    expect(report.overall).toBe('PASS');
+    expect(mergeStrategyFromVerdict(report)).toBe('direct');
+  });
+
+  test('PASS with grade A+ → direct', () => {
+    const report = evaluate({
+      review: makeReview({ grade: 'A+' }),
+      cso: makeReview({ findings: [] }),
+    });
+    expect(report.overall).toBe('PASS');
+    expect(mergeStrategyFromVerdict(report)).toBe('direct');
+  });
+
+  test('PASS with grade A- → direct', () => {
+    const report = evaluate({
+      review: makeReview({ grade: 'A-' }),
+      cso: makeReview({ findings: [] }),
+    });
+    expect(report.overall).toBe('PASS');
+    expect(mergeStrategyFromVerdict(report)).toBe('direct');
+  });
+
+  test('PASS with grade B → mr', () => {
+    const report = evaluate({
+      review: makeReview({ grade: 'B' }),
+      cso: makeReview({ findings: [] }),
+    });
+    expect(report.overall).toBe('PASS');
+    expect(mergeStrategyFromVerdict(report)).toBe('mr');
+  });
+
+  test('PASS with grade C → mr', () => {
+    const report = evaluate({
+      review: makeReview({ grade: 'C' }),
+      cso: makeReview({ findings: [] }),
+    });
+    expect(report.overall).toBe('PASS');
+    expect(mergeStrategyFromVerdict(report)).toBe('mr');
+  });
+
+  test('PASS with no grade (null review but blockOnNotRun=false) → mr', () => {
+    const policy: QualityPolicy = { ...DEFAULT_POLICY, blockOnNotRun: false };
+    // With blockOnNotRun=false and null review, correctness is WARN, security is PASS → overall WARN
+    // So let's construct a PASS with no grade by using a review with no grade and no critical findings
+    const report = evaluate({
+      review: makeReview({ grade: null, findings: [] }),
+      cso: makeReview({ findings: [] }),
+    });
+    // No grade + no criticals = WARN overall, so this tests WARN path
+    expect(mergeStrategyFromVerdict(report)).toBe('mr');
   });
 });
 

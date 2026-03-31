@@ -401,6 +401,112 @@ describe('T3.4.4: extracted task titles → adapter arg safety', () => {
   });
 });
 
+// --- T3.4.5: sling command with --merge flag ---
+
+describe('T3.4.5: sling command arg construction', () => {
+  let adapter: TestableGasTownAdapter;
+
+  beforeEach(() => {
+    adapter = new TestableGasTownAdapter();
+  });
+
+  test('sling with beadId and rig only', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    expect(args).toEqual(['gt', 'sling', 'gt-t1x', 'gastack']);
+  });
+
+  test('sling with --merge direct', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+      merge: 'direct',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    expect(args).toContain('--merge');
+    const mergeIdx = args.indexOf('--merge');
+    expect(args[mergeIdx + 1]).toBe('direct');
+  });
+
+  test('sling with --merge mr', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+      merge: 'mr',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    const mergeIdx = args.indexOf('--merge');
+    expect(args[mergeIdx + 1]).toBe('mr');
+  });
+
+  test('sling with --merge local', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+      merge: 'local',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    const mergeIdx = args.indexOf('--merge');
+    expect(args[mergeIdx + 1]).toBe('local');
+  });
+
+  test('sling with all flags', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+      merge: 'mr',
+      reviewOnly: true,
+      agent: 'claude',
+      formula: 'mol-polecat-work',
+      formulaArgs: 'Run /review then /cso',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    expect(args).toEqual([
+      'gt', 'sling', 'gt-t1x', 'gastack',
+      '--merge', 'mr',
+      '--review-only',
+      '--agent', 'claude',
+      '--formula', 'mol-polecat-work',
+      '--args', 'Run /review then /cso',
+    ]);
+  });
+
+  test('sling merge value with injection payload stays literal', async () => {
+    await adapter.execute('sling', {
+      beadId: '$(id)',
+      rig: 'gastack; rm -rf /',
+      merge: 'direct; echo pwned',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    // Each value is a single array element
+    expect(args[2]).toBe('$(id)');
+    expect(args[3]).toBe('gastack; rm -rf /');
+    const mergeIdx = args.indexOf('--merge');
+    expect(args[mergeIdx + 1]).toBe('direct; echo pwned');
+  });
+
+  test('sling without --merge flag omits it entirely', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+      reviewOnly: true,
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    expect(args).not.toContain('--merge');
+    expect(args).toContain('--review-only');
+  });
+});
+
 // --- Cross-cutting: structural invariants ---
 
 describe('T3.4 structural invariants', () => {
@@ -420,6 +526,7 @@ describe('T3.4 structural invariants', () => {
       { cmd: 'prime' },
       { cmd: 'escalate', args: { description: 'd', severity: 'HIGH', message: 'm' } },
       { cmd: 'nudge', args: { target: 't', message: 'm' } },
+      { cmd: 'sling', args: { beadId: 'gt-t1x', rig: 'gastack', merge: 'mr' } },
       { cmd: 'raw', args: { args: ['status', '--verbose'] } },
     ];
 

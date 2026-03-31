@@ -247,6 +247,7 @@ export class EventTailer {
  *   - prime         → gt prime
  *   - escalate      → gt escalate <desc> -s <severity>
  *   - nudge         → gt nudge <target> <message>
+ *   - sling         → gt sling <beadId> <rig> [--merge <strategy>] [--review-only] [--agent <agent>]
  *   - tail.poll     → poll events.jsonl for new events
  *   - tail.state    → return current tail state
  *   - tail.restore  → restore tail state from args
@@ -326,6 +327,16 @@ export class GasTownAdapter implements Adapter {
           String(args?.target ?? ''),
           String(args?.message ?? ''),
         ]);
+
+      case 'sling': {
+        const slingArgs = ['sling', String(args?.beadId ?? ''), String(args?.rig ?? '')];
+        if (args?.merge) slingArgs.push('--merge', String(args.merge));
+        if (args?.reviewOnly) slingArgs.push('--review-only');
+        if (args?.agent) slingArgs.push('--agent', String(args.agent));
+        if (args?.formula) slingArgs.push('--formula', String(args.formula));
+        if (args?.formulaArgs) slingArgs.push('--args', String(args.formulaArgs));
+        return this.textCommand(slingArgs);
+      }
 
       case 'tail.poll':
         return this.pollEvents();

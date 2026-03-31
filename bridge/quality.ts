@@ -15,6 +15,16 @@
 import type { Adapter } from './orchestrate.js';
 import type { ReviewResult, Finding } from './adapters/gstack.js';
 
+// --- Merge strategy ---
+
+/**
+ * Merge strategies that encode how code should land based on quality.
+ *   - 'direct': push straight to main (earned by excellent code)
+ *   - 'mr': go through refinery merge queue (default for decent code)
+ *   - 'local': quarantine on branch, human must review (dangerous code)
+ */
+export type MergeStrategy = 'direct' | 'mr' | 'local';
+
 // --- Gate decisions ---
 
 export type GateVerdict = 'PASS' | 'WARN' | 'BLOCKED';
@@ -256,6 +266,39 @@ function formatSummary(gates: GateResult[], overall: GateVerdict): string {
     (g) => `${g.gate}: ${g.verdict} — ${g.reason}`,
   );
   return `Quality: ${overall}\n${lines.join('\n')}`;
+}
+
+// --- Merge strategy from quality verdicts ---
+
+/**
+ * Map a quality report to a merge strategy.
+ *
+ * Decision tree:
+ *   - BLOCKED → 'local' (quarantine on branch, human must review)
+ *   - WARN → 'mr' (refinery merge queue, extra scrutiny)
+ *   - PASS with grade A (any variant) → 'direct' (push straight to main)
+ *   - PASS with grade B-C → 'mr' (still goes through queue)
+ *
+ * The correctness gate's grade drives the direct/mr split for PASS verdicts.
+ * If no grade is available (PASS from no-findings fallback), defaults to 'mr'.
+ */
+export function mergeStrategyFromVerdict(report: QualityReport): MergeStrategy {
+  if (report.overall === 'BLOCKED') return 'local';
+  if (report.overall === 'WARN') return 'mr';
+
+  // PASS — check if the review grade earns direct merge
+  const correctnessGate = report.gates.find((g) => g.gate === 'correctness');
+  if (correctnessGate) {
+    // Extract grade from the reason string (format: "Grade X passes ...")
+    const gradeMatch = correctnessGate.reason.match(/^Grade\s+(\S+)\s+passes/);
+    if (gradeMatch) {
+      const grade = gradeMatch[1];
+      // A+, A, A- all earn direct merge
+      if (grade.toUpperCase().startsWith('A')) return 'direct';
+    }
+  }
+
+  return 'mr';
 }
 
 // --- Adapter implementation ---
