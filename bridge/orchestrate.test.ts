@@ -684,3 +684,189 @@ describe('idempotencyKey', () => {
     expect(k).toMatch(/^[0-9a-f]{16}$/);
   });
 });
+
+// --- Learnings feedback loop tests ---
+
+describe('Learnings feedback loop', () => {
+  function createOrch(adapters?: Record<string, Adapter>) {
+    return Orchestrator.create({
+      logDir: tmpDir,
+      projectDir: '/tmp/project',
+      adapters,
+      config: { test: true },
+    });
+  }
+
+  test('isCleanRun returns true for straight-through session', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('DEPLOY');
+    orch.completeStage();
+    orch.enterStage('VERIFY');
+    orch.completeStage();
+
+    // Single forward pass through all stages — REVIEW entered only once
+    expect(orch.isCleanRun()).toBe(true);
+  });
+
+  test('isCleanRun returns false when review-fix loop occurred', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    // REFINE → EXECUTE → REVIEW loop (review-fix cycle)
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW'); // Second REVIEW entry = loop
+    orch.completeStage();
+
+    expect(orch.isCleanRun()).toBe(false);
+  });
+
+  test('isCleanRun returns false when approval override was used', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    const approvalId = orch.requestApproval('Gate check');
+    orch.recordApproval(approvalId, true, 'LGTM');
+
+    expect(orch.isCleanRun()).toBe(false);
+  });
+
+  test('extractLearnings captures completed tasks', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    const t1 = orch.queueTask('Build the thing');
+    orch.startTask(t1);
+    orch.completeTask(t1, 'done');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    const t2 = orch.queueTask('Run tests');
+    orch.startTask(t2);
+    orch.completeTask(t2, 'passed');
+    orch.completeStage();
+
+    const learnings = orch.extractLearnings();
+    const taskLearning = learnings.find((l) => l.key === 'clean-task-completion');
+    expect(taskLearning).toBeDefined();
+    expect(taskLearning!.insight).toContain('2 task(s) completed cleanly');
+    expect(taskLearning!.insight).toContain('PLAN');
+    expect(taskLearning!.insight).toContain('EXECUTE');
+  });
+
+  test('extractLearnings captures review quality outcomes', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage(JSON.stringify({
+      report: {
+        overall: 'PASS',
+        gates: [
+          { name: 'code-review', verdict: 'PASS' },
+          { name: 'security', verdict: 'PASS' },
+        ],
+      },
+    }));
+
+    const learnings = orch.extractLearnings();
+    const reviewLearning = learnings.find((l) => l.key === 'review-outcome-pass');
+    expect(reviewLearning).toBeDefined();
+    expect(reviewLearning!.insight).toContain('PASS verdict');
+    expect(reviewLearning!.insight).toContain('code-review=PASS');
+    expect(reviewLearning!.confidence).toBe(8);
+  });
+
+  test('extractLearnings captures successful adapter calls', async () => {
+    const adapter: Adapter = {
+      name: 'gstack',
+      async execute() { return 'review-result'; },
+    };
+    const orch = createOrch({ gstack: adapter });
+    orch.enterStage('PLAN');
+    await orch.externalCall('gstack', 'review-suite');
+
+    const learnings = orch.extractLearnings();
+    const adapterLearning = learnings.find((l) => l.key === 'successful-adapter-calls');
+    expect(adapterLearning).toBeDefined();
+    expect(adapterLearning!.insight).toContain('gstack:review-suite');
+  });
+
+  test('extractLearnings returns empty array when no completed tasks', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    // No tasks, no reviews, no external calls
+
+    const learnings = orch.extractLearnings();
+    expect(learnings).toEqual([]);
+  });
+
+  test('logLearnings returns 0 for non-clean run (review-fix loop)', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    // Review-fix loop: REFINE → EXECUTE → REVIEW (second entry)
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+
+    expect(orch.logLearnings()).toBe(0);
+  });
+
+  test('logLearnings returns 0 when binary not found', () => {
+    const orch = Orchestrator.create({
+      logDir: tmpDir,
+      projectDir: '/nonexistent/path',
+      config: { test: true },
+    });
+    orch.enterStage('PLAN');
+    const t = orch.queueTask('Work');
+    orch.startTask(t);
+    orch.completeTask(t, 'done');
+    orch.completeStage();
+
+    // Clean run with tasks, but binary doesn't exist at projectDir
+    expect(orch.logLearnings()).toBe(0);
+  });
+
+  test('complete() calls logLearnings on clean run without error', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    const t = orch.queueTask('Build');
+    orch.startTask(t);
+    orch.completeTask(t, 'done');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('DEPLOY');
+
+    // complete() should not throw even though gstack-learnings-log
+    // binary isn't available — logLearnings is best-effort
+    orch.complete('All done');
+    expect(orch.isDone()).toBe(true);
+  });
+});

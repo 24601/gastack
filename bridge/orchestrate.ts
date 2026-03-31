@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { execFileSync } from 'child_process';
 import {
   type BridgeEvent,
   type Stage,
@@ -1014,6 +1015,171 @@ export class Orchestrator {
     return { passed: false, result: canaryResult, approvalRequested: true };
   }
 
+  // --- Feedback loop: learnings ---
+
+  /**
+   * Check if the session had a clean run — no review-fix loops and no approval overrides.
+   * A clean run means all stages passed on the first attempt without human intervention.
+   *
+   * Detects loops by counting REVIEW stage entries (>1 means a REFINE→EXECUTE→REVIEW
+   * cycle occurred). Fast-forwarded stages from complete() don't count because
+   * complete() fast-forwards linearly without re-entering REVIEW.
+   */
+  isCleanRun(): boolean {
+    // Multiple REVIEW entries = review-fix loop occurred
+    const reviewEntries = this.log.ofType('STAGE_ENTERED').filter((e) => e.stage === 'REVIEW');
+    if (reviewEntries.length > 1) return false;
+
+    // Any approval decision = human override was needed
+    const approvalDecisions = this.log.ofType('APPROVAL_DECISION');
+    if (approvalDecisions.length > 0) return false;
+
+    return true;
+  }
+
+  /**
+   * Extract a learning summary from a clean session run.
+   *
+   * Analyzes the event log to produce structured learning entries:
+   * - Task types that passed cleanly (from TASK_COMPLETED events)
+   * - Review quality outcomes (from REVIEW stage completions)
+   * - Quality gate results (from review cycle iteration summaries)
+   *
+   * Returns an array of learning entries ready for gstack-learnings-log.
+   */
+  extractLearnings(): Array<{
+    skill: string;
+    type: string;
+    key: string;
+    insight: string;
+    confidence: number;
+    source: string;
+    files?: string[];
+  }> {
+    const learnings: Array<{
+      skill: string;
+      type: string;
+      key: string;
+      insight: string;
+      confidence: number;
+      source: string;
+      files?: string[];
+    }> = [];
+
+    // 1. Tasks that completed successfully
+    const completedTasks = this.tasks().filter((t) => t.status === 'completed');
+    if (completedTasks.length > 0) {
+      const taskTypes = [...new Set(completedTasks.map((t) => t.stage))];
+      learnings.push({
+        skill: 'bridge',
+        type: 'pattern',
+        key: 'clean-task-completion',
+        insight: `${completedTasks.length} task(s) completed cleanly across stages: ${taskTypes.join(', ')}`,
+        confidence: 7,
+        source: 'observed',
+      });
+    }
+
+    // 2. Review quality gate outcomes
+    const reviewCompletions = this.log.ofType('STAGE_COMPLETED')
+      .filter((e) => e.stage === 'REVIEW' && e.summary);
+
+    for (const completion of reviewCompletions) {
+      try {
+        const parsed = JSON.parse(completion.summary!) as {
+          report?: { overall?: string; gates?: Array<{ name: string; verdict: string }> };
+        };
+        if (parsed.report?.overall) {
+          learnings.push({
+            skill: 'bridge',
+            type: 'pattern',
+            key: `review-outcome-${parsed.report.overall.toLowerCase()}`,
+            insight: `Review passed with ${parsed.report.overall} verdict. ` +
+              `Gates: ${(parsed.report.gates ?? []).map((g) => `${g.name}=${g.verdict}`).join(', ') || 'none'}`,
+            confidence: 8,
+            source: 'observed',
+          });
+        }
+      } catch {
+        // Non-JSON summary — skip
+      }
+    }
+
+    // 3. External calls that succeeded (adapter patterns)
+    const successfulCalls = this.log.ofType('EXTERNAL_CALL_COMPLETED')
+      .filter((e) => e.success);
+    if (successfulCalls.length > 0) {
+      // Match with initiated calls for adapter info
+      const initiatedCalls = this.log.ofType('EXTERNAL_CALL_INITIATED');
+      const adapterCommands = new Set<string>();
+      for (const call of successfulCalls) {
+        const initiated = initiatedCalls.find((ic) => ic.callId === call.callId);
+        if (initiated) {
+          adapterCommands.add(`${initiated.adapter}:${initiated.command}`);
+        }
+      }
+      if (adapterCommands.size > 0) {
+        learnings.push({
+          skill: 'bridge',
+          type: 'pattern',
+          key: 'successful-adapter-calls',
+          insight: `Adapter calls succeeded: ${[...adapterCommands].join(', ')}`,
+          confidence: 6,
+          source: 'observed',
+        });
+      }
+    }
+
+    return learnings;
+  }
+
+  /**
+   * Log learnings from a clean session to gstack-learnings-log.
+   *
+   * Called automatically on clean DONE (no REFINE loops, no overrides).
+   * Uses the gstack-learnings-log binary to persist entries.
+   *
+   * Returns the number of learnings logged, or 0 if logging was skipped/failed.
+   */
+  logLearnings(): number {
+    if (!this.isCleanRun()) return 0;
+
+    const learnings = this.extractLearnings();
+    if (learnings.length === 0) return 0;
+
+    // Find gstack-learnings-log binary
+    const binPaths = [
+      path.join(this.projectDir, 'bin', 'gstack-learnings-log'),
+      path.join(process.env.HOME ?? '', '.claude', 'skills', 'gstack', 'bin', 'gstack-learnings-log'),
+    ];
+
+    let logBin: string | null = null;
+    for (const p of binPaths) {
+      if (fs.existsSync(p)) {
+        logBin = p;
+        break;
+      }
+    }
+
+    if (!logBin) return 0;
+
+    let logged = 0;
+    for (const learning of learnings) {
+      try {
+        execFileSync(logBin, [JSON.stringify(learning)], {
+          cwd: this.projectDir,
+          timeout: 5000,
+          stdio: 'pipe',
+        });
+        logged++;
+      } catch {
+        // Best-effort: don't fail the session if learnings can't be logged
+      }
+    }
+
+    return logged;
+  }
+
   // --- Session lifecycle ---
 
   /** Complete the session. Fast-forwards through remaining stages to DONE. */
@@ -1031,6 +1197,9 @@ export class Orchestrator {
       this.log.append({ type: 'STAGE_ENTERED', stage: STAGES[i] });
       this.log.append({ type: 'STAGE_COMPLETED', stage: STAGES[i] });
     }
+
+    // Log learnings from clean runs before emitting terminal event
+    this.logLearnings();
 
     this.log.append({
       type: 'SESSION_COMPLETED',
