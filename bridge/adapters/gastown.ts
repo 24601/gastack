@@ -15,6 +15,26 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Adapter } from '../orchestrate.js';
 
+// --- Execution context types ---
+
+/** Execution metadata extracted from bead notes. */
+export interface ExecutionContext {
+  /** Number of polecat attempts (session restarts). */
+  attemptCount: number;
+  /** Files modified by the polecat. */
+  filesModified: string[];
+  /** Number of distinct modules (top-level dirs) touched. */
+  moduleCount: number;
+  /** Whether any escalation notes are present. */
+  hadEscalation: boolean;
+  /** Escalation notes text, if any. */
+  escalationNotes: string | null;
+  /** Raw notes from the bead. */
+  rawNotes: string | null;
+  /** Human-readable summary for review preamble. */
+  summary: string;
+}
+
 // --- Types ---
 
 export interface GtResult {
@@ -234,6 +254,141 @@ export class EventTailer {
   }
 }
 
+// --- Beads CLI executor ---
+
+/**
+ * Execute a bd CLI command using Bun.spawn with array args.
+ * No shell — args are passed directly to the process.
+ */
+export async function bdExec(
+  args: string[],
+  opts?: { cwd?: string; timeout?: number },
+): Promise<GtResult> {
+  const proc = Bun.spawn(['bd', ...args], {
+    cwd: opts?.cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: { ...process.env },
+  });
+
+  const timeout = opts?.timeout ?? 15_000;
+  const timer = setTimeout(() => proc.kill(), timeout);
+
+  try {
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const exitCode = await proc.exited;
+
+    return { stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), exitCode };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// --- Execution context extraction ---
+
+/** Count polecat attempts from bead notes (looks for "attempt", "retry", "rework" patterns). */
+function extractAttemptCount(notes: string): number {
+  // Look for explicit attempt markers: "attempt 3", "retry #2", "rework", etc.
+  const attemptMatch = notes.match(/attempt\s*(?:#?\s*)?(\d+)/i);
+  if (attemptMatch) return parseInt(attemptMatch[1], 10);
+
+  // Count "MERGE REJECTION" occurrences (each rejection = previous attempt)
+  const rejections = (notes.match(/MERGE REJECTION/gi) || []).length;
+  if (rejections > 0) return rejections + 1;
+
+  return 1;
+}
+
+/** Extract file list from notes (looks for "files changed:", git diff stat patterns). */
+function extractFilesModified(notes: string): string[] {
+  const files = new Set<string>();
+
+  // Pattern: "modified: path/to/file" or "changed: path/to/file"
+  for (const match of notes.matchAll(/(?:modified|changed|added|deleted):\s*(\S+)/gi)) {
+    files.add(match[1]);
+  }
+
+  // Pattern: " path/to/file.ext | N +" (git diff --stat format)
+  for (const match of notes.matchAll(/^\s+(\S+\.\w+)\s+\|\s+\d+/gm)) {
+    files.add(match[1]);
+  }
+
+  return [...files];
+}
+
+/** Count distinct top-level directories (modules) from file paths. */
+function countModules(files: string[]): number {
+  const modules = new Set(files.map((f) => f.split('/')[0]));
+  return modules.size;
+}
+
+/** Check for escalation notes. */
+function extractEscalation(notes: string): { had: boolean; text: string | null } {
+  const escalationPatterns = [
+    /HELP:.*$/gm,
+    /escalat(?:ed|ion|ing).*$/gim,
+    /BLOCKED:.*$/gm,
+    /stuck.*$/gim,
+  ];
+
+  const matches: string[] = [];
+  for (const pattern of escalationPatterns) {
+    for (const match of notes.matchAll(pattern)) {
+      matches.push(match[0].trim());
+    }
+  }
+
+  return {
+    had: matches.length > 0,
+    text: matches.length > 0 ? matches.join('; ') : null,
+  };
+}
+
+/**
+ * Extract execution context from a bead's JSON output.
+ * Reads notes, design fields, and metadata to build a reviewer-useful summary.
+ */
+export function extractExecutionContext(beadJson: Record<string, unknown>): ExecutionContext {
+  const bead = Array.isArray(beadJson) ? beadJson[0] : beadJson;
+  const notes = String(bead?.notes ?? bead?.design ?? '');
+  const description = String(bead?.description ?? '');
+  const allText = `${notes}\n${description}`;
+
+  const attemptCount = extractAttemptCount(allText);
+  const filesModified = extractFilesModified(allText);
+  const moduleCount = countModules(filesModified);
+  const escalation = extractEscalation(allText);
+
+  // Build human-readable summary
+  const parts: string[] = [];
+  if (attemptCount > 1) {
+    parts.push(`This polecat took ${attemptCount} attempts`);
+  }
+  if (filesModified.length > 0) {
+    parts.push(`modified ${filesModified.length} files across ${moduleCount} module${moduleCount !== 1 ? 's' : ''}`);
+  }
+  if (escalation.had) {
+    parts.push('encountered difficulties requiring escalation');
+  }
+
+  const summary = parts.length > 0
+    ? `Execution context: ${parts.join(', ')}.${attemptCount > 1 || escalation.had ? ' Review with extra scrutiny.' : ''}`
+    : 'Execution context: clean single-attempt implementation.';
+
+  return {
+    attemptCount,
+    filesModified,
+    moduleCount,
+    hadEscalation: escalation.had,
+    escalationNotes: escalation.text,
+    rawNotes: notes || null,
+    summary,
+  };
+}
+
 // --- Adapter implementation ---
 
 /**
@@ -254,6 +409,7 @@ export class EventTailer {
  *   - tail.poll     → poll events.jsonl for new events
  *   - tail.state    → return current tail state
  *   - tail.restore  → restore tail state from args
+ *   - bead.context  → bd show --json <beadId>, extract execution context
  *   - raw           → pass-through for arbitrary gt subcommands
  */
 export class GasTownAdapter implements Adapter {
@@ -386,6 +542,14 @@ export class GasTownAdapter implements Adapter {
         return JSON.stringify({ restored: true });
       }
 
+      case 'bead.context': {
+        const beadId = String(args?.beadId ?? '');
+        if (!beadId) {
+          throw new Error('bead.context requires args.beadId');
+        }
+        return this.fetchBeadContext(beadId);
+      }
+
       case 'raw': {
         const rawArgs = args?.args;
         if (!Array.isArray(rawArgs)) {
@@ -447,5 +611,48 @@ export class GasTownAdapter implements Adapter {
       throw new Error('Event tailer not initialized. Call initTailer() first.');
     }
     return JSON.stringify(this.tailer.state);
+  }
+
+  /**
+   * Fetch bead context: run `bd show --json <beadId>` and extract execution metadata.
+   * Returns ExecutionContext as JSON. Fails gracefully if bd is unavailable.
+   */
+  private async fetchBeadContext(beadId: string): Promise<string> {
+    const result = await bdExec(['show', beadId, '--json'], {
+      cwd: this.cwd,
+      timeout: this.timeout,
+    });
+
+    if (result.exitCode !== 0) {
+      // bd not available or bead not found — return empty context
+      const empty: ExecutionContext = {
+        attemptCount: 1,
+        filesModified: [],
+        moduleCount: 0,
+        hadEscalation: false,
+        escalationNotes: null,
+        rawNotes: null,
+        summary: 'Execution context: unavailable (bd show failed).',
+      };
+      return JSON.stringify(empty);
+    }
+
+    try {
+      const beadJson = JSON.parse(result.stdout) as Record<string, unknown>;
+      const context = extractExecutionContext(beadJson);
+      return JSON.stringify(context);
+    } catch {
+      // JSON parse failure — return empty context
+      const empty: ExecutionContext = {
+        attemptCount: 1,
+        filesModified: [],
+        moduleCount: 0,
+        hadEscalation: false,
+        escalationNotes: null,
+        rawNotes: null,
+        summary: 'Execution context: unavailable (parse error).',
+      };
+      return JSON.stringify(empty);
+    }
   }
 }

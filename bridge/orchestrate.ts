@@ -606,22 +606,48 @@ export class Orchestrator {
   }> {
     const routing = routeReview(input);
 
+    // Fetch execution context from bead notes (best-effort, non-blocking)
+    let executionContext: string | undefined;
+    if (opts?.beadId) {
+      try {
+        const ctxResult = await this.externalCall('gastown', 'bead.context', {
+          beadId: opts.beadId,
+        });
+        const ctx = JSON.parse(ctxResult.result);
+        if (ctx.summary) {
+          executionContext = ctx.summary;
+        }
+      } catch {
+        // Non-fatal: review proceeds without execution context
+      }
+    }
+
     if (routing.mode === 'review-only') {
       // Spawn a separate polecat with --review-only
+      // Execution context is forwarded via formulaArgs for the review polecat
       const callArgs: Record<string, unknown> = {
         beadId: opts?.beadId,
         rig: opts?.rig,
         agent: opts?.agent,
       };
       if (opts?.iteration) callArgs.iteration = opts.iteration;
+      if (executionContext) {
+        callArgs.formulaArgs = `${executionContext}\n\nRun /review on the branch, then /cso. Persist findings to bead notes.`;
+      }
       const result = await this.externalCall('gastown', 'sling.review', callArgs);
       return { mode: 'review-only', reason: routing.reason, result: result.result };
     }
 
     // Inline: run review-suite in current context via gstack adapter
     // Include iteration to differentiate review cycles in the idempotency cache
-    const callArgs = opts?.iteration ? { iteration: opts.iteration } : undefined;
-    const result = await this.externalCall('gstack', 'review-suite', callArgs);
+    const callArgs: Record<string, unknown> = {};
+    if (opts?.iteration) callArgs.iteration = opts.iteration;
+    if (executionContext) callArgs.executionContext = executionContext;
+    const result = await this.externalCall(
+      'gstack',
+      'review-suite',
+      Object.keys(callArgs).length > 0 ? callArgs : undefined,
+    );
     return { mode: 'inline', reason: routing.reason, result: result.result };
   }
 
@@ -894,24 +920,49 @@ export class Orchestrator {
     // Step 1: Determine routing
     const routing = routeReview(input);
 
+    // Step 1b: Fetch execution context from bead notes (best-effort)
+    let executionContext: string | undefined;
+    if (opts?.beadId) {
+      try {
+        const ctxResult = await this.externalCall('gastown', 'bead.context', {
+          beadId: opts.beadId,
+        });
+        const ctx = JSON.parse(ctxResult.result);
+        if (ctx.summary) {
+          executionContext = ctx.summary;
+        }
+      } catch {
+        // Non-fatal: review proceeds without execution context
+      }
+    }
+
     // Step 2: Dispatch primary review
+    const primarySlingArgs: Record<string, unknown> = {
+      beadId: opts?.beadId,
+      rig: opts?.rig,
+      agent: primaryAgent,
+    };
+    if (executionContext) {
+      primarySlingArgs.formulaArgs = `${executionContext}\n\nRun /review on the branch, then /cso. Persist findings to bead notes.`;
+    }
     const primaryResult = routing.mode === 'review-only'
-      ? await this.externalCall('gastown', 'sling.review', {
-          beadId: opts?.beadId,
-          rig: opts?.rig,
-          agent: primaryAgent,
-        })
+      ? await this.externalCall('gastown', 'sling.review', primarySlingArgs)
       : await this.externalCall('gstack', 'review-suite', {
           agent: primaryAgent,
+          executionContext,
         });
 
     // Step 3: Dispatch secondary (independent) review
     // Always use sling.review for secondary — separate context ensures independence
-    const secondaryResult = await this.externalCall('gastown', 'sling.review', {
+    const secondarySlingArgs: Record<string, unknown> = {
       beadId: opts?.beadId,
       rig: opts?.rig,
       agent: reviewAgent,
-    });
+    };
+    if (executionContext) {
+      secondarySlingArgs.formulaArgs = `${executionContext}\n\nRun /review on the branch, then /cso. Persist findings to bead notes.`;
+    }
+    const secondaryResult = await this.externalCall('gastown', 'sling.review', secondarySlingArgs);
 
     // Step 4: Parse and evaluate both results through quality gates
     const primaryParsed = safeParseReviewSuite(primaryResult.result);

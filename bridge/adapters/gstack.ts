@@ -213,7 +213,10 @@ export class GstackAdapter implements Adapter {
     args?: Record<string, unknown>,
   ): Promise<string> {
     const branch = args?.branch ? ` --branch ${String(args.branch)}` : '';
-    const prompt = `${skill}${branch}`;
+    const contextPreamble = args?.executionContext
+      ? `${String(args.executionContext)}\n\n`
+      : '';
+    const prompt = `${contextPreamble}${skill}${branch}`;
 
     const result = await claudeExec(prompt, {
       cwd: this.cwd,
