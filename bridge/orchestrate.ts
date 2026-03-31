@@ -28,6 +28,7 @@ import {
   type DeathLedger,
   type ReviewRoutingInput,
   type ReviewMode,
+  type ReconciliationResult,
   type QualityReport,
   type QualityIteration,
   type ReviewLoopPolicy,
@@ -40,9 +41,15 @@ import {
   extractFixableFindings,
   resolvedFindings,
   summarizeIteration,
+  reconcileReports,
   evaluate,
 } from './quality.js';
 import type { ReviewResult, ReviewSuiteResult } from './adapters/gstack.js';
+import {
+  type MultiModelConfig,
+  type BridgeConfig,
+  DEFAULT_MULTI_MODEL,
+} from './config.js';
 
 // --- Adapter interface ---
 
@@ -549,6 +556,20 @@ export class Orchestrator {
     return this.deathLedger;
   }
 
+  // --- Multi-model dispatch configuration ---
+
+  private multiModelConfig: MultiModelConfig = { ...DEFAULT_MULTI_MODEL };
+
+  /** Configure multi-model dispatch settings. */
+  setMultiModelConfig(config: Partial<MultiModelConfig>): void {
+    this.multiModelConfig = { ...this.multiModelConfig, ...config };
+  }
+
+  /** Get the current multi-model config. */
+  getMultiModelConfig(): MultiModelConfig {
+    return { ...this.multiModelConfig };
+  }
+
   // --- Review dispatch ---
 
   /**
@@ -827,6 +848,100 @@ export class Orchestrator {
     return { report: finalReport, iterations, passed: false, approvalRequested: true };
   }
 
+  /**
+   * Dispatch multi-model review: run primary AND secondary review agents,
+   * then reconcile their verdicts.
+   *
+   * Encodes the "20th dentist" philosophy: two models disagreeing is signal.
+   * When primary (claude) and secondary (codex) disagree on verdict,
+   * the DISAGREEMENT itself triggers human review via approval request.
+   *
+   * Flow:
+   *   1. Run primary review (default agent or configured primary)
+   *   2. Run secondary review (configured review agent, e.g., codex)
+   *   3. Evaluate both through quality gates
+   *   4. Reconcile verdicts using disagreement policy
+   *   5. If human_review outcome → request approval
+   *
+   * Returns both reports, reconciliation result, and merged report.
+   */
+  async dispatchMultiModelReview(
+    input: ReviewRoutingInput,
+    opts?: {
+      beadId?: string;
+      rig?: string;
+      /** Override primary agent. */
+      primaryAgent?: string;
+      /** Override secondary (review) agent. */
+      reviewAgent?: string;
+    },
+  ): Promise<{
+    mode: ReviewMode;
+    reason: string;
+    primaryReport: QualityReport;
+    secondaryReport: QualityReport;
+    reconciliation: ReconciliationResult;
+    mergedReport: QualityReport;
+    /** If human review was requested, the approval ID. */
+    approvalId?: string;
+  }> {
+    const config = this.multiModelConfig;
+    const primaryAgent = opts?.primaryAgent ?? config.primary;
+    const reviewAgent = opts?.reviewAgent ?? config.review;
+
+    // Step 1: Determine routing
+    const routing = routeReview(input);
+
+    // Step 2: Dispatch primary review
+    const primaryResult = routing.mode === 'review-only'
+      ? await this.externalCall('gastown', 'sling.review', {
+          beadId: opts?.beadId,
+          rig: opts?.rig,
+          agent: primaryAgent,
+        })
+      : await this.externalCall('gstack', 'review-suite', {
+          agent: primaryAgent,
+        });
+
+    // Step 3: Dispatch secondary (independent) review
+    // Always use sling.review for secondary — separate context ensures independence
+    const secondaryResult = await this.externalCall('gastown', 'sling.review', {
+      beadId: opts?.beadId,
+      rig: opts?.rig,
+      agent: reviewAgent,
+    });
+
+    // Step 4: Parse and evaluate both results through quality gates
+    const primaryParsed = safeParseReviewSuite(primaryResult.result);
+    const secondaryParsed = safeParseReviewSuite(secondaryResult.result);
+
+    const primaryReport = evaluate(primaryParsed);
+    const secondaryReport = evaluate(secondaryParsed);
+
+    // Step 5: Reconcile verdicts
+    const { reconciliation, mergedReport } = reconcileReports(primaryReport, secondaryReport);
+
+    // Step 6: If disagreement requires human review, request approval
+    let approvalId: string | undefined;
+    if (reconciliation.outcome === 'human_review') {
+      approvalId = this.requestApproval(
+        `Multi-model disagreement: ${primaryAgent} says ${reconciliation.primaryVerdict}, ` +
+        `${reviewAgent} says ${reconciliation.secondaryVerdict}. ` +
+        `The disagreement itself is signal — human review required.`,
+      );
+    }
+
+    return {
+      mode: routing.mode,
+      reason: routing.reason,
+      primaryReport,
+      secondaryReport,
+      reconciliation,
+      mergedReport,
+      approvalId,
+    };
+  }
+
   // --- Session lifecycle ---
 
   /** Complete the session. Fast-forwards through remaining stages to DONE. */
@@ -909,5 +1024,37 @@ export class Orchestrator {
       pendingApproval: this.pendingApproval() !== null,
       eventCount: this.log.length,
     };
+  }
+}
+
+// --- Helpers ---
+
+import type { ReviewResult, ReviewSuiteResult } from './adapters/gstack.js';
+import type { EvaluateInput } from './quality.js';
+
+/**
+ * Parse a review suite result string into EvaluateInput.
+ * Handles both ReviewSuiteResult JSON and plain ReviewResult JSON.
+ */
+function safeParseReviewSuite(raw: string): EvaluateInput {
+  try {
+    const parsed = JSON.parse(raw);
+
+    // ReviewSuiteResult shape: { review: {...}, cso: {...} }
+    if (parsed && typeof parsed === 'object' && 'review' in parsed) {
+      return {
+        review: parsed.review as ReviewResult,
+        cso: parsed.cso as ReviewResult | undefined,
+      };
+    }
+
+    // Plain ReviewResult: treat as review only
+    if (parsed && typeof parsed === 'object' && ('grade' in parsed || 'findings' in parsed)) {
+      return { review: parsed as ReviewResult };
+    }
+
+    return {};
+  } catch {
+    return {};
   }
 }

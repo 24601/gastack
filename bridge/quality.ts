@@ -753,6 +753,171 @@ export function summarizeIteration(iteration: QualityIteration): string {
   return lines.join('\n');
 }
 
+// --- Multi-model verdict reconciliation ---
+
+/**
+ * Reconciliation outcome when two models review the same code.
+ *   - 'agree_pass': both models agree the code passes
+ *   - 'agree_block': both models agree the code should be blocked
+ *   - 'human_review': one PASS + one BLOCK — fundamental disagreement, human decides
+ *   - 'stricter': one WARN involved — take the stricter verdict automatically
+ */
+export type ReconciliationOutcome =
+  | 'agree_pass'
+  | 'agree_block'
+  | 'human_review'
+  | 'stricter';
+
+export interface ReconciliationResult {
+  /** What happened. */
+  outcome: ReconciliationOutcome;
+  /** The final verdict after reconciliation. */
+  finalVerdict: GateVerdict;
+  /** Whether the two models disagreed (the interesting signal). */
+  disagreement: boolean;
+  /** Human-readable explanation. */
+  reason: string;
+  /** Primary model's verdict. */
+  primaryVerdict: GateVerdict;
+  /** Secondary (review) model's verdict. */
+  secondaryVerdict: GateVerdict;
+}
+
+/**
+ * Reconcile two quality verdicts from different models.
+ *
+ * Implements the "20th dentist" philosophy from gstack's /codex skill:
+ * two models disagreeing is SIGNAL, not noise.
+ *
+ * Disagreement policy:
+ *   - Both PASS → PASS (agreement)
+ *   - Both BLOCKED → BLOCKED (agreement)
+ *   - One BLOCKED + one PASS → HUMAN REVIEW (the interesting case)
+ *   - One WARN + one anything → take stricter verdict (auto-resolve)
+ *
+ * The key insight: PASS vs BLOCKED means two independent model families
+ * see the code fundamentally differently. That's exactly when a human
+ * should look — the disagreement itself is the signal.
+ */
+export function reconcileVerdicts(
+  primary: GateVerdict,
+  secondary: GateVerdict,
+): ReconciliationResult {
+  // Agreement: both same verdict
+  if (primary === secondary) {
+    return {
+      outcome: primary === 'PASS' ? 'agree_pass' : primary === 'BLOCKED' ? 'agree_block' : 'stricter',
+      finalVerdict: primary,
+      disagreement: false,
+      reason: `Both models agree: ${primary}`,
+      primaryVerdict: primary,
+      secondaryVerdict: secondary,
+    };
+  }
+
+  // BLOCKED vs PASS (either direction) → human review
+  if (
+    (primary === 'BLOCKED' && secondary === 'PASS') ||
+    (primary === 'PASS' && secondary === 'BLOCKED')
+  ) {
+    return {
+      outcome: 'human_review',
+      finalVerdict: 'BLOCKED', // Block until human decides
+      disagreement: true,
+      reason: `Models disagree: ${primary} vs ${secondary}. Escalating to human review — the disagreement is the signal.`,
+      primaryVerdict: primary,
+      secondaryVerdict: secondary,
+    };
+  }
+
+  // WARN involved: take the stricter verdict
+  const stricter = stricterVerdict(primary, secondary);
+  return {
+    outcome: 'stricter',
+    finalVerdict: stricter,
+    disagreement: true,
+    reason: `One model warns, taking stricter: ${stricter} (primary: ${primary}, secondary: ${secondary})`,
+    primaryVerdict: primary,
+    secondaryVerdict: secondary,
+  };
+}
+
+/** Return the stricter of two verdicts. BLOCKED > WARN > PASS. */
+function stricterVerdict(a: GateVerdict, b: GateVerdict): GateVerdict {
+  const order: Record<GateVerdict, number> = { PASS: 0, WARN: 1, BLOCKED: 2 };
+  return order[a] >= order[b] ? a : b;
+}
+
+/**
+ * Reconcile two full quality reports from different models.
+ *
+ * Applies reconcileVerdicts to the overall verdicts, and merges findings
+ * from both reports for complete context.
+ */
+export function reconcileReports(
+  primary: QualityReport,
+  secondary: QualityReport,
+): {
+  reconciliation: ReconciliationResult;
+  /** Merged report with findings from both models. */
+  mergedReport: QualityReport;
+} {
+  const reconciliation = reconcileVerdicts(primary.overall, secondary.overall);
+
+  // Merge gates: take the stricter gate result for each gate name
+  const gateMap = new Map<string, GateResult>();
+  for (const g of [...primary.gates, ...secondary.gates]) {
+    const existing = gateMap.get(g.gate);
+    if (!existing || verdictSeverity(g.verdict) > verdictSeverity(existing.verdict)) {
+      gateMap.set(g.gate, {
+        ...g,
+        // Merge findings from both if same gate
+        findings: existing
+          ? deduplicateFindings([...existing.findings, ...g.findings])
+          : g.findings,
+      });
+    } else if (existing) {
+      // Keep existing (stricter) but merge findings
+      existing.findings = deduplicateFindings([...existing.findings, ...g.findings]);
+    }
+  }
+
+  const mergedGates = Array.from(gateMap.values());
+  const mergedReport: QualityReport = {
+    overall: reconciliation.finalVerdict,
+    gates: mergedGates,
+    summary: reconciliation.disagreement
+      ? `Multi-model review: ${reconciliation.reason}\n` +
+        formatSummaryFromGates(mergedGates, reconciliation.finalVerdict)
+      : formatSummaryFromGates(mergedGates, reconciliation.finalVerdict),
+  };
+
+  return { reconciliation, mergedReport };
+}
+
+/** Numeric severity for comparison. */
+function verdictSeverity(v: GateVerdict): number {
+  const order: Record<GateVerdict, number> = { PASS: 0, WARN: 1, BLOCKED: 2 };
+  return order[v];
+}
+
+/** Deduplicate findings by description (case-insensitive). */
+function deduplicateFindings(findings: Finding[]): Finding[] {
+  const seen = new Set<string>();
+  return findings.filter((f) => {
+    const key = f.description.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Format summary from gates (extracted for reuse). */
+function formatSummaryFromGates(gates: GateResult[], overall: GateVerdict): string {
+  const lines = gates.map((g) => `${g.gate}: ${g.verdict} — ${g.reason}`);
+  return `Quality: ${overall}\n${lines.join('\n')}`;
+}
+
 // --- Input parsing helpers ---
 
 /** Parse evaluate command input from adapter args. */
