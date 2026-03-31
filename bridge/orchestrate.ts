@@ -26,9 +26,12 @@ import {
   type FailureResponse,
   type FailurePolicy,
   type DeathLedger,
+  type ReviewRoutingInput,
+  type ReviewMode,
   DEFAULT_FAILURE_POLICY,
   classifyDeathEvent,
   detectMassDeath,
+  routeReview,
 } from './quality.js';
 
 // --- Adapter interface ---
@@ -534,6 +537,53 @@ export class Orchestrator {
   /** Get the death ledger (for inspection/debugging). */
   getDeathLedger(): DeathLedger {
     return this.deathLedger;
+  }
+
+  // --- Review dispatch ---
+
+  /**
+   * Dispatch a review based on the routing decision.
+   *
+   * Decision tree (encoded in quality.ts routeReview):
+   *   - Security-sensitive paths → ALWAYS review-only polecat (separate context)
+   *   - Multi-file >50 lines → review-only polecat (unbiased, fresh eyes)
+   *   - Single file ≤50 lines → inline review (gstack adapter, same context)
+   *
+   * For review-only: spawns a separate polecat via gastown sling.review.
+   * For inline: runs gstack review-suite in the same context.
+   *
+   * Returns the review mode used and the raw results.
+   */
+  async dispatchReview(
+    input: ReviewRoutingInput,
+    opts?: {
+      /** Bead ID for the review-only polecat to report on. */
+      beadId?: string;
+      /** Rig to dispatch the review-only polecat to. */
+      rig?: string;
+      /** Agent to use for review (e.g., 'claude', 'gemini'). */
+      agent?: string;
+    },
+  ): Promise<{
+    mode: ReviewMode;
+    reason: string;
+    result: string;
+  }> {
+    const routing = routeReview(input);
+
+    if (routing.mode === 'review-only') {
+      // Spawn a separate polecat with --review-only
+      const result = await this.externalCall('gastown', 'sling.review', {
+        beadId: opts?.beadId,
+        rig: opts?.rig,
+        agent: opts?.agent,
+      });
+      return { mode: 'review-only', reason: routing.reason, result: result.result };
+    }
+
+    // Inline: run review-suite in current context via gstack adapter
+    const result = await this.externalCall('gstack', 'review-suite');
+    return { mode: 'inline', reason: routing.reason, result: result.result };
   }
 
   // --- Session lifecycle ---
