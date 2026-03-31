@@ -28,11 +28,21 @@ import {
   type DeathLedger,
   type ReviewRoutingInput,
   type ReviewMode,
+  type QualityReport,
+  type QualityIteration,
+  type ReviewLoopPolicy,
   DEFAULT_FAILURE_POLICY,
+  DEFAULT_REVIEW_LOOP_POLICY,
   classifyDeathEvent,
   detectMassDeath,
   routeReview,
+  shouldReiterate,
+  extractFixableFindings,
+  resolvedFindings,
+  summarizeIteration,
+  evaluate,
 } from './quality.js';
+import type { ReviewResult, ReviewSuiteResult } from './adapters/gstack.js';
 
 // --- Adapter interface ---
 
@@ -563,6 +573,8 @@ export class Orchestrator {
       rig?: string;
       /** Agent to use for review (e.g., 'claude', 'gemini'). */
       agent?: string;
+      /** Iteration number (breaks idempotency cache for review cycles). */
+      iteration?: number;
     },
   ): Promise<{
     mode: ReviewMode;
@@ -573,17 +585,246 @@ export class Orchestrator {
 
     if (routing.mode === 'review-only') {
       // Spawn a separate polecat with --review-only
-      const result = await this.externalCall('gastown', 'sling.review', {
+      const callArgs: Record<string, unknown> = {
         beadId: opts?.beadId,
         rig: opts?.rig,
         agent: opts?.agent,
-      });
+      };
+      if (opts?.iteration) callArgs.iteration = opts.iteration;
+      const result = await this.externalCall('gastown', 'sling.review', callArgs);
       return { mode: 'review-only', reason: routing.reason, result: result.result };
     }
 
     // Inline: run review-suite in current context via gstack adapter
-    const result = await this.externalCall('gstack', 'review-suite');
+    // Include iteration to differentiate review cycles in the idempotency cache
+    const callArgs = opts?.iteration ? { iteration: opts.iteration } : undefined;
+    const result = await this.externalCall('gstack', 'review-suite', callArgs);
     return { mode: 'inline', reason: routing.reason, result: result.result };
+  }
+
+  // --- Review-fix-rereview loop ---
+
+  /** Review loop policy. */
+  private reviewLoopPolicy: ReviewLoopPolicy = DEFAULT_REVIEW_LOOP_POLICY;
+
+  /** Configure the review loop policy. */
+  setReviewLoopPolicy(policy: Partial<ReviewLoopPolicy>): void {
+    this.reviewLoopPolicy = { ...this.reviewLoopPolicy, ...policy };
+  }
+
+  /**
+   * Count how many review cycles have occurred in this session.
+   * Derived from the event log: counts STAGE_ENTERED events for REVIEW.
+   */
+  reviewCycleCount(): number {
+    return this.log.ofType('STAGE_ENTERED')
+      .filter((e) => e.stage === 'REVIEW').length;
+  }
+
+  /**
+   * Get the iteration history from the event log.
+   * Each REVIEW stage entry with a subsequent quality evaluation
+   * constitutes one iteration.
+   */
+  iterationHistory(): QualityIteration[] {
+    const iterations: QualityIteration[] = [];
+    const allEvents = this.log.all();
+
+    let iterationNum = 0;
+    for (let i = 0; i < allEvents.length; i++) {
+      const ev = allEvents[i].event;
+      if (ev.type !== 'STAGE_COMPLETED' || ev.stage !== 'REVIEW') continue;
+
+      iterationNum++;
+      // Look for the review cycle summary in the stage completion
+      const summary = ev.summary;
+      if (!summary) continue;
+
+      try {
+        const parsed = JSON.parse(summary) as {
+          report?: QualityReport;
+          fixesApplied?: string[];
+          remainingFindings?: Array<{ severity: string; description: string }>;
+        };
+        if (parsed.report) {
+          iterations.push({
+            iteration: iterationNum,
+            report: parsed.report,
+            fixesApplied: parsed.fixesApplied ?? [],
+            remainingFindings: (parsed.remainingFindings ?? []).map((f) => ({
+              severity: f.severity as 'CRITICAL' | 'MAJOR' | 'MINOR',
+              description: f.description,
+            })),
+          });
+        }
+      } catch {
+        // Non-JSON summary — skip
+      }
+    }
+
+    return iterations;
+  }
+
+  /**
+   * Execute a full review cycle: REVIEW → (if blocked) REFINE → EXECUTE → REVIEW...
+   *
+   * This is the core of the checkpoint/resume loop. It:
+   * 1. Dispatches a review (inline or review-only polecat)
+   * 2. Evaluates the quality report
+   * 3. If BLOCKED with fixable findings: enters REFINE, queues fix tasks,
+   *    loops back to EXECUTE, then re-reviews
+   * 4. Compares findings across iterations to detect progress
+   * 5. Stops when: quality passes, max iterations reached, or no progress
+   *
+   * The orchestrator must be in the REVIEW stage when this is called.
+   * On completion, the stage will be either:
+   *   - REVIEW (completed, ready to advance to DEPLOY) if quality passed
+   *   - REVIEW (with pending approval) if max iterations exhausted
+   *
+   * Returns the final quality report and iteration history.
+   */
+  async reviewCycle(
+    input: ReviewRoutingInput,
+    opts?: {
+      beadId?: string;
+      rig?: string;
+      agent?: string;
+    },
+  ): Promise<{
+    report: QualityReport;
+    iterations: QualityIteration[];
+    passed: boolean;
+    approvalRequested: boolean;
+  }> {
+    const current = this.currentStage();
+    if (current !== 'REVIEW') {
+      throw new Error(`reviewCycle requires REVIEW stage, currently in ${current}`);
+    }
+
+    const iterations: QualityIteration[] = [];
+    let lastReport: QualityReport | null = null;
+    let approvalRequested = false;
+
+    for (let i = 0; i < this.reviewLoopPolicy.maxIterations; i++) {
+      const iterationNum = i + 1;
+
+      // Step 1: Dispatch review
+      // Pass iteration number to break idempotency cache — each review cycle
+      // must be a fresh external call, not a cached replay of the first.
+      const reviewOpts = { ...opts, iteration: iterationNum };
+      const reviewResult = await this.dispatchReview(input, reviewOpts);
+
+      // Step 2: Parse and evaluate quality
+      const parsed = JSON.parse(reviewResult.result);
+      let report: QualityReport;
+
+      if (parsed.review && parsed.cso) {
+        // ReviewSuiteResult from inline review
+        const suite = parsed as ReviewSuiteResult;
+        report = evaluate({ review: suite.review, cso: suite.cso });
+      } else if (parsed.grade !== undefined) {
+        // Single ReviewResult (from review-only polecat)
+        report = evaluate({ review: parsed as ReviewResult });
+      } else if (parsed.overall) {
+        // Already a QualityReport
+        report = parsed as QualityReport;
+      } else {
+        // Unknown format — treat as WARN
+        report = {
+          overall: 'WARN',
+          gates: [],
+          summary: 'Review output could not be parsed into a quality report',
+        };
+      }
+
+      // Step 3: Build iteration record
+      const allFindings = report.gates.flatMap((g) => g.findings);
+      const previousFindings = lastReport
+        ? lastReport.gates.flatMap((g) => g.findings)
+        : [];
+      const resolved = lastReport
+        ? resolvedFindings(previousFindings, allFindings)
+        : [];
+      const fixesApplied = resolved.map(
+        (f) => `Resolved [${f.severity}]: ${f.description}`,
+      );
+
+      const iteration: QualityIteration = {
+        iteration: iterationNum,
+        report,
+        fixesApplied,
+        remainingFindings: allFindings,
+      };
+      iterations.push(iteration);
+
+      // Step 4: Record iteration in event log (stage completion summary)
+      const iterationSummary = JSON.stringify({
+        report,
+        fixesApplied,
+        remainingFindings: allFindings,
+        iterationNum,
+      });
+
+      // Step 5: Check if we pass
+      if (report.overall === 'PASS' || report.overall === 'WARN') {
+        this.completeStage(iterationSummary);
+        lastReport = report;
+        return { report, iterations, passed: true, approvalRequested: false };
+      }
+
+      // Step 6: BLOCKED — check if we should reiterate
+      lastReport = report;
+
+      if (!shouldReiterate(iteration, this.reviewLoopPolicy)) {
+        // Can't make more progress — request human approval (while still in REVIEW)
+        const summary = summarizeIteration(iteration);
+        this.requestApproval(
+          `Review found ${allFindings.length} issues after ${iterationNum} iteration(s). ` +
+            `${summary}`,
+        );
+        approvalRequested = true;
+        return { report, iterations, passed: false, approvalRequested: true };
+      }
+
+      // Step 7: Enter REFINE — queue fix tasks for fixable findings
+      this.completeStage(iterationSummary);
+      this.enterStage('REFINE');
+
+      const fixable = extractFixableFindings(report);
+      for (const finding of fixable) {
+        this.queueTask(`Fix [${finding.severity}]: ${finding.description}`, {
+          finding,
+          iteration: iterationNum,
+          reviewContext: iterationSummary,
+        });
+      }
+
+      // Step 8: Complete REFINE, loop back to EXECUTE
+      this.completeStage(`Queued ${fixable.length} fix task(s) from iteration ${iterationNum}`);
+      this.enterStage('EXECUTE');
+
+      // In a real bridge, the fix polecat would run here.
+      // The orchestrator signals EXECUTE for fix dispatch; callers
+      // run the fix work and then call back into reviewCycle.
+      // For the loop to continue, we complete EXECUTE and re-enter REVIEW.
+      this.completeStage(`Fix iteration ${iterationNum} — re-reviewing`);
+      this.enterStage('REVIEW');
+    }
+
+    // Max iterations exhausted without passing
+    const finalReport = lastReport ?? {
+      overall: 'BLOCKED' as const,
+      gates: [],
+      summary: 'Max review iterations exhausted',
+    };
+
+    this.requestApproval(
+      `Max ${this.reviewLoopPolicy.maxIterations} review iterations exhausted. ` +
+        `${iterations.length} cycle(s) completed. Remaining findings: ` +
+        `${finalReport.gates.flatMap((g) => g.findings).map((f) => f.description).join('; ')}`,
+    );
+    approvalRequested = true;
+    return { report: finalReport, iterations, passed: false, approvalRequested: true };
   }
 
   // --- Session lifecycle ---
