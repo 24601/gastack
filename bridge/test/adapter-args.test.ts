@@ -507,6 +507,114 @@ describe('T3.4.5: sling command arg construction', () => {
   });
 });
 
+// --- T3.4.6: sling.batch command arg construction ---
+
+describe('T3.4.6: sling.batch command arg construction', () => {
+  let adapter: TestableGasTownAdapter;
+
+  beforeEach(() => {
+    adapter = new TestableGasTownAdapter();
+  });
+
+  test('sling.batch with 3 bead IDs and rig', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['ga-001', 'ga-002', 'ga-003'],
+      rig: 'gastack',
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    expect(args).toEqual(['gt', 'sling', 'ga-001', 'ga-002', 'ga-003', 'gastack']);
+  });
+
+  test('sling.batch with --max-concurrent', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['ga-001', 'ga-002'],
+      rig: 'gastack',
+      maxConcurrent: 2,
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    expect(args).toContain('--max-concurrent');
+    const mcIdx = args.indexOf('--max-concurrent');
+    expect(args[mcIdx + 1]).toBe('2');
+  });
+
+  test('sling.batch with --merge strategy', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['ga-001', 'ga-002'],
+      rig: 'gastack',
+      merge: 'mr',
+      maxConcurrent: 3,
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    expect(args).toContain('--merge');
+    const mergeIdx = args.indexOf('--merge');
+    expect(args[mergeIdx + 1]).toBe('mr');
+  });
+
+  test('sling.batch with all flags', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['ga-001', 'ga-002', 'ga-003'],
+      rig: 'gastack',
+      maxConcurrent: 2,
+      merge: 'mr',
+      reviewOnly: true,
+      agent: 'claude',
+      formula: 'mol-polecat-work',
+      formulaArgs: 'Run /review',
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    expect(args).toEqual([
+      'gt', 'sling', 'ga-001', 'ga-002', 'ga-003', 'gastack',
+      '--max-concurrent', '2',
+      '--merge', 'mr',
+      '--review-only',
+      '--agent', 'claude',
+      '--formula', 'mol-polecat-work',
+      '--args', 'Run /review',
+    ]);
+  });
+
+  test('sling.batch with single bead ID', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['ga-001'],
+      rig: 'gastack',
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    expect(args).toEqual(['gt', 'sling', 'ga-001', 'gastack']);
+  });
+
+  test('sling.batch bead IDs with injection payloads stay literal', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['$(id)', 'ga-002; rm -rf /', '`whoami`'],
+      rig: 'gastack',
+      maxConcurrent: 3,
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    // Each bead ID is its own array element — no shell interpretation
+    expect(args[2]).toBe('$(id)');
+    expect(args[3]).toBe('ga-002; rm -rf /');
+    expect(args[4]).toBe('`whoami`');
+  });
+
+  test('sling.batch preserves ordering of bead IDs', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['ga-003', 'ga-001', 'ga-002'],
+      rig: 'gastack',
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    // Bead IDs appear in the order provided (priority-sorted by caller)
+    expect(args[2]).toBe('ga-003');
+    expect(args[3]).toBe('ga-001');
+    expect(args[4]).toBe('ga-002');
+  });
+});
+
 // --- Cross-cutting: structural invariants ---
 
 describe('T3.4 structural invariants', () => {
@@ -527,6 +635,7 @@ describe('T3.4 structural invariants', () => {
       { cmd: 'escalate', args: { description: 'd', severity: 'HIGH', message: 'm' } },
       { cmd: 'nudge', args: { target: 't', message: 'm' } },
       { cmd: 'sling', args: { beadId: 'gt-t1x', rig: 'gastack', merge: 'mr' } },
+      { cmd: 'sling.batch', args: { beadIds: ['ga-001', 'ga-002'], rig: 'gastack', maxConcurrent: 2 } },
       { cmd: 'raw', args: { args: ['status', '--verbose'] } },
     ];
 

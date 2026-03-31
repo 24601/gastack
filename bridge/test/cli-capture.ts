@@ -129,6 +129,21 @@ export class TestableGasTownAdapter implements Adapter {
         return { tool: 'gt', cliArgs: slingArgs };
       }
 
+      case 'sling.batch': {
+        const beadIds = args?.beadIds;
+        if (!Array.isArray(beadIds) || beadIds.length === 0) {
+          return { tool: 'gt', cliArgs: ['gt', 'sling'] };
+        }
+        const batchArgs = ['gt', 'sling', ...beadIds.map(String), String(args?.rig ?? '')];
+        if (args?.maxConcurrent) batchArgs.push('--max-concurrent', String(args.maxConcurrent));
+        if (args?.merge) batchArgs.push('--merge', String(args.merge));
+        if (args?.reviewOnly) batchArgs.push('--review-only');
+        if (args?.agent) batchArgs.push('--agent', String(args.agent));
+        if (args?.formula) batchArgs.push('--formula', String(args.formula));
+        if (args?.formulaArgs) batchArgs.push('--args', String(args.formulaArgs));
+        return { tool: 'gt', cliArgs: batchArgs };
+      }
+
       case 'raw': {
         const rawArgs = args?.args;
         if (!Array.isArray(rawArgs)) {

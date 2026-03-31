@@ -249,6 +249,7 @@ export class EventTailer {
  *   - escalate      → gt escalate <desc> -s <severity>
  *   - nudge         → gt nudge <target> <message>
  *   - sling         → gt sling <beadId> <rig> [--merge <strategy>] [--review-only] [--agent <agent>]
+ *   - sling.batch   → gt sling <id1> <id2> ... <rig> [--max-concurrent N] [--merge <strategy>]
  *   - tail.poll     → poll events.jsonl for new events
  *   - tail.state    → return current tail state
  *   - tail.restore  → restore tail state from args
@@ -337,6 +338,21 @@ export class GasTownAdapter implements Adapter {
         if (args?.formula) slingArgs.push('--formula', String(args.formula));
         if (args?.formulaArgs) slingArgs.push('--args', String(args.formulaArgs));
         return this.textCommand(slingArgs);
+      }
+
+      case 'sling.batch': {
+        const beadIds = args?.beadIds;
+        if (!Array.isArray(beadIds) || beadIds.length === 0) {
+          throw new Error('sling.batch requires args.beadIds as non-empty string[]');
+        }
+        const batchArgs = ['sling', ...beadIds.map(String), String(args?.rig ?? '')];
+        if (args?.maxConcurrent) batchArgs.push('--max-concurrent', String(args.maxConcurrent));
+        if (args?.merge) batchArgs.push('--merge', String(args.merge));
+        if (args?.reviewOnly) batchArgs.push('--review-only');
+        if (args?.agent) batchArgs.push('--agent', String(args.agent));
+        if (args?.formula) batchArgs.push('--formula', String(args.formula));
+        if (args?.formulaArgs) batchArgs.push('--args', String(args.formulaArgs));
+        return this.textCommand(batchArgs);
       }
 
       case 'convoy.stranded':
