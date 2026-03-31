@@ -548,6 +548,99 @@ export class QualityAdapter implements Adapter {
   }
 }
 
+// --- Review routing (inline vs review-only polecat) ---
+
+/**
+ * Security-sensitive file path patterns.
+ * Changes touching these paths ALWAYS get a review-only polecat
+ * (separate context, can't be influenced by "I just wrote this").
+ */
+export const SECURITY_SENSITIVE_PATTERNS: RegExp[] = [
+  /\bauth\b/i,
+  /\blogin\b/i,
+  /\bsession\b/i,
+  /\btoken\b/i,
+  /\bcredential/i,
+  /\bsecret/i,
+  /\bpassword/i,
+  /\bcrypto\b/i,
+  /\bencrypt/i,
+  /\bdecrypt/i,
+  /\bpayment/i,
+  /\bbilling\b/i,
+  /\bstripe\b/i,
+  /\bcheckout\b/i,
+  /\bpermission/i,
+  /\baccess.?control/i,
+  /\brbac\b/i,
+  /\boauth\b/i,
+  /\bjwt\b/i,
+  /\bapi.?key/i,
+  /\bsigning\b/i,
+  /\bcertificat/i,
+  /\btls\b/i,
+  /\bssl\b/i,
+  /\.env\b/,
+  /\bsecrets?\.\w+$/i,
+];
+
+/**
+ * Check whether a file path matches any security-sensitive pattern.
+ */
+export function isSecuritySensitivePath(filePath: string): boolean {
+  return SECURITY_SENSITIVE_PATTERNS.some((p) => p.test(filePath));
+}
+
+/**
+ * Review routing decision: should we use a review-only polecat
+ * (separate context) or inline review (same context)?
+ *
+ * Decision tree:
+ *   - Any security-sensitive file path → ALWAYS review-only polecat
+ *   - Multi-file (>1 file) AND >50 total changed lines → review-only polecat
+ *   - Single file ≤50 lines → inline review (gstack adapter, same context)
+ *
+ * Returns 'review-only' or 'inline'.
+ */
+export type ReviewMode = 'review-only' | 'inline';
+
+export interface ReviewRoutingInput {
+  /** Changed file paths in the diff. */
+  changedFiles: string[];
+  /** Total number of changed lines (additions + deletions). */
+  totalChangedLines: number;
+}
+
+export function routeReview(input: ReviewRoutingInput): {
+  mode: ReviewMode;
+  reason: string;
+} {
+  // Security-sensitive paths always get separate-context review
+  const sensitiveFiles = input.changedFiles.filter(isSecuritySensitivePath);
+  if (sensitiveFiles.length > 0) {
+    return {
+      mode: 'review-only',
+      reason: `Security-sensitive path(s): ${sensitiveFiles.slice(0, 3).join(', ')}${sensitiveFiles.length > 3 ? ` (+${sensitiveFiles.length - 3} more)` : ''}`,
+    };
+  }
+
+  // Multi-file, >50 lines → separate context for unbiased review
+  if (input.changedFiles.length > 1 && input.totalChangedLines > 50) {
+    return {
+      mode: 'review-only',
+      reason: `${input.changedFiles.length} files, ${input.totalChangedLines} lines changed (threshold: >1 file, >50 lines)`,
+    };
+  }
+
+  // Small change: inline review is fine
+  return {
+    mode: 'inline',
+    reason: input.changedFiles.length <= 1
+      ? `Single file, ${input.totalChangedLines} lines`
+      : `${input.changedFiles.length} files, ${input.totalChangedLines} lines (under threshold)`,
+  };
+}
+
 // --- Input parsing helpers ---
 
 /** Parse evaluate command input from adapter args. */
