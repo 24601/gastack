@@ -248,7 +248,8 @@ describe('Orchestrator', () => {
     expect(orch.advance('execute done')).toBe('REVIEW');
     expect(orch.advance('review done')).toBe('REFINE');
     expect(orch.advance('refine done')).toBe('DEPLOY');
-    expect(orch.advance('deploy done')).toBe('DONE');
+    expect(orch.advance('deploy done')).toBe('VERIFY');
+    expect(orch.advance('verify done')).toBe('DONE');
     expect(orch.currentStage()).toBe('DONE');
   });
 
@@ -463,6 +464,8 @@ describe('Orchestrator', () => {
     orch.enterStage('REFINE');
     orch.completeStage();
     orch.enterStage('DEPLOY');
+    orch.completeStage();
+    orch.enterStage('VERIFY');
 
     orch.complete('All deployed');
     expect(orch.isDone()).toBe(true);
@@ -509,6 +512,147 @@ describe('Orchestrator', () => {
 
     const r = await orch.externalCall('late', 'cmd');
     expect(r.result).toBe('late-result');
+  });
+
+  test('VERIFY can loop back to REFINE on canary failure', () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('DEPLOY');
+    orch.completeStage();
+    orch.enterStage('VERIFY');
+    orch.completeStage();
+    // Loop back to REFINE
+    orch.enterStage('REFINE');
+    expect(orch.currentStage()).toBe('REFINE');
+  });
+
+  test('verifyCycle passes when canary returns passed:true', async () => {
+    const mockAdapter: Adapter = {
+      name: 'gstack',
+      async execute(cmd, args) {
+        if (cmd === 'canary') {
+          return JSON.stringify({ passed: true, summary: 'All checks green' });
+        }
+        return '';
+      },
+    };
+    const orch = createOrch({ gstack: mockAdapter });
+    // Walk to VERIFY stage
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('DEPLOY');
+    orch.completeStage();
+    orch.enterStage('VERIFY');
+
+    const result = await orch.verifyCycle();
+    expect(result.passed).toBe(true);
+    expect(result.approvalRequested).toBe(false);
+    // VERIFY stage should be completed, ready for DONE
+    expect(orch.currentStage()).toBeNull();
+  });
+
+  test('verifyCycle fails and transitions to REFINE when canary returns passed:false', async () => {
+    const mockAdapter: Adapter = {
+      name: 'gstack',
+      async execute(cmd, args) {
+        if (cmd === 'canary') {
+          return JSON.stringify({ passed: false, errors: ['Console error on /home'] });
+        }
+        return '';
+      },
+    };
+    const orch = createOrch({ gstack: mockAdapter });
+    // Walk to VERIFY stage
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('DEPLOY');
+    orch.completeStage();
+    orch.enterStage('VERIFY');
+
+    const result = await orch.verifyCycle();
+    expect(result.passed).toBe(false);
+    expect(result.approvalRequested).toBe(true);
+    // Should have transitioned to REFINE
+    expect(orch.currentStage()).toBe('REFINE');
+    expect(orch.pendingApproval()).not.toBeNull();
+  });
+
+  test('verifyCycle handles adapter exception as failure', async () => {
+    const mockAdapter: Adapter = {
+      name: 'gstack',
+      async execute(cmd) {
+        if (cmd === 'canary') throw new Error('Canary process crashed');
+        return '';
+      },
+    };
+    const orch = createOrch({ gstack: mockAdapter });
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('DEPLOY');
+    orch.completeStage();
+    orch.enterStage('VERIFY');
+
+    const result = await orch.verifyCycle();
+    expect(result.passed).toBe(false);
+    expect(result.approvalRequested).toBe(true);
+    expect(orch.currentStage()).toBe('REFINE');
+  });
+
+  test('verifyCycle rejects if not in VERIFY stage', async () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    await expect(orch.verifyCycle()).rejects.toThrow('verifyCycle requires VERIFY stage');
+  });
+
+  test('verifyCycle passes url and duration to canary', async () => {
+    let capturedArgs: Record<string, unknown> | undefined;
+    const mockAdapter: Adapter = {
+      name: 'gstack',
+      async execute(cmd, args) {
+        capturedArgs = args;
+        return JSON.stringify({ passed: true, summary: 'OK' });
+      },
+    };
+    const orch = createOrch({ gstack: mockAdapter });
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+    orch.completeStage();
+    orch.enterStage('REFINE');
+    orch.completeStage();
+    orch.enterStage('DEPLOY');
+    orch.completeStage();
+    orch.enterStage('VERIFY');
+
+    await orch.verifyCycle({ url: 'https://example.com', duration: 60 });
+    expect(capturedArgs).toEqual({ url: 'https://example.com', duration: 60 });
   });
 
   test('rejects operations on completed session', () => {

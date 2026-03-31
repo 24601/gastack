@@ -15,7 +15,7 @@ import * as crypto from 'crypto';
 
 // --- Stage definition ---
 
-export const STAGES = ['PLAN', 'EXECUTE', 'REVIEW', 'REFINE', 'DEPLOY', 'DONE'] as const;
+export const STAGES = ['PLAN', 'EXECUTE', 'REVIEW', 'REFINE', 'DEPLOY', 'VERIFY', 'DONE'] as const;
 export type Stage = (typeof STAGES)[number];
 
 // --- 13-event schema ---

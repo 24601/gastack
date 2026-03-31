@@ -1,5 +1,5 @@
 /**
- * Full lifecycle integration test — PLAN→EXECUTE→REVIEW→DEPLOY→DONE
+ * Full lifecycle integration test — PLAN→EXECUTE→REVIEW→DEPLOY→VERIFY→DONE
  * with realistic adapters (ga-ckv).
  *
  * Single test walks through all stages with realistic gt CLI responses
@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 describe('Full lifecycle integration', () => {
-  test('PLAN→EXECUTE→REVIEW→DEPLOY→DONE with realistic adapters', async () => {
+  test('PLAN→EXECUTE→REVIEW→DEPLOY→VERIFY→DONE with realistic adapters', async () => {
     // --- Setup adapters ---
 
     // Gastown adapter: returns realistic gt CLI fixture responses
@@ -210,6 +210,12 @@ describe('Full lifecycle integration', () => {
     orch.completeTask(deployTask, `MR ${submitData.mr_id} queued`);
     orch.completeStage('Branch pushed and MR submitted to merge queue');
 
+    // --- VERIFY stage ---
+
+    orch.enterStage('VERIFY');
+    expect(orch.currentStage()).toBe('VERIFY');
+    orch.completeStage('Canary verification passed');
+
     // --- DONE stage ---
 
     orch.enterStage('DONE');
@@ -224,7 +230,7 @@ describe('Full lifecycle integration', () => {
     orch.completeStage('Session complete');
 
     // Finalize the session
-    orch.complete('Full lifecycle complete: PLAN→EXECUTE→REVIEW→DEPLOY→DONE');
+    orch.complete('Full lifecycle complete: PLAN→EXECUTE→REVIEW→DEPLOY→VERIFY→DONE');
 
     // --- Verify final state ---
 
@@ -306,6 +312,9 @@ describe('Full lifecycle integration', () => {
     orch.enterStage('DEPLOY');
     orch.completeStage();
 
+    orch.enterStage('VERIFY');
+    orch.completeStage();
+
     orch.enterStage('DONE');
     orch.completeStage();
   });
@@ -370,6 +379,8 @@ describe('Full lifecycle integration', () => {
     orch2.completeStage();
     orch2.enterStage('DEPLOY');
     orch2.completeStage();
+    orch2.enterStage('VERIFY');
+    orch2.completeStage();
     orch2.enterStage('DONE');
     orch2.complete('Recovered and completed');
 
@@ -422,6 +433,10 @@ describe('Full lifecycle integration', () => {
     orch.enterStage('DEPLOY');
     orch.completeStage('Deployed');
 
+    // VERIFY
+    orch.enterStage('VERIFY');
+    orch.completeStage('Canary passed');
+
     // DONE
     orch.enterStage('DONE');
     orch.complete('Complete after one refine loop');
@@ -432,12 +447,12 @@ describe('Full lifecycle integration', () => {
     // Verify event log captured the full loop
     const stageEntered = orch.eventLog.ofType('STAGE_ENTERED');
     const stageNames = stageEntered.map(e => e.stage);
-    // PLAN, EXECUTE, REVIEW, REFINE, EXECUTE, REVIEW, REFINE, DEPLOY, DONE
+    // PLAN, EXECUTE, REVIEW, REFINE, EXECUTE, REVIEW, REFINE, DEPLOY, VERIFY, DONE
     // complete() fast-forwards through remaining stages, adding a final DONE entry
-    expect(stageNames.slice(0, 9)).toEqual([
+    expect(stageNames.slice(0, 10)).toEqual([
       'PLAN', 'EXECUTE', 'REVIEW', 'REFINE',
       'EXECUTE', 'REVIEW', 'REFINE',
-      'DEPLOY', 'DONE',
+      'DEPLOY', 'VERIFY', 'DONE',
     ]);
   });
 
@@ -460,6 +475,8 @@ describe('Full lifecycle integration', () => {
     orch.enterStage('REFINE');
     orch.completeStage();
     orch.enterStage('DEPLOY');
+    orch.completeStage();
+    orch.enterStage('VERIFY');
     orch.completeStage();
     orch.enterStage('DONE');
 

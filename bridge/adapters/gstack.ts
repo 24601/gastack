@@ -157,6 +157,7 @@ export class ClaudeError extends Error {
  *   - review       → Run /review via claude -p, parse grade + findings
  *   - cso          → Run /cso via claude -p, parse grade + findings
  *   - review-suite → Run /review + /cso in parallel (Promise.all)
+ *   - canary       → Run /canary via claude -p for post-deploy verification
  *   - raw          → Run arbitrary prompt via claude -p
  */
 export class GstackAdapter implements Adapter {
@@ -191,6 +192,9 @@ export class GstackAdapter implements Adapter {
 
       case 'review-suite':
         return this.runReviewSuite(args);
+
+      case 'canary':
+        return this.runCanary(args);
 
       case 'raw':
         return this.runRaw(args);
@@ -252,6 +256,34 @@ export class GstackAdapter implements Adapter {
     };
 
     return JSON.stringify(suite);
+  }
+
+  /**
+   * Run /canary via claude -p for post-deploy verification.
+   * Returns JSON with { passed: boolean, errors?: string[], summary: string }.
+   */
+  private async runCanary(args?: Record<string, unknown>): Promise<string> {
+    const url = args?.url ? ` ${String(args.url)}` : '';
+    const duration = args?.duration ? ` --duration ${String(args.duration)}` : '';
+    const prompt = `/canary${url}${duration}`;
+
+    const result = await claudeExec(prompt, {
+      cwd: this.cwd,
+      timeout: this.timeout,
+      model: this.model,
+      maxTurns: this.maxTurns,
+      dangerouslySkipPermissions: true,
+    });
+
+    if (result.exitCode !== 0) {
+      throw new ClaudeError(
+        `claude -p failed running /canary (exit ${result.exitCode})`,
+        prompt,
+        result,
+      );
+    }
+
+    return result.stdout;
   }
 
   /** Run an arbitrary prompt via claude -p. Returns raw stdout. */

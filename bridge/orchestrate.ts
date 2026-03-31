@@ -1,5 +1,5 @@
 /**
- * Bridge stage machine — orchestrates PLAN→EXECUTE→REVIEW→REFINE→DEPLOY→DONE.
+ * Bridge stage machine — orchestrates PLAN→EXECUTE→REVIEW→REFINE→DEPLOY→VERIFY→DONE.
  *
  * State is derived entirely from the event log. No mutable state fields.
  * On crash/restart, replay the log to reconstruct exactly where we left off.
@@ -306,11 +306,12 @@ export class Orchestrator {
         ? nextIdx === refIdx + 1
         : nextIdx === refIdx + 1;
       const isRefineLoop = referenceStage === 'REFINE' && stage === 'EXECUTE';
+      const isCanaryFailLoop = referenceStage === 'VERIFY' && stage === 'REFINE';
 
-      if (!isForward && !isRefineLoop) {
+      if (!isForward && !isRefineLoop && !isCanaryFailLoop) {
         throw new Error(
           `Invalid transition: ${referenceStage} → ${stage}. ` +
-            `Allowed: next stage or REFINE → EXECUTE`,
+            `Allowed: next stage, REFINE → EXECUTE, or VERIFY → REFINE`,
         );
       }
     }
@@ -940,6 +941,77 @@ export class Orchestrator {
       mergedReport,
       approvalId,
     };
+  }
+
+  // --- Post-deploy canary verification ---
+
+  /**
+   * Run canary verification after deploy, before DONE.
+   *
+   * Invokes gstack's /canary skill to check for console errors, performance
+   * regressions, and page failures on the deployed branch. The orchestrator
+   * must be in the VERIFY stage when this is called.
+   *
+   * On pass: VERIFY completes, ready to advance to DONE.
+   * On fail: transitions to REFINE (human decides next action).
+   *
+   * Returns the canary result and whether verification passed.
+   */
+  async verifyCycle(opts?: {
+    /** Production URL to canary-check. */
+    url?: string;
+    /** Duration in seconds for the canary monitoring window. */
+    duration?: number;
+  }): Promise<{
+    passed: boolean;
+    result: string;
+    /** If failed, an approval is requested for the human to decide. */
+    approvalRequested: boolean;
+  }> {
+    const current = this.currentStage();
+    if (current !== 'VERIFY') {
+      throw new Error(`verifyCycle requires VERIFY stage, currently in ${current}`);
+    }
+
+    // Invoke canary via gstack adapter
+    const canaryArgs: Record<string, unknown> = {};
+    if (opts?.url) canaryArgs.url = opts.url;
+    if (opts?.duration) canaryArgs.duration = opts.duration;
+
+    let canaryResult: string;
+    try {
+      const call = await this.externalCall('gstack', 'canary', canaryArgs);
+      canaryResult = call.result;
+    } catch (err) {
+      // Canary invocation itself failed — treat as verification failure
+      const message = err instanceof Error ? err.message : String(err);
+      canaryResult = JSON.stringify({ passed: false, error: message });
+    }
+
+    // Parse canary result
+    let passed = false;
+    try {
+      const parsed = JSON.parse(canaryResult);
+      passed = parsed.passed === true;
+    } catch {
+      // Unparseable result — treat as failure
+      passed = false;
+    }
+
+    if (passed) {
+      this.completeStage(`Canary verification passed`);
+      return { passed: true, result: canaryResult, approvalRequested: false };
+    }
+
+    // Canary failed — transition to REFINE, request human decision
+    this.completeStage(`Canary verification failed: ${canaryResult}`);
+    this.enterStage('REFINE');
+    this.requestApproval(
+      `Post-deploy canary verification failed. ` +
+        `Result: ${canaryResult}. ` +
+        `Action needed: investigate and fix, or accept the deployment.`,
+    );
+    return { passed: false, result: canaryResult, approvalRequested: true };
   }
 
   // --- Session lifecycle ---
