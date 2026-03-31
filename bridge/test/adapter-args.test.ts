@@ -635,6 +635,7 @@ describe('T3.4 structural invariants', () => {
       { cmd: 'escalate', args: { description: 'd', severity: 'HIGH', message: 'm' } },
       { cmd: 'nudge', args: { target: 't', message: 'm' } },
       { cmd: 'sling', args: { beadId: 'gt-t1x', rig: 'gastack', merge: 'mr' } },
+      { cmd: 'sling.review', args: { beadId: 'gt-t1x', rig: 'gastack', agent: 'claude' } },
       { cmd: 'sling.batch', args: { beadIds: ['ga-001', 'ga-002'], rig: 'gastack', maxConcurrent: 2 } },
       { cmd: 'raw', args: { args: ['status', '--verbose'] } },
     ];
