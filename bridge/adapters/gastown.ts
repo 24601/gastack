@@ -48,6 +48,7 @@ const JSON_COMMANDS = new Set([
   'status',
   'peek',
   'dolt',
+  'convoy',
 ]);
 
 // --- gt CLI executor ---
@@ -337,6 +338,9 @@ export class GasTownAdapter implements Adapter {
         if (args?.formulaArgs) slingArgs.push('--args', String(args.formulaArgs));
         return this.textCommand(slingArgs);
       }
+
+      case 'convoy.stranded':
+        return this.jsonCommand(['convoy', 'stranded']);
 
       case 'tail.poll':
         return this.pollEvents();

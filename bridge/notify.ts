@@ -10,6 +10,10 @@
  */
 
 import type { Adapter } from './orchestrate.js';
+import {
+  type StrandedDiagnosis,
+  formatDiagnosisForNotify,
+} from './stranded.js';
 
 // --- Types ---
 
@@ -221,6 +225,8 @@ export class NotifyAdapter implements Adapter {
         return this.send(args);
       case 'broadcast':
         return this.broadcast(args);
+      case 'stranded':
+        return this.sendStranded(args);
       case 'list':
         return this.list();
       default:
@@ -253,6 +259,47 @@ export class NotifyAdapter implements Adapter {
     }
 
     return JSON.stringify({ queued: true, targets: names });
+  }
+
+  /**
+   * Send stranded convoy alerts to all configured targets.
+   *
+   * Accepts an array of StrandedDiagnosis objects. Each diagnosis with
+   * quality_blocked reason gets sent as an error-severity alert; others
+   * get sent as warnings or info.
+   */
+  private sendStranded(args?: Record<string, unknown>): string {
+    const diagnoses = args?.diagnoses as StrandedDiagnosis[] | undefined;
+    if (!diagnoses || !Array.isArray(diagnoses) || diagnoses.length === 0) {
+      return JSON.stringify({ queued: false, reason: 'no diagnoses provided' });
+    }
+
+    const targetName = args?.target ? String(args.target) : undefined;
+    let sent = 0;
+
+    for (const diagnosis of diagnoses) {
+      const { text, fields, severity } = formatDiagnosisForNotify(diagnosis);
+      const payload: NotifyPayload = { text, fields, severity };
+
+      if (targetName) {
+        const target = this.targets[targetName];
+        if (!target) {
+          throw new Error(
+            `Unknown notify target: "${targetName}". Available: ${Object.keys(this.targets).join(', ')}`,
+          );
+        }
+        this.fireAndForget(target, payload);
+        sent++;
+      } else {
+        // Broadcast to all targets
+        for (const name of Object.keys(this.targets)) {
+          this.fireAndForget(this.targets[name], payload);
+          sent++;
+        }
+      }
+    }
+
+    return JSON.stringify({ queued: true, sent });
   }
 
   /** List configured targets. */

@@ -13,6 +13,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EventLog, type EventEnvelope, type Stage, STAGES } from './events.js';
 import { Orchestrator, type OrchestratorOptions } from './orchestrate.js';
+import {
+  diagnoseStranded,
+  formatDiagnoses,
+  type StrandedConvoy,
+  type StrandedDiagnosis,
+} from './stranded.js';
+import type { QualityReport } from './quality.js';
 
 // --- Types ---
 
@@ -75,6 +82,10 @@ export interface ApprovalSignal {
   reviewCycle: number;
   /** Reason for the decision. */
   reason?: string;
+}
+
+export interface StrandedResult {
+  diagnoses: StrandedDiagnosis[];
 }
 
 // --- Helpers ---
@@ -365,6 +376,61 @@ export function reject(ctx: CliContext, signal: ApprovalSignal): { approvalId: s
   return { approvalId: target.approvalId };
 }
 
+/**
+ * Diagnose stranded convoys with quality context.
+ *
+ * Accepts raw convoy data and an optional quality cache. When called from the
+ * CLI, convoy data comes from `gt convoy stranded --json` and the quality
+ * cache comes from session event logs (quality evaluation results).
+ */
+export function stranded(
+  convoys: StrandedConvoy[],
+  qualityCache?: Map<string, QualityReport>,
+): StrandedResult {
+  const cache = qualityCache ?? new Map();
+  const diagnoses = diagnoseStranded(convoys, cache);
+  return { diagnoses };
+}
+
+/**
+ * Build a quality cache from a session's event log.
+ *
+ * Scans EXTERNAL_CALL_COMPLETED events for quality evaluation results and
+ * maps issue IDs to their QualityReport. Used by the stranded command to
+ * join convoy data with quality context.
+ */
+export function buildQualityCacheFromLog(
+  logDir: string,
+): Map<string, QualityReport> {
+  const cache = new Map<string, QualityReport>();
+
+  const logs = findSessionLogs(logDir);
+  for (const logPath of logs) {
+    try {
+      const log = EventLog.replay(logPath);
+      const calls = log.ofType('EXTERNAL_CALL_COMPLETED');
+      for (const call of calls) {
+        if (!call.success || !call.result) continue;
+        try {
+          const parsed = JSON.parse(call.result);
+          // Quality evaluation results have an 'overall' verdict and 'gates' array
+          if (parsed.overall && Array.isArray(parsed.gates)) {
+            // Extract issue ID from the idempotency key or use callId as fallback
+            const issueId = call.idempotencyKey ?? call.callId;
+            cache.set(issueId, parsed as QualityReport);
+          }
+        } catch {
+          // Not JSON or not a quality report — skip
+        }
+      }
+    } catch {
+      // Malformed log — skip
+    }
+  }
+
+  return cache;
+}
+
 // --- CLI argument parser ---
 
 export interface ParsedArgs {
@@ -422,6 +488,7 @@ Commands:
   status <run-id>                        Show session status
   list                                   List all sessions
   watch <run-id> [--timeout MS]          Live event stream
+  stranded [--convoy-data JSON]          Diagnose stranded convoys with quality context
   approve <run-id> --stage STAGE --cycle N [--reason TEXT]
                                          Approve pending gate
   reject <run-id> --stage STAGE --cycle N [--reason TEXT]
@@ -515,6 +582,24 @@ export async function main(argv: string[]): Promise<void> {
         const result = await watch(ctx, runId, { timeout });
         if (!json) {
           out(`\nWatch ended: ${result.reason} (${result.eventsEmitted} events)`);
+        }
+        break;
+      }
+
+      case 'stranded': {
+        const convoyData = parsed.flags['convoy-data'];
+        let convoys: StrandedConvoy[] = [];
+        if (convoyData) {
+          convoys = JSON.parse(convoyData) as StrandedConvoy[];
+        }
+        const qualityCache = buildQualityCacheFromLog(logDir);
+        const result = stranded(convoys, qualityCache);
+        if (json) {
+          out(JSON.stringify(result));
+        } else if (result.diagnoses.length === 0) {
+          out('No stranded convoys.');
+        } else {
+          out(formatDiagnoses(result.diagnoses));
         }
         break;
       }
