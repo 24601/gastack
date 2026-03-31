@@ -129,6 +129,18 @@ export class TestableGasTownAdapter implements Adapter {
         return { tool: 'gt', cliArgs: slingArgs };
       }
 
+      case 'sling.review': {
+        const reviewSlingArgs = [
+          'gt', 'sling', String(args?.beadId ?? ''), String(args?.rig ?? ''),
+          '--review-only',
+          '--formula', 'mol-polecat-work',
+          '--args', String(args?.formulaArgs ?? 'Run /review on the branch, then /cso. Persist findings to bead notes.'),
+        ];
+        if (args?.agent) reviewSlingArgs.push('--agent', String(args.agent));
+        if (args?.merge) reviewSlingArgs.push('--merge', String(args.merge));
+        return { tool: 'gt', cliArgs: reviewSlingArgs };
+      }
+
       case 'sling.batch': {
         const beadIds = args?.beadIds;
         if (!Array.isArray(beadIds) || beadIds.length === 0) {

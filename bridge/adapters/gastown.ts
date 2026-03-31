@@ -249,6 +249,7 @@ export class EventTailer {
  *   - escalate      → gt escalate <desc> -s <severity>
  *   - nudge         → gt nudge <target> <message>
  *   - sling         → gt sling <beadId> <rig> [--merge <strategy>] [--review-only] [--agent <agent>]
+ *   - sling.review  → gt sling <beadId> <rig> --review-only [--agent <agent>]
  *   - sling.batch   → gt sling <id1> <id2> ... <rig> [--max-concurrent N] [--merge <strategy>]
  *   - tail.poll     → poll events.jsonl for new events
  *   - tail.state    → return current tail state
@@ -338,6 +339,18 @@ export class GasTownAdapter implements Adapter {
         if (args?.formula) slingArgs.push('--formula', String(args.formula));
         if (args?.formulaArgs) slingArgs.push('--args', String(args.formulaArgs));
         return this.textCommand(slingArgs);
+      }
+
+      case 'sling.review': {
+        const reviewSlingArgs = [
+          'sling', String(args?.beadId ?? ''), String(args?.rig ?? ''),
+          '--review-only',
+          '--formula', 'mol-polecat-work',
+          '--args', String(args?.formulaArgs ?? 'Run /review on the branch, then /cso. Persist findings to bead notes.'),
+        ];
+        if (args?.agent) reviewSlingArgs.push('--agent', String(args.agent));
+        if (args?.merge) reviewSlingArgs.push('--merge', String(args.merge));
+        return this.textCommand(reviewSlingArgs);
       }
 
       case 'sling.batch': {
