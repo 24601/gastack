@@ -641,6 +641,118 @@ export function routeReview(input: ReviewRoutingInput): {
   };
 }
 
+// --- Review iteration tracking ---
+
+/**
+ * Tracks the state of a single review-fix-rereview iteration.
+ *
+ * The bridge uses this to decide whether to loop back (REFINE→EXECUTE)
+ * or escalate to a human. Each iteration records the quality report,
+ * what was fixed, and what remains.
+ */
+export interface QualityIteration {
+  /** 1-indexed iteration number. */
+  iteration: number;
+  /** The quality report from this iteration's review. */
+  report: QualityReport;
+  /** Descriptions of fixes applied before this review (empty on first iteration). */
+  fixesApplied: string[];
+  /** Findings that remain unresolved after this iteration. */
+  remainingFindings: Finding[];
+}
+
+/**
+ * Policy for the review-fix-rereview loop.
+ */
+export interface ReviewLoopPolicy {
+  /** Maximum iterations before escalating to human (default: 3). */
+  maxIterations: number;
+}
+
+export const DEFAULT_REVIEW_LOOP_POLICY: ReviewLoopPolicy = {
+  maxIterations: 3,
+};
+
+/**
+ * Decide whether to reiterate (loop back to fix and re-review).
+ *
+ * Returns false (stop iterating) when:
+ *   - Max iterations reached
+ *   - No fixable findings remain (only CRITICAL left, which needs human)
+ *   - Last iteration made no progress (same findings, no fixes applied)
+ *
+ * Returns true (keep iterating) when:
+ *   - There are MAJOR or MINOR findings that an agent can fix
+ *   - Fixes were applied last round (progress is being made)
+ */
+export function shouldReiterate(
+  current: QualityIteration,
+  policy: ReviewLoopPolicy = DEFAULT_REVIEW_LOOP_POLICY,
+): boolean {
+  // Stop if max iterations reached
+  if (current.iteration >= policy.maxIterations) return false;
+
+  // Stop if no fixable findings remain
+  // CRITICAL findings need human judgment — not auto-fixable
+  const fixable = current.remainingFindings.filter(
+    (f) => f.severity !== 'CRITICAL',
+  );
+  if (fixable.length === 0) return false;
+
+  // Stop if last iteration made no progress (no fixes applied = stuck)
+  if (current.iteration > 1 && current.fixesApplied.length === 0) return false;
+
+  return true;
+}
+
+/**
+ * Extract auto-fixable findings from a quality report.
+ * CRITICAL findings are excluded — they require human judgment.
+ */
+export function extractFixableFindings(report: QualityReport): Finding[] {
+  return report.gates.flatMap((gate) =>
+    gate.findings.filter((f) => f.severity !== 'CRITICAL'),
+  );
+}
+
+/**
+ * Compare findings across two iterations to detect progress.
+ * Returns findings that were resolved (present in previous, absent in current).
+ */
+export function resolvedFindings(
+  previous: Finding[],
+  current: Finding[],
+): Finding[] {
+  return previous.filter(
+    (prev) => !current.some(
+      (curr) => curr.severity === prev.severity && curr.description === prev.description,
+    ),
+  );
+}
+
+/**
+ * Summarize iteration state for human-readable output or bead notes.
+ */
+export function summarizeIteration(iteration: QualityIteration): string {
+  const lines = [
+    `Iteration ${iteration.iteration}:`,
+    `  Overall: ${iteration.report.overall}`,
+    `  Findings remaining: ${iteration.remainingFindings.length}`,
+  ];
+  if (iteration.fixesApplied.length > 0) {
+    lines.push(`  Fixes applied: ${iteration.fixesApplied.join('; ')}`);
+  }
+  const fixable = iteration.remainingFindings.filter((f) => f.severity !== 'CRITICAL');
+  const critical = iteration.remainingFindings.filter((f) => f.severity === 'CRITICAL');
+  if (critical.length > 0) {
+    lines.push(`  CRITICAL (needs human): ${critical.map((f) => f.description).join('; ')}`);
+  }
+  if (fixable.length > 0) {
+    lines.push(`  Fixable: ${fixable.map((f) => `[${f.severity}] ${f.description}`).join('; ')}`);
+  }
+  return lines.join('\n');
+}
+
 // --- Input parsing helpers ---
 
 /** Parse evaluate command input from adapter args. */
