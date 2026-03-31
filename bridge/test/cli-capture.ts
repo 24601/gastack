@@ -100,6 +100,7 @@ export class TestableGasTownAdapter implements Adapter {
         if (args?.target) doneArgs.push('--target', String(args.target));
         if (args?.cleanupStatus) doneArgs.push('--cleanup-status', String(args.cleanupStatus));
         if (args?.status) doneArgs.push('--status', String(args.status));
+        if (args?.resume) doneArgs.push('--resume');
         return { tool: 'gt', cliArgs: doneArgs };
       }
 
