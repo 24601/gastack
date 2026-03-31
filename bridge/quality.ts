@@ -301,6 +301,155 @@ export function mergeStrategyFromVerdict(report: QualityReport): MergeStrategy {
   return 'mr';
 }
 
+// --- Failure policy (session death response) ---
+
+/**
+ * Death event types from gastown.
+ *   - session_death: a single polecat session died
+ *   - mass_death: multiple sessions died in a short window
+ *   - scheduler_dispatch_failed: scheduler couldn't assign work
+ */
+export type DeathEventType = 'session_death' | 'mass_death' | 'scheduler_dispatch_failed';
+
+/** A death event received from gastown's event stream. */
+export interface DeathEvent {
+  type: DeathEventType;
+  /** Task or bead ID that was being worked on. */
+  taskId?: string;
+  /** Polecat/session that died. */
+  sessionId?: string;
+  /** How many sessions died (for mass_death). */
+  count?: number;
+  /** Time window in seconds (for mass_death). */
+  windowSeconds?: number;
+  /** Error or reason for death if known. */
+  reason?: string;
+  /** ISO timestamp of the event. */
+  timestamp: string;
+}
+
+/**
+ * Failure response actions.
+ *   - retry: transient failure, retry the task
+ *   - investigate: repeated failure, run /investigate to find root cause
+ *   - halt: mass failure, stop all dispatch and surface to human
+ */
+export type FailureAction = 'retry' | 'investigate' | 'halt';
+
+/** Result of classifying a death event. */
+export interface FailureResponse {
+  action: FailureAction;
+  reason: string;
+  /** Task ID to retry or investigate (if applicable). */
+  taskId?: string;
+  /** Whether to surface this to a human operator. */
+  surfaceToHuman: boolean;
+}
+
+/**
+ * Failure policy configuration.
+ *   - maxRetries: how many times to auto-retry before triggering investigation
+ *   - massDeathThreshold: how many deaths in a window trigger HALT
+ *   - massDeathWindowSeconds: the time window for mass death detection
+ */
+export interface FailurePolicy {
+  maxRetries: number;
+  massDeathThreshold: number;
+  massDeathWindowSeconds: number;
+}
+
+export const DEFAULT_FAILURE_POLICY: FailurePolicy = {
+  maxRetries: 1,
+  massDeathThreshold: 3,
+  massDeathWindowSeconds: 300,
+};
+
+/**
+ * Track per-task death counts for retry vs investigate decisions.
+ * Key: taskId, Value: number of deaths seen.
+ */
+export type DeathLedger = Map<string, number>;
+
+/**
+ * Classify a death event into a failure response.
+ *
+ * Decision tree:
+ *   - mass_death → HALT (always, regardless of retry count)
+ *   - scheduler_dispatch_failed → HALT (infrastructure broken)
+ *   - session_death, first occurrence for task → retry (transient)
+ *   - session_death, repeated for same task → investigate (root cause needed)
+ *
+ * Encodes gstack's /investigate opinion:
+ * "Iron Law: no fixes without root cause." Blind retry is the opposite of investigation.
+ */
+export function classifyDeathEvent(
+  event: DeathEvent,
+  ledger: DeathLedger,
+  policy: FailurePolicy = DEFAULT_FAILURE_POLICY,
+): FailureResponse {
+  // mass_death: always halt
+  if (event.type === 'mass_death') {
+    return {
+      action: 'halt',
+      reason: `Mass death: ${event.count ?? 'unknown'} sessions died within ${event.windowSeconds ?? 'unknown'}s. All dispatch halted pending human review.`,
+      surfaceToHuman: true,
+    };
+  }
+
+  // scheduler_dispatch_failed: infrastructure failure → halt
+  if (event.type === 'scheduler_dispatch_failed') {
+    return {
+      action: 'halt',
+      reason: `Scheduler dispatch failed: ${event.reason ?? 'unknown cause'}. Infrastructure may be degraded.`,
+      surfaceToHuman: true,
+    };
+  }
+
+  // session_death: check retry count for this task
+  const taskId = event.taskId ?? 'unknown';
+  const priorDeaths = ledger.get(taskId) ?? 0;
+  const newCount = priorDeaths + 1;
+  ledger.set(taskId, newCount);
+
+  if (newCount <= policy.maxRetries) {
+    return {
+      action: 'retry',
+      reason: `Session death for task ${taskId} (attempt ${newCount}/${policy.maxRetries + 1}). Retrying — may be transient.`,
+      taskId,
+      surfaceToHuman: false,
+    };
+  }
+
+  // Repeated death: Iron Law — no fixes without root cause
+  return {
+    action: 'investigate',
+    reason: `Session death for task ${taskId} repeated ${newCount} times (exceeds ${policy.maxRetries} retry limit). Triggering /investigate for root cause analysis.`,
+    taskId,
+    surfaceToHuman: true,
+  };
+}
+
+/**
+ * Check if a batch of recent death events constitutes a mass death.
+ * Used by the EventTailer handler to detect mass_death from individual events.
+ */
+export function detectMassDeath(
+  recentDeaths: DeathEvent[],
+  policy: FailurePolicy = DEFAULT_FAILURE_POLICY,
+): boolean {
+  if (recentDeaths.length < policy.massDeathThreshold) return false;
+
+  // Check if enough deaths occurred within the window
+  const now = Date.now();
+  const windowMs = policy.massDeathWindowSeconds * 1000;
+  const inWindow = recentDeaths.filter((e) => {
+    const eventTime = new Date(e.timestamp).getTime();
+    return now - eventTime <= windowMs;
+  });
+
+  return inWindow.length >= policy.massDeathThreshold;
+}
+
 // --- Adapter implementation ---
 
 /**
@@ -311,13 +460,21 @@ export function mergeStrategyFromVerdict(report: QualityReport): MergeStrategy {
  *   - security     → Evaluate security gate only
  *   - correctness  → Evaluate correctness gate only
  *   - policy       → Return current policy configuration
+ *   - classify-death → Classify a death event into a failure response
+ *   - failure-policy → Return current failure policy configuration
  */
 export class QualityAdapter implements Adapter {
   readonly name = 'quality';
   private policy: QualityPolicy;
+  private failurePolicy: FailurePolicy;
+  private deathLedger: DeathLedger = new Map();
 
-  constructor(opts?: { policy?: Partial<QualityPolicy> }) {
+  constructor(opts?: {
+    policy?: Partial<QualityPolicy>;
+    failurePolicy?: Partial<FailurePolicy>;
+  }) {
     this.policy = { ...DEFAULT_POLICY, ...opts?.policy };
+    this.failurePolicy = { ...DEFAULT_FAILURE_POLICY, ...opts?.failurePolicy };
   }
 
   async execute(
@@ -333,6 +490,10 @@ export class QualityAdapter implements Adapter {
         return this.correctnessCmd(args);
       case 'policy':
         return this.policyCmd();
+      case 'classify-death':
+        return this.classifyDeathCmd(args);
+      case 'failure-policy':
+        return JSON.stringify(this.failurePolicy);
       default:
         throw new Error(`Unknown quality command: ${command}`);
     }
@@ -362,6 +523,28 @@ export class QualityAdapter implements Adapter {
   /** Return current policy. */
   private policyCmd(): string {
     return JSON.stringify(this.policy);
+  }
+
+  /** Classify a death event and return the failure response. */
+  private classifyDeathCmd(args?: Record<string, unknown>): string {
+    if (!args?.event) {
+      throw new Error('classify-death requires args.event');
+    }
+    const event = (typeof args.event === 'string'
+      ? JSON.parse(args.event)
+      : args.event) as DeathEvent;
+    const response = classifyDeathEvent(event, this.deathLedger, this.failurePolicy);
+    return JSON.stringify(response);
+  }
+
+  /** Expose death ledger for inspection (testing/debugging). */
+  getDeathLedger(): DeathLedger {
+    return this.deathLedger;
+  }
+
+  /** Reset death tracking state (e.g., after manual intervention). */
+  resetDeathLedger(): void {
+    this.deathLedger.clear();
   }
 }
 

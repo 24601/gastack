@@ -21,6 +21,15 @@ import {
   EventLog,
   idempotencyKey,
 } from './events.js';
+import {
+  type DeathEvent,
+  type FailureResponse,
+  type FailurePolicy,
+  type DeathLedger,
+  DEFAULT_FAILURE_POLICY,
+  classifyDeathEvent,
+  detectMassDeath,
+} from './quality.js';
 
 // --- Adapter interface ---
 
@@ -440,6 +449,91 @@ export class Orchestrator {
       approved,
       reason,
     });
+  }
+
+  // --- Death event handling ---
+
+  /** Death ledger: per-task death counts for retry vs investigate decisions. */
+  private deathLedger: DeathLedger = new Map();
+  /** Recent death events for mass death detection. */
+  private recentDeaths: DeathEvent[] = [];
+  /** Failure policy configuration. */
+  private failurePolicy: FailurePolicy = DEFAULT_FAILURE_POLICY;
+  /** Whether dispatch has been halted due to mass death. */
+  private dispatchHalted = false;
+
+  /** Configure the failure policy (optional — defaults are sensible). */
+  setFailurePolicy(policy: Partial<FailurePolicy>): void {
+    this.failurePolicy = { ...this.failurePolicy, ...policy };
+  }
+
+  /** Whether dispatch is currently halted. */
+  isDispatchHalted(): boolean {
+    return this.dispatchHalted;
+  }
+
+  /** Resume dispatch after a halt (requires human decision). */
+  resumeDispatch(): void {
+    this.dispatchHalted = false;
+    this.recentDeaths = [];
+  }
+
+  /**
+   * Handle a death event from gastown's event stream.
+   *
+   * Decision tree:
+   *   - mass_death → HALT all dispatch, surface to human
+   *   - scheduler_dispatch_failed → HALT, surface to human
+   *   - session_death (first for this task) → auto-retry
+   *   - session_death (repeated for same task) → /investigate root cause
+   *
+   * Encodes gstack's /investigate Iron Law:
+   * "No fixes without root cause." Blind retry masks systemic failures.
+   * A single auto-retry handles transient crashes (OOM, network blip).
+   * Repeated deaths for the same task demand investigation, not retry loops.
+   *
+   * Returns the classified response so callers can act on it.
+   */
+  handleDeathEvent(event: DeathEvent): FailureResponse {
+    // Track for mass death detection
+    this.recentDeaths.push(event);
+
+    // Prune old events outside the window
+    const windowMs = this.failurePolicy.massDeathWindowSeconds * 1000;
+    const cutoff = Date.now() - windowMs;
+    this.recentDeaths = this.recentDeaths.filter(
+      (e) => new Date(e.timestamp).getTime() >= cutoff,
+    );
+
+    // Check for mass death from accumulated individual session_death events
+    if (
+      event.type === 'session_death' &&
+      detectMassDeath(this.recentDeaths, this.failurePolicy)
+    ) {
+      this.dispatchHalted = true;
+      const syntheticMass: DeathEvent = {
+        type: 'mass_death',
+        count: this.recentDeaths.length,
+        windowSeconds: this.failurePolicy.massDeathWindowSeconds,
+        timestamp: event.timestamp,
+        reason: `Detected ${this.recentDeaths.length} session deaths within ${this.failurePolicy.massDeathWindowSeconds}s window`,
+      };
+      return classifyDeathEvent(syntheticMass, this.deathLedger, this.failurePolicy);
+    }
+
+    // Classify the individual event
+    const response = classifyDeathEvent(event, this.deathLedger, this.failurePolicy);
+
+    if (response.action === 'halt') {
+      this.dispatchHalted = true;
+    }
+
+    return response;
+  }
+
+  /** Get the death ledger (for inspection/debugging). */
+  getDeathLedger(): DeathLedger {
+    return this.deathLedger;
   }
 
   // --- Session lifecycle ---
