@@ -36,6 +36,18 @@ export interface ReviewSuiteResult {
   cso: ReviewResult;
 }
 
+/** Structured output from /investigate root cause analysis. */
+export interface InvestigationResult {
+  /** Root cause description (extracted or full output). */
+  rootCause: string;
+  /** Whether the issue is systemic (infra/config) vs task-specific (code bug). */
+  systemic: boolean;
+  /** Full diagnosis text. */
+  diagnosis: string;
+  /** Raw output from claude -p. */
+  raw: string;
+}
+
 // --- Grade parser ---
 
 const GRADE_PATTERN = /\b(?:Grade|Rating|Score)\s*[:=]\s*([A-F][+-]?)/i;
@@ -68,6 +80,46 @@ export function parseReviewOutput(raw: string): ReviewResult {
   return {
     grade: parseGrade(raw),
     findings: parseFindings(raw),
+    raw,
+  };
+}
+
+// --- Investigation output parser ---
+
+const ROOT_CAUSE_PATTERN = /(?:Root\s*Cause|Root\s*cause|ROOT\s*CAUSE)\s*[:—\-]\s*(.+?)(?:\n|$)/i;
+const SYSTEMIC_PATTERNS = [
+  /\bsystemic\b/i,
+  /\binfrastructure\b/i,
+  /\bconfig(?:uration)?\s+(?:drift|issue|error|problem)\b/i,
+  /\bdependency\s+(?:failure|issue|broken|incompatib)/i,
+  /\bservice\s+(?:outage|down|unavailabl)/i,
+  /\bnetwork\b/i,
+  /\bDNS\b/,
+  /\bOOM\b/,
+  /\bout\s*of\s*memory\b/i,
+  /\bdisk\s+(?:full|space)\b/i,
+  /\bpermission\s+denied\b/i,
+  /\brate\s*limit/i,
+];
+
+/**
+ * Parse /investigate output into structured diagnosis.
+ * Extracts root cause, systemic classification, and full diagnosis.
+ */
+export function parseInvestigationOutput(raw: string): InvestigationResult {
+  // Extract root cause line if present
+  const rootCauseMatch = ROOT_CAUSE_PATTERN.exec(raw);
+  const rootCause = rootCauseMatch
+    ? rootCauseMatch[1].trim()
+    : raw.slice(0, 200).trim(); // Fallback: first 200 chars
+
+  // Check for systemic indicators
+  const systemic = SYSTEMIC_PATTERNS.some((p) => p.test(raw));
+
+  return {
+    rootCause,
+    systemic,
+    diagnosis: raw,
     raw,
   };
 }
@@ -157,6 +209,7 @@ export class ClaudeError extends Error {
  *   - review       → Run /review via claude -p, parse grade + findings
  *   - cso          → Run /cso via claude -p, parse grade + findings
  *   - review-suite → Run /review + /cso in parallel (Promise.all)
+ *   - investigate  → Run /investigate via claude -p for root cause analysis
  *   - canary       → Run /canary via claude -p for post-deploy verification
  *   - raw          → Run arbitrary prompt via claude -p
  */
@@ -192,6 +245,9 @@ export class GstackAdapter implements Adapter {
 
       case 'review-suite':
         return this.runReviewSuite(args);
+
+      case 'investigate':
+        return this.runInvestigate(args);
 
       case 'canary':
         return this.runCanary(args);
@@ -259,6 +315,45 @@ export class GstackAdapter implements Adapter {
     };
 
     return JSON.stringify(suite);
+  }
+
+  /**
+   * Run /investigate via claude -p for root cause analysis.
+   * Returns JSON with { rootCause, systemic, diagnosis, raw }.
+   */
+  private async runInvestigate(
+    args?: Record<string, unknown>,
+  ): Promise<string> {
+    const error = args?.error ? String(args.error) : '';
+    const taskDescription = args?.taskDescription ? String(args.taskDescription) : '';
+
+    const contextParts = [
+      taskDescription ? `Failed task: ${taskDescription}` : '',
+      error ? `Error: ${error}` : '',
+      '',
+      '/investigate',
+    ].filter(Boolean);
+
+    const prompt = contextParts.join('\n');
+
+    const result = await claudeExec(prompt, {
+      cwd: this.cwd,
+      timeout: this.timeout,
+      model: this.model,
+      maxTurns: this.maxTurns,
+      dangerouslySkipPermissions: true,
+    });
+
+    if (result.exitCode !== 0) {
+      throw new ClaudeError(
+        `claude -p failed running /investigate (exit ${result.exitCode})`,
+        prompt,
+        result,
+      );
+    }
+
+    const diagnosis = parseInvestigationOutput(result.stdout);
+    return JSON.stringify(diagnosis);
   }
 
   /**

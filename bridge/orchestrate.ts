@@ -558,6 +558,134 @@ export class Orchestrator {
     return this.deathLedger;
   }
 
+  // --- Task failure investigation ---
+
+  /**
+   * Handle a TASK_FAILED event by auto-invoking /investigate.
+   *
+   * When a task fails, this method:
+   *   1. Spawns a review-only polecat with /investigate on the failed branch
+   *   2. Persists root cause diagnosis to bead notes
+   *   3. Returns the diagnosis so the next dispatch gets context
+   *   4. If /investigate finds a systemic issue, escalates to human
+   *
+   * Encodes gstack's Iron Law: "No fixes without root cause."
+   * Don't blindly retry — understand why it failed first.
+   *
+   * Returns the investigation result. If investigation itself fails,
+   * returns a fallback result and does NOT block the caller.
+   */
+  async handleTaskFailed(
+    taskId: string,
+    opts?: {
+      /** Bead ID for the failed task. */
+      beadId?: string;
+      /** Rig to dispatch the investigation polecat to. */
+      rig?: string;
+      /** Agent to use for investigation. */
+      agent?: string;
+    },
+  ): Promise<{
+    /** Root cause description. */
+    rootCause: string;
+    /** Whether the issue is systemic (not task-specific). */
+    systemic: boolean;
+    /** Full diagnosis text. */
+    diagnosis: string;
+    /** Whether a human escalation was triggered. */
+    escalated: boolean;
+    /** Approval ID if escalation was requested. */
+    approvalId?: string;
+  }> {
+    // Find the failed task in our log
+    const task = this.tasks().find((t) => t.taskId === taskId);
+    if (!task) {
+      return {
+        rootCause: `Task ${taskId} not found in event log`,
+        systemic: false,
+        diagnosis: '',
+        escalated: false,
+      };
+    }
+
+    // Step 1: Dispatch /investigate via gastown adapter (sling.investigate)
+    let investigationResult: string;
+    try {
+      const callArgs: Record<string, unknown> = {
+        beadId: opts?.beadId,
+        rig: opts?.rig,
+        agent: opts?.agent,
+        error: task.error ?? 'unknown error',
+        taskDescription: task.description,
+      };
+
+      const result = await this.externalCall('gastown', 'sling.investigate', callArgs);
+      investigationResult = result.result;
+    } catch (err) {
+      // Investigation dispatch failed — return fallback, don't block
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        rootCause: `Investigation dispatch failed: ${message}`,
+        systemic: false,
+        diagnosis: `Could not dispatch /investigate for task ${taskId}: ${message}`,
+        escalated: false,
+      };
+    }
+
+    // Step 2: Parse investigation output
+    let rootCause = '';
+    let systemic = false;
+    let diagnosis = investigationResult;
+
+    try {
+      const parsed = JSON.parse(investigationResult);
+      rootCause = parsed.rootCause ?? '';
+      systemic = parsed.systemic ?? false;
+      diagnosis = parsed.diagnosis ?? investigationResult;
+    } catch {
+      // Raw text output — use as-is
+      rootCause = investigationResult.slice(0, 200);
+      diagnosis = investigationResult;
+    }
+
+    // Step 3: Persist diagnosis to bead notes
+    if (opts?.beadId) {
+      try {
+        await this.externalCall('gastown', 'raw', {
+          args: [
+            'mail', 'send', '--self',
+            '-s', `Investigation: ${taskId}`,
+            '-m', `Root cause: ${rootCause}\nSystemic: ${systemic}\nDiagnosis: ${diagnosis.slice(0, 500)}`,
+          ],
+        });
+      } catch {
+        // Best-effort: don't fail the flow if note persistence fails
+      }
+    }
+
+    // Step 4: If systemic, escalate to human
+    let escalated = false;
+    let approvalId: string | undefined;
+    if (systemic) {
+      const stage = this.currentStage();
+      if (stage) {
+        approvalId = this.requestApproval(
+          `Systemic issue detected for task ${taskId}: ${rootCause}. ` +
+          `This is not task-specific — may affect other tasks. Human review required.`,
+        );
+      }
+      escalated = true;
+    }
+
+    return {
+      rootCause,
+      systemic,
+      diagnosis,
+      escalated,
+      approvalId,
+    };
+  }
+
   // --- Multi-model dispatch configuration ---
 
   private multiModelConfig: MultiModelConfig = { ...DEFAULT_MULTI_MODEL };

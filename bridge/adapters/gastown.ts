@@ -405,6 +405,7 @@ export function extractExecutionContext(beadJson: Record<string, unknown>): Exec
  *   - nudge         → gt nudge <target> <message>
  *   - sling         → gt sling <beadId> <rig> [--merge <strategy>] [--review-only] [--agent <agent>]
  *   - sling.review  → gt sling <beadId> <rig> --review-only [--agent <agent>]
+ *   - sling.investigate → gt sling <beadId> <rig> --review-only with /investigate prompt
  *   - sling.batch   → gt sling <id1> <id2> ... <rig> [--max-concurrent N] [--merge <strategy>]
  *   - tail.poll     → poll events.jsonl for new events
  *   - tail.state    → return current tail state
@@ -508,6 +509,28 @@ export class GasTownAdapter implements Adapter {
         if (args?.agent) reviewSlingArgs.push('--agent', String(args.agent));
         if (args?.merge) reviewSlingArgs.push('--merge', String(args.merge));
         return this.textCommand(reviewSlingArgs);
+      }
+
+      case 'sling.investigate': {
+        const error = String(args?.error ?? 'unknown error');
+        const taskDescription = args?.taskDescription ? String(args.taskDescription) : '';
+        const investigatePrompt = [
+          taskDescription ? `Failed task: ${taskDescription}` : '',
+          `Error: ${error}`,
+          '',
+          'Run /investigate to find the root cause of this failure.',
+          'Persist your diagnosis to bead notes via `bd update <id> --notes "..."` .',
+          'Classify your finding: is this task-specific (bad code, wrong approach) or systemic (infra, config, dependency)?',
+        ].filter(Boolean).join('\n');
+
+        const investigateSlingArgs = [
+          'sling', String(args?.beadId ?? ''), String(args?.rig ?? ''),
+          '--review-only',
+          '--formula', 'mol-polecat-work',
+          '--args', investigatePrompt,
+        ];
+        if (args?.agent) investigateSlingArgs.push('--agent', String(args.agent));
+        return this.textCommand(investigateSlingArgs);
       }
 
       case 'sling.batch': {
