@@ -125,6 +125,7 @@ export class TestableGasTownAdapter implements Adapter {
         if (args?.merge) slingArgs.push('--merge', String(args.merge));
         if (args?.reviewOnly) slingArgs.push('--review-only');
         if (args?.agent) slingArgs.push('--agent', String(args.agent));
+        if (args?.baseBranch) slingArgs.push('--base-branch', String(args.baseBranch));
         if (args?.formula) slingArgs.push('--formula', String(args.formula));
         if (args?.formulaArgs) slingArgs.push('--args', String(args.formulaArgs));
         return { tool: 'gt', cliArgs: slingArgs };
@@ -152,6 +153,7 @@ export class TestableGasTownAdapter implements Adapter {
         if (args?.merge) batchArgs.push('--merge', String(args.merge));
         if (args?.reviewOnly) batchArgs.push('--review-only');
         if (args?.agent) batchArgs.push('--agent', String(args.agent));
+        if (args?.baseBranch) batchArgs.push('--base-branch', String(args.baseBranch));
         if (args?.formula) batchArgs.push('--formula', String(args.formula));
         if (args?.formulaArgs) batchArgs.push('--args', String(args.formulaArgs));
         return { tool: 'gt', cliArgs: batchArgs };

@@ -404,10 +404,10 @@ export function extractExecutionContext(beadJson: Record<string, unknown>): Exec
  *   - prime         → gt prime
  *   - escalate      → gt escalate <desc> -s <severity>
  *   - nudge         → gt nudge <target> <message>
- *   - sling         → gt sling <beadId> <rig> [--merge <strategy>] [--review-only] [--agent <agent>]
+ *   - sling         → gt sling <beadId> <rig> [--merge <strategy>] [--review-only] [--agent <agent>] [--base-branch <branch>]
  *   - sling.review  → gt sling <beadId> <rig> --review-only [--agent <agent>]
  *   - sling.investigate → gt sling <beadId> <rig> --review-only with /investigate prompt
- *   - sling.batch   → gt sling <id1> <id2> ... <rig> [--max-concurrent N] [--merge <strategy>]
+ *   - sling.batch   → gt sling <id1> <id2> ... <rig> [--max-concurrent N] [--merge <strategy>] [--base-branch <branch>]
  *   - convoy.stage  → gt convoy stage <beadIds> --json [--title <title>] [--launch]
  *   - convoy.launch → gt convoy launch <convoyId> [--force]
  *   - tail.poll     → poll events.jsonl for new events
@@ -498,6 +498,7 @@ export class GasTownAdapter implements Adapter {
         if (args?.merge) slingArgs.push('--merge', String(args.merge));
         if (args?.reviewOnly) slingArgs.push('--review-only');
         if (args?.agent) slingArgs.push('--agent', String(args.agent));
+        if (args?.baseBranch) slingArgs.push('--base-branch', String(args.baseBranch));
         if (args?.formula) slingArgs.push('--formula', String(args.formula));
         if (args?.formulaArgs) slingArgs.push('--args', String(args.formulaArgs));
         return this.textCommand(slingArgs);
@@ -547,6 +548,7 @@ export class GasTownAdapter implements Adapter {
         if (args?.merge) batchArgs.push('--merge', String(args.merge));
         if (args?.reviewOnly) batchArgs.push('--review-only');
         if (args?.agent) batchArgs.push('--agent', String(args.agent));
+        if (args?.baseBranch) batchArgs.push('--base-branch', String(args.baseBranch));
         if (args?.formula) batchArgs.push('--formula', String(args.formula));
         if (args?.formulaArgs) batchArgs.push('--args', String(args.formulaArgs));
         return this.textCommand(batchArgs);

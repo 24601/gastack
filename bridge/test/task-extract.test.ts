@@ -17,6 +17,7 @@ import { createTestRig, type TestRig } from './test-rig.js';
 import {
   extractTasks,
   containsShellMetacharacters,
+  detectTargetBranch,
   type ExtractionResult,
 } from '../task-extract.js';
 
@@ -245,5 +246,58 @@ describe('containsShellMetacharacters utility', () => {
 
   test('passes clean title', () => {
     expect(containsShellMetacharacters('Wire review-suite adapter command')).toBe(false);
+  });
+});
+
+// --- Case 5: Target branch detection ---
+
+describe('detectTargetBranch', () => {
+  test('detects "Target branch: feat/auth-refactor" from fixture', () => {
+    const markdown = rig.readFixture('design-docs', 'target-branch.md');
+    expect(detectTargetBranch(markdown)).toBe('feat/auth-refactor');
+  });
+
+  test('detects "Base branch: develop"', () => {
+    expect(detectTargetBranch('Base branch: develop')).toBe('develop');
+  });
+
+  test('detects "Target branch: release/v2.0"', () => {
+    expect(detectTargetBranch('Target branch: release/v2.0')).toBe('release/v2.0');
+  });
+
+  test('detects backtick-wrapped branch name', () => {
+    expect(detectTargetBranch('**Target branch:** `feat/new-api`')).toBe('feat/new-api');
+  });
+
+  test('detects "branch from: staging"', () => {
+    expect(detectTargetBranch('Branch from: staging')).toBe('staging');
+  });
+
+  test('detects "merge into: release/3.x"', () => {
+    expect(detectTargetBranch('Merge into: release/3.x')).toBe('release/3.x');
+  });
+
+  test('returns null for main (default branch)', () => {
+    expect(detectTargetBranch('Target branch: main')).toBeNull();
+  });
+
+  test('returns null for master (default branch)', () => {
+    expect(detectTargetBranch('Target branch: master')).toBeNull();
+  });
+
+  test('returns null when no branch indicator present', () => {
+    expect(detectTargetBranch('# Just a regular design doc\n\nNo branch info here.')).toBeNull();
+  });
+
+  test('returns null for empty string', () => {
+    expect(detectTargetBranch('')).toBeNull();
+  });
+
+  test('case insensitive matching', () => {
+    expect(detectTargetBranch('TARGET BRANCH: feat/uppercase')).toBe('feat/uppercase');
+  });
+
+  test('handles branch names with dots and underscores', () => {
+    expect(detectTargetBranch('Target branch: feature/v2.1_hotfix')).toBe('feature/v2.1_hotfix');
   });
 });

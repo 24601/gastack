@@ -96,3 +96,47 @@ export function extractTasks(markdown: string): ExtractionResult {
     method: 'regex',
   };
 }
+
+// --- Target branch detection ---
+
+/**
+ * Patterns that indicate a target/base branch in a design document.
+ *
+ * Matches lines like:
+ *   - "Target branch: feat/auth-refactor"
+ *   - "**Base branch:** `develop`"
+ *   - "Branch: feature/new-api"
+ *
+ * Only matches plausible branch names (alphanumeric + /-_.).
+ */
+const TARGET_BRANCH_PATTERNS: RegExp[] = [
+  /(?:target|base|feature)\s*branch\s*\**\s*[:=]\s*\**\s*`?([a-zA-Z0-9._/-]+)`?/i,
+  /branch\s*(?:from|off)\s*[:=]?\s*`?([a-zA-Z0-9._/-]+)`?/i,
+  /merge\s*(?:into|to)\s*[:=]?\s*`?([a-zA-Z0-9._/-]+)`?/i,
+];
+
+/** Branches that don't count as "target branch" overrides (they're the default). */
+const DEFAULT_BRANCHES = new Set(['main', 'master']);
+
+/**
+ * Detect a target branch from design document markdown.
+ *
+ * Scans the document for target/base branch indicators. Returns null if
+ * no target branch is specified or if the target is main/master (the default).
+ *
+ * This enables the bridge to pass --base-branch to gt sling so polecats
+ * branch from the correct base, preventing merge conflicts when work
+ * targets a feature branch.
+ */
+export function detectTargetBranch(markdown: string): string | null {
+  for (const pattern of TARGET_BRANCH_PATTERNS) {
+    const match = markdown.match(pattern);
+    if (match) {
+      const branch = match[1].trim();
+      if (!DEFAULT_BRANCHES.has(branch)) {
+        return branch;
+      }
+    }
+  }
+  return null;
+}

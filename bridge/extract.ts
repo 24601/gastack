@@ -20,6 +20,7 @@ import { claudeExec, type ClaudeResult } from './adapters/gstack.js';
 import {
   extractTasks,
   containsShellMetacharacters,
+  detectTargetBranch,
   type ExtractedTask,
   type ExtractionResult,
 } from './task-extract.js';
@@ -28,6 +29,7 @@ import {
 export {
   extractTasks,
   containsShellMetacharacters,
+  detectTargetBranch,
   type ExtractedTask,
   type ExtractionResult,
 } from './task-extract.js';

@@ -505,6 +505,41 @@ describe('T3.4.5: sling command arg construction', () => {
     expect(args).not.toContain('--merge');
     expect(args).toContain('--review-only');
   });
+
+  test('sling with --base-branch', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+      baseBranch: 'feat/auth-refactor',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    expect(args).toContain('--base-branch');
+    const bbIdx = args.indexOf('--base-branch');
+    expect(args[bbIdx + 1]).toBe('feat/auth-refactor');
+  });
+
+  test('sling without baseBranch omits --base-branch', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    expect(args).not.toContain('--base-branch');
+  });
+
+  test('sling --base-branch with injection payload stays literal', async () => {
+    await adapter.execute('sling', {
+      beadId: 'gt-t1x',
+      rig: 'gastack',
+      baseBranch: 'feat/x; rm -rf /',
+    });
+    const args = adapter.lastCliArgsFor('sling')!;
+
+    const bbIdx = args.indexOf('--base-branch');
+    expect(args[bbIdx + 1]).toBe('feat/x; rm -rf /');
+  });
 });
 
 // --- T3.4.6: sling.batch command arg construction ---
@@ -612,6 +647,29 @@ describe('T3.4.6: sling.batch command arg construction', () => {
     expect(args[2]).toBe('ga-003');
     expect(args[3]).toBe('ga-001');
     expect(args[4]).toBe('ga-002');
+  });
+
+  test('sling.batch with --base-branch', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['ga-001', 'ga-002'],
+      rig: 'gastack',
+      baseBranch: 'feat/auth-refactor',
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    expect(args).toContain('--base-branch');
+    const bbIdx = args.indexOf('--base-branch');
+    expect(args[bbIdx + 1]).toBe('feat/auth-refactor');
+  });
+
+  test('sling.batch without baseBranch omits --base-branch', async () => {
+    await adapter.execute('sling.batch', {
+      beadIds: ['ga-001'],
+      rig: 'gastack',
+    });
+    const args = adapter.lastCliArgsFor('sling.batch')!;
+
+    expect(args).not.toContain('--base-branch');
   });
 });
 
