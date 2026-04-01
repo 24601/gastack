@@ -11,6 +11,8 @@
  *   5. Within same priority, extraction order preserved
  *   6. Batch grouping respects --max-concurrent limit
  *   7. Full pipeline: prioritize + batch
+ *   8. Mountain dispatch for large task sets (10+)
+ *   9. Dispatch strategy selection (mountain vs convoy)
  */
 
 import { describe, test, expect } from 'bun:test';
@@ -21,6 +23,9 @@ import {
   planDispatch,
   batchBeadIds,
   stageAndLaunch,
+  mountainDispatch,
+  chooseDispatchStrategy,
+  MOUNTAIN_THRESHOLD,
   type PrioritizedTask,
 } from '../dispatch.js';
 import type { ExtractedTask } from '../task-extract.js';
@@ -452,5 +457,180 @@ describe('stageAndLaunch — convoy dispatch', () => {
     const slingCall = adapter.calls.find((c) => c.command === 'sling.batch');
     expect(slingCall?.args?.rig).toBe('');
     expect(slingCall?.args?.maxConcurrent).toBe(4);
+  });
+});
+
+// --- chooseDispatchStrategy ---
+
+describe('chooseDispatchStrategy — threshold selection', () => {
+  test('returns convoy for task count below threshold', () => {
+    expect(chooseDispatchStrategy(5)).toBe('convoy');
+    expect(chooseDispatchStrategy(9)).toBe('convoy');
+  });
+
+  test('returns mountain for task count at threshold', () => {
+    expect(chooseDispatchStrategy(10)).toBe('mountain');
+  });
+
+  test('returns mountain for task count above threshold', () => {
+    expect(chooseDispatchStrategy(15)).toBe('mountain');
+    expect(chooseDispatchStrategy(50)).toBe('mountain');
+  });
+
+  test('custom threshold works', () => {
+    expect(chooseDispatchStrategy(3, 5)).toBe('convoy');
+    expect(chooseDispatchStrategy(5, 5)).toBe('mountain');
+    expect(chooseDispatchStrategy(7, 5)).toBe('mountain');
+  });
+
+  test('threshold of 1 always returns mountain (except 0)', () => {
+    expect(chooseDispatchStrategy(0, 1)).toBe('convoy');
+    expect(chooseDispatchStrategy(1, 1)).toBe('mountain');
+  });
+
+  test('default threshold is MOUNTAIN_THRESHOLD (10)', () => {
+    expect(MOUNTAIN_THRESHOLD).toBe(10);
+  });
+});
+
+// --- mountainDispatch ---
+
+describe('mountainDispatch — mountain activation', () => {
+  test('activates mountain successfully', async () => {
+    const adapter = mockAdapter({
+      'mountain': JSON.stringify({ mountain_id: 'hq-mtn-001', convoy_id: 'hq-conv-001' }),
+    });
+
+    const result = await mountainDispatch('ga-epic-1', ['ga-001', 'ga-002'], adapter);
+
+    expect(result.ok).toBe(true);
+    expect(result.mountainId).toBe('hq-mtn-001');
+    expect(result.fellBackToConvoy).toBe(false);
+    expect(result.fellBackToSling).toBe(false);
+    expect(adapter.calls).toHaveLength(1);
+    expect(adapter.calls[0].command).toBe('mountain');
+    expect(adapter.calls[0].args?.epicId).toBe('ga-epic-1');
+  });
+
+  test('parses convoy_id when mountain_id absent', async () => {
+    const adapter = mockAdapter({
+      'mountain': JSON.stringify({ convoy_id: 'hq-conv-002' }),
+    });
+
+    const result = await mountainDispatch('ga-epic-2', ['ga-001'], adapter);
+
+    expect(result.ok).toBe(true);
+    expect(result.mountainId).toBe('hq-conv-002');
+  });
+
+  test('parses id field as fallback', async () => {
+    const adapter = mockAdapter({
+      'mountain': JSON.stringify({ id: 'hq-id-003' }),
+    });
+
+    const result = await mountainDispatch('ga-epic-3', ['ga-001'], adapter);
+
+    expect(result.ok).toBe(true);
+    expect(result.mountainId).toBe('hq-id-003');
+  });
+
+  test('parses text output when JSON fails', async () => {
+    const adapter = mockAdapter({
+      'mountain': 'Mountain hq-mtn-text activated',
+    });
+
+    const result = await mountainDispatch('ga-epic-4', ['ga-001'], adapter);
+
+    expect(result.ok).toBe(true);
+    expect(result.mountainId).toBe('hq-mtn-text');
+  });
+
+  test('falls back to convoy when mountain fails', async () => {
+    const adapter = mockAdapter({
+      'mountain': new Error('mountain command not available'),
+      'convoy.stage': JSON.stringify({ convoy_id: 'hq-conv-fallback' }),
+      'convoy.launch': 'Launched',
+    });
+
+    const result = await mountainDispatch('ga-epic-5', ['ga-001', 'ga-002'], adapter, {
+      title: 'Test convoy fallback',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.mountainId).toBe('hq-conv-fallback');
+    expect(result.fellBackToConvoy).toBe(true);
+    expect(result.fellBackToSling).toBe(false);
+    expect(result.error).toContain('mountain failed');
+    expect(result.error).toContain('fell back to convoy');
+  });
+
+  test('falls back to sling when both mountain and convoy fail', async () => {
+    const adapter = mockAdapter({
+      'mountain': new Error('mountain unavailable'),
+      'convoy.stage': new Error('stage unavailable'),
+      'sling.batch': 'Slung 2 beads',
+    });
+
+    const result = await mountainDispatch('ga-epic-6', ['ga-001', 'ga-002'], adapter, {
+      rig: 'gastack',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.fellBackToConvoy).toBe(false);
+    expect(result.fellBackToSling).toBe(true);
+    expect(result.error).toContain('mountain failed');
+  });
+
+  test('reports failure when all three strategies fail', async () => {
+    const adapter = mockAdapter({
+      'mountain': new Error('mountain unavailable'),
+      'convoy.stage': new Error('stage unavailable'),
+      'sling.batch': new Error('sling unavailable'),
+    });
+
+    const result = await mountainDispatch('ga-epic-7', ['ga-001'], adapter);
+
+    expect(result.ok).toBe(false);
+    expect(result.fellBackToConvoy).toBe(false);
+    expect(result.fellBackToSling).toBe(true);
+    expect(result.error).toContain('mountain failed');
+  });
+
+  test('empty beadIds returns ok without calling adapter', async () => {
+    const adapter = mockAdapter({});
+
+    const result = await mountainDispatch('ga-epic-8', [], adapter);
+
+    expect(result.ok).toBe(true);
+    expect(result.fellBackToConvoy).toBe(false);
+    expect(result.fellBackToSling).toBe(false);
+    expect(adapter.calls).toHaveLength(0);
+  });
+
+  test('passes force flag to mountain command', async () => {
+    const adapter = mockAdapter({
+      'mountain': JSON.stringify({ mountain_id: 'hq-mtn-force' }),
+    });
+
+    await mountainDispatch('ga-epic-9', ['ga-001'], adapter, { force: true });
+
+    expect(adapter.calls[0].args?.force).toBe(true);
+  });
+
+  test('passes fallback options through to stageAndLaunch', async () => {
+    const adapter = mockAdapter({
+      'mountain': new Error('unavailable'),
+      'convoy.stage': JSON.stringify({ convoy_id: 'hq-fallback' }),
+      'convoy.launch': 'OK',
+    });
+
+    await mountainDispatch('ga-epic-10', ['ga-001'], adapter, {
+      title: 'My title',
+      rig: 'gastack',
+      maxConcurrent: 6,
+    });
+
+    const stageCall = adapter.calls.find((c) => c.command === 'convoy.stage');
+    expect(stageCall?.args?.title).toBe('My title');
   });
 });

@@ -14,10 +14,16 @@
  *   - Batches respect --max-concurrent limit
  *   - Each batch contains priority-ordered bead IDs for a single gt sling call
  *
- * Convoy dispatch (preferred):
+ * Convoy dispatch (default):
  *   - stageAndLaunch() uses gt convoy stage + gt convoy launch
  *   - gastown handles dependency ordering and wave-based dispatch natively
  *   - Falls back to manual sling.batch if stage/launch fails
+ *
+ * Mountain dispatch (for large task sets, 10+ tasks):
+ *   - mountainDispatch() uses gt mountain for enhanced stall detection,
+ *     skip-after-N-failures, and Deacon auditing
+ *   - Falls back to stageAndLaunch, then sling.batch
+ *   - chooseDispatchStrategy() picks mountain vs convoy based on task count
  */
 
 import type { ExtractedTask } from './task-extract.js';
@@ -250,6 +256,111 @@ function parseConvoyId(stageOutput: string): string | undefined {
   } catch {
     // Try line-based fallback: "Convoy hq-xxx staged"
     const match = stageOutput.match(/[Cc]onvoy\s+([\w-]+)/);
+    return match?.[1];
+  }
+}
+
+// --- Mountain dispatch ---
+
+/** Default task count threshold for activating mountain mode. */
+export const MOUNTAIN_THRESHOLD = 10;
+
+/** Result of a mountain dispatch attempt. */
+export interface MountainDispatchResult {
+  /** Whether mountain activation succeeded. */
+  ok: boolean;
+  /** Mountain/convoy ID if activation succeeded. */
+  mountainId?: string;
+  /** Whether we fell back to convoy stage+launch. */
+  fellBackToConvoy: boolean;
+  /** Whether we fell back all the way to manual sling. */
+  fellBackToSling: boolean;
+  /** Error message if mountain activation failed. */
+  error?: string;
+}
+
+/**
+ * Dispatch tasks via `gt mountain` for large task sets.
+ *
+ * Mountains are convoys with enhanced stall detection, skip-after-N-failures,
+ * and active progress monitoring via the Deacon. Use this instead of
+ * stageAndLaunch when task count exceeds the mountain threshold.
+ *
+ * Fallback chain: mountain → stageAndLaunch (convoy) → sling.batch
+ *
+ * @param epicId - Epic/parent bead ID that owns the tasks
+ * @param beadIds - Bead IDs to dispatch (already created via bd create)
+ * @param adapter - Gas Town adapter for executing commands
+ * @param opts - Optional force flag, rig, and maxConcurrent for fallback
+ */
+export async function mountainDispatch(
+  epicId: string,
+  beadIds: string[],
+  adapter: Adapter,
+  opts?: {
+    force?: boolean;
+    title?: string;
+    rig?: string;
+    maxConcurrent?: number;
+  },
+): Promise<MountainDispatchResult> {
+  if (beadIds.length === 0) {
+    return { ok: true, fellBackToConvoy: false, fellBackToSling: false };
+  }
+
+  // Try mountain activation
+  try {
+    const result = await adapter.execute('mountain', {
+      epicId,
+      force: opts?.force,
+    });
+
+    // Parse mountain/convoy ID from JSON output
+    const mountainId = parseMountainId(result);
+    if (!mountainId) {
+      throw new Error(`mountain returned no ID: ${result}`);
+    }
+
+    return { ok: true, mountainId, fellBackToConvoy: false, fellBackToSling: false };
+  } catch (mountainErr) {
+    // Mountain failed — fall back to convoy stage+launch
+    const convoyResult = await stageAndLaunch(beadIds, adapter, {
+      title: opts?.title,
+      rig: opts?.rig,
+      maxConcurrent: opts?.maxConcurrent,
+    });
+
+    return {
+      ok: convoyResult.ok,
+      mountainId: convoyResult.convoyId,
+      fellBackToConvoy: !convoyResult.fellBackToSling,
+      fellBackToSling: convoyResult.fellBackToSling,
+      error: `mountain failed, fell back to convoy: ${errorMessage(mountainErr)}${convoyResult.error ? `; ${convoyResult.error}` : ''}`,
+    };
+  }
+}
+
+/**
+ * Choose the right dispatch strategy based on task count.
+ *
+ * When taskCount >= MOUNTAIN_THRESHOLD, returns 'mountain'.
+ * Otherwise returns 'convoy' (stageAndLaunch).
+ */
+export function chooseDispatchStrategy(
+  taskCount: number,
+  threshold: number = MOUNTAIN_THRESHOLD,
+): 'mountain' | 'convoy' {
+  return taskCount >= threshold ? 'mountain' : 'convoy';
+}
+
+/** Parse mountain/convoy ID from gt mountain --json output. */
+function parseMountainId(output: string): string | undefined {
+  try {
+    const parsed = JSON.parse(output);
+    return parsed.mountain_id ?? parsed.convoy_id ?? parsed.id ?? undefined;
+  } catch {
+    // Try line-based fallback: "Mountain hq-xxx activated"
+    const match = output.match(/[Mm]ountain\s+([\w-]+)/);
     return match?.[1];
   }
 }

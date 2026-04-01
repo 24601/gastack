@@ -410,6 +410,11 @@ export function extractExecutionContext(beadJson: Record<string, unknown>): Exec
  *   - sling.batch   → gt sling <id1> <id2> ... <rig> [--max-concurrent N] [--merge <strategy>] [--base-branch <branch>]
  *   - convoy.stage  → gt convoy stage <beadIds> --json [--title <title>] [--launch]
  *   - convoy.launch → gt convoy launch <convoyId> [--force]
+ *   - mountain      → gt mountain <epicId> --json [--force]
+ *   - mountain.status → gt mountain status [id] --json
+ *   - mountain.pause  → gt mountain pause <id>
+ *   - mountain.resume → gt mountain resume <id>
+ *   - mountain.cancel → gt mountain cancel <id>
  *   - tail.poll     → poll events.jsonl for new events
  *   - tail.state    → return current tail state
  *   - tail.restore  → restore tail state from args
@@ -584,6 +589,48 @@ export class GasTownAdapter implements Adapter {
 
       case 'convoy.stranded':
         return this.jsonCommand(['convoy', 'stranded']);
+
+      case 'mountain': {
+        const epicId = String(args?.epicId ?? '');
+        if (!epicId) {
+          throw new Error('mountain requires args.epicId');
+        }
+        const mountainArgs = ['mountain', epicId];
+        if (args?.force) mountainArgs.push('--force');
+        mountainArgs.push('--json');
+        return this.textCommand(mountainArgs);
+      }
+
+      case 'mountain.status': {
+        const statusArgs = ['mountain', 'status'];
+        if (args?.id) statusArgs.push(String(args.id));
+        statusArgs.push('--json');
+        return this.textCommand(statusArgs);
+      }
+
+      case 'mountain.pause': {
+        const pauseId = String(args?.id ?? '');
+        if (!pauseId) {
+          throw new Error('mountain.pause requires args.id');
+        }
+        return this.textCommand(['mountain', 'pause', pauseId]);
+      }
+
+      case 'mountain.resume': {
+        const resumeId = String(args?.id ?? '');
+        if (!resumeId) {
+          throw new Error('mountain.resume requires args.id');
+        }
+        return this.textCommand(['mountain', 'resume', resumeId]);
+      }
+
+      case 'mountain.cancel': {
+        const cancelId = String(args?.id ?? '');
+        if (!cancelId) {
+          throw new Error('mountain.cancel requires args.id');
+        }
+        return this.textCommand(['mountain', 'cancel', cancelId]);
+      }
 
       case 'tail.poll':
         return this.pollEvents();
