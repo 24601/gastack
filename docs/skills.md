@@ -27,6 +27,8 @@ Detailed guides for every gstack skill — philosophy, workflow, and examples.
 | [`/setup-browser-cookies`](#setup-browser-cookies) | **Session Manager** | Import cookies from your real browser (Chrome, Arc, Brave, Edge) into the headless session. Test authenticated pages. |
 | [`/autoplan`](#autoplan) | **Review Pipeline** | One command, fully reviewed plan. Runs CEO → design → eng review automatically with encoded decision principles. Surfaces only taste decisions for your approval. |
 | [`/learn`](#learn) | **Memory** | Manage what gstack learned across sessions. Review, search, prune, and export project-specific patterns and preferences. |
+| [`/checkpoint`](#checkpoint) | **Session Snapshot** | Save and resume working state. Captures git state, decisions made, remaining work. Survives context compaction. Cross-branch listing for multi-agent handoff. |
+| [`/health`](#health) | **Code Quality** | Scorekeeper for your codebase. Wraps your tools (tsc, biome, knip, shellcheck, tests), computes a 0-10 composite score, tracks trends. When the score drops, tells you exactly what changed. |
 | | | |
 | **Multi-AI** | | |
 | [`/codex`](#codex) | **Second Opinion** | Independent review from OpenAI Codex CLI. Three modes: code review (pass/fail gate), adversarial challenge, and open consultation with session continuity. Cross-model analysis when both `/review` and `/codex` have run. |
@@ -1101,6 +1103,95 @@ Claude: Current version: 0.7.4
 ```
 
 Set `auto_upgrade: true` in `~/.gstack/config.yaml` to skip the prompt entirely — gstack upgrades silently at the start of each session when a new version is available.
+
+---
+
+## `/checkpoint`
+
+This is **session memory**.
+
+Your Claude Code session is a context window. When it compacts, decisions, findings, and progress vanish. `/checkpoint` saves a working state snapshot that survives compaction, session restarts, and even machine reboots.
+
+### What it captures
+
+- **Git state** — current branch, last commit, dirty files
+- **Decisions made** — what you chose and why (from the conversation)
+- **Remaining work** — what's left to do
+- **Skill history** — which skills ran and their outcomes
+
+### Cross-branch listing
+
+When running 10+ parallel sprints via Conductor, `/checkpoint` lists snapshots across all branches. You see which agents are where, what's blocked, and what's ready for review — without switching windows.
+
+### Example
+
+```
+You:   /checkpoint
+
+Claude: Saved checkpoint for branch feature/smart-upload
+        ├── 3 commits ahead of main
+        ├── Last skill: /review (Grade B, 2 findings fixed)
+        ├── Decisions: chose async enrichment over sync (latency)
+        └── Remaining: integration tests, /ship
+
+        Other branches with checkpoints:
+        ├── feature/auth-rewrite    — /qa in progress (12 bugs found, 9 fixed)
+        ├── fix/payment-race        — ready for /ship
+        └── feature/dashboard-v2    — blocked on design approval
+```
+
+After compaction, your next session starts with:
+
+```
+Claude: Welcome back to feature/smart-upload.
+        Last session: /review (Grade B). 2 findings fixed.
+        Remaining: integration tests, then /ship.
+```
+
+No re-explaining. No "where was I?" The agent picks up where you left off.
+
+---
+
+## `/health`
+
+This is your **code quality scorekeeper**.
+
+Every project has quality tools — TypeScript compiler, linters, dead code detectors, test runners. But nobody runs all of them consistently, and nobody tracks whether the score is going up or down. `/health` does both.
+
+### How it works
+
+1. **Detects your tools** — reads package.json, Makefile, CLAUDE.md. Finds tsc, biome, eslint, knip, shellcheck, pytest, jest, go vet, whatever you have.
+2. **Runs them all** — captures stdout/stderr, parses error counts.
+3. **Computes a composite score** — 0 to 10, weighted by severity. TypeScript errors count more than lint warnings.
+4. **Tracks trends** — stores scores in `~/.gstack/projects/{slug}/health/`. You can see whether the codebase is getting healthier or decaying.
+
+### When the score drops
+
+The most useful mode: run `/health` after a PR lands. If the score dropped, it tells you exactly what changed — which files, which checks, which new errors. No guessing.
+
+### Example
+
+```
+You:   /health
+
+Claude: Code Health Score: 7.2 / 10  (↓ 0.3 from last check)
+
+        ┌─────────────────┬────────┬────────┐
+        │ Check           │ Status │ Issues │
+        ├─────────────────┼────────┼────────┤
+        │ TypeScript      │ ✓ pass │      0 │
+        │ Biome lint      │ ⚠ warn │      3 │
+        │ Dead code (knip)│ ✗ fail │      7 │
+        │ Tests           │ ✓ pass │      0 │
+        │ Shellcheck      │ ⚠ warn │      2 │
+        └─────────────────┴────────┴────────┘
+
+        Score dropped because 4 new dead exports appeared
+        in src/utils/legacy.ts (knip). Likely from the
+        auth refactor that landed yesterday.
+
+        Fix? (Y/n)
+```
 
 ---
 

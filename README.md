@@ -4,13 +4,13 @@
 
 gastack is a continuous verification pipeline that connects [gstack](https://github.com/garrytan/gstack) (AI code review and design tools by [@garrytan](https://github.com/garrytan)) to [Gas Town](https://github.com/24601/gastown) (multi-agent orchestration). Point it at a design doc and a rig. It extracts tasks, dispatches them to AI coding agents, runs code review and security audit in parallel, applies quality gates, blocks when human judgment is needed, and lands through the merge queue.
 
-Six stages. Crash recovery. One event log. You approve one security finding. That's your only input.
+Seven stages. Crash recovery. Review cycles. One event log. You approve one security finding. That's your only input.
 
 ```
-Design Doc → PLAN → EXECUTE → REVIEW → REFINE → DEPLOY → DONE
-                      ↑                    ↑
-                   gastown               gstack
-               (agent fleet)        (review + security)
+Design Doc → PLAN → EXECUTE → REVIEW → REFINE → VERIFY → DEPLOY → DONE
+                      ↑          ↑        ↑        ↑
+                   gastown     gstack   gstack   canary
+               (agent fleet) (review)  (policy)  (health)
 ```
 
 ### The gap the bridge fills
@@ -50,6 +50,8 @@ Each skill feeds into the next. `/office-hours` writes a design doc that `/plan-
 | `/setup-browser-cookies` | **Session Manager** | Import cookies from your real browser (Chrome, Arc, Brave, Edge) into the headless session. Test authenticated pages. |
 | `/autoplan` | **Review Pipeline** | One command, fully reviewed plan. Runs CEO → design → eng review automatically with encoded decision principles. Surfaces only taste decisions for your approval. |
 | `/learn` | **Memory** | Manage what gstack learned across sessions. Review, search, prune, and export project-specific patterns, pitfalls, and preferences. Learnings compound across sessions so gstack gets smarter on your codebase over time. |
+| `/checkpoint` | **Session Snapshot** | Save and resume working state. Captures git state, decisions made, remaining work. Survives context compaction. Cross-branch listing for multi-agent handoff. |
+| `/health` | **Code Quality** | Scorekeeper for your codebase. Wraps your tools (tsc, biome, knip, shellcheck, tests), computes a 0-10 composite score, tracks trends. When the score drops, tells you exactly what changed. |
 
 ### Power tools
 
@@ -135,10 +137,11 @@ Without the bridge, you are the integration layer:
 | Step | Without bridge | With bridge |
 |------|---------------|-------------|
 | Read design doc, extract tasks | Manual | `PLAN` stage (regex + LLM) |
-| Create beads, dispatch to agents | Manual (`bd new`, `gt sling` × N) | `EXECUTE` stage (convoy create + sling) |
-| Wait for completion, run reviews | Manual (`claude -p /review`, `/cso`) | `REVIEW` stage (parallel, automatic) |
-| Interpret findings, decide action | Manual | `quality.ts` policy engine |
+| Create beads, dispatch to agents | Manual (`bd new`, `gt sling` × N) | `EXECUTE` stage (priority-ordered batch) |
+| Wait for completion, run reviews | Manual (`claude -p /review`, `/cso`) | `REVIEW` stage (parallel, multi-model, iterates) |
+| Interpret findings, decide action | Manual | `quality.ts` policy engine with reconciliation |
 | Approve blocking findings | Manual | `REFINE` stage (scoped signals) |
+| Verify production health | Manual (open browser, click around) | `VERIFY` stage (canary health checks) |
 | Trigger merge | Manual (`gt convoy land`) | `DEPLOY` stage (merge queue) |
 
 Every manual step loses context and invites shortcuts. The bridge replaces you as the router.
@@ -215,9 +218,10 @@ bun run bridge/cli.ts list
 | Stage | What happens | External calls |
 |-------|-------------|----------------|
 | **PLAN** | Extract tasks from design doc (regex + Haiku LLM) | — |
-| **EXECUTE** | Create convoy, dispatch tasks to polecats | `gt convoy create`, `gt sling` × N |
-| **REVIEW** | Run code review + security audit in parallel | `claude -p /review`, `claude -p /cso` |
+| **EXECUTE** | Create convoy, dispatch tasks to polecats (priority-ordered) | `gt convoy create`, `gt sling` × N |
+| **REVIEW** | Run code review + security audit in parallel; iterates review cycles until clean | `claude -p /review`, `claude -p /cso` |
 | **REFINE** | Quality gate evaluation → PASS / WARN / BLOCKED | Human approval if blocked |
+| **VERIFY** | Post-merge canary check — monitors production health | Browse daemon health checks |
 | **DEPLOY** | Land through refinery merge queue | `gt convoy land` |
 | **DONE** | Pipeline complete | — |
 
@@ -246,20 +250,23 @@ Security CRITICAL+ requires explicit human approval with a reason. The bridge fa
 
 ![Integration architecture — CLI calls through adapters](docs/images/integration-arch.svg)
 
-~3K lines source + ~2K lines tests. Zero npm dependencies.
+~6K lines source + ~8K lines tests. Zero npm dependencies.
 
 ```
 bridge/
-├── orchestrate.ts         528 lines — stage machine, state derivation
+├── orchestrate.ts        1480 lines — stage machine, review cycles, state derivation
 ├── events.ts              462 lines — 13-event schema, JSONL log, idempotency
-├── cli.ts                 571 lines — start, status, watch, approve, reject
-├── quality.ts             350 lines — quality policy engine
+├── cli.ts                 656 lines — start, status, watch, approve, reject
+├── quality.ts             946 lines — quality policy engine, multi-model reconciliation
 ├── output.ts              360 lines — adaptive output calibration
-├── notify.ts              307 lines — Slack/Discord webhooks
+├── notify.ts              354 lines — Slack/Discord webhooks
+├── dispatch.ts            157 lines — priority-ordered batch dispatch
+├── stranded.ts            272 lines — stranded convoy diagnosis
+├── task-extract.ts         98 lines — design doc → task extraction
 ├── adapters/
-│   ├── gastown.ts         406 lines — gt CLI wrapper, event tailer
-│   └── gstack.ts          282 lines — claude -p executor, grade/finding parsers
-└── *.test.ts             2K+ lines — tests for every module
+│   ├── gastown.ts         681 lines — gt CLI wrapper, review routing, event tailer
+│   └── gstack.ts          412 lines — claude -p executor, grade/finding parsers
+└── test/                 8K+ lines — tests for every module
 ```
 
 ### Key engineering decisions
@@ -269,6 +276,9 @@ bridge/
 3. **Scoped approval signals.** `{runId, stage, reviewCycle}` — stale approvals from previous cycles are ignored.
 4. **Array args everywhere.** `Bun.spawn(['gt', 'sling', beadId])` — no shell interpolation, no injection.
 5. **Adaptive output.** First run: verbose. Run 10+: terse. `--verbose`/`--quiet` override.
+6. **Review cycles.** Review → fix → re-review iterates until clean or max cycles reached. Each cycle gets its own scoped approval context.
+7. **Multi-model dispatch.** Reviews dispatched to multiple models with verdict reconciliation — disagreements surface for human judgment.
+8. **Smart review routing.** Security-sensitive paths get full /cso + /review. Infra-only changes skip design review. The decision tree routes like a well-run startup.
 
 ---
 
@@ -291,8 +301,9 @@ git push
 
 ## Roadmap
 
-- **Phase B1 (current):** Bun-only spike. Local daemon. Terminal UI. Works today.
-- **Phase B2:** Temporal migration. Durable workflow state. Multi-machine resume.
+- **Phase B1 (shipped):** Bun-only spike. Local daemon. Terminal UI. Event-sourced state. Crash recovery.
+- **Phase B2 (current):** Review cycles, multi-model dispatch, smart review routing, VERIFY stage, session death handling, stranded convoy diagnosis. Production-grade pipeline.
+- **Phase B3:** Temporal migration. Durable workflow state. Multi-machine resume.
 - **Phase C:** Extensible policy engine. Custom stage definitions. Plugin adapters.
 
 ---

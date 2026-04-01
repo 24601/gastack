@@ -198,7 +198,7 @@ Templates contain the workflows, tips, and examples that require human judgment.
 |-------------|--------|-------------------|
 | `{{COMMAND_REFERENCE}}` | `commands.ts` | Categorized command table |
 | `{{SNAPSHOT_FLAGS}}` | `snapshot.ts` | Flag reference with examples |
-| `{{PREAMBLE}}` | `gen-skill-docs.ts` | Startup block: update check, session tracking, contributor mode, AskUserQuestion format |
+| `{{PREAMBLE}}` | `gen-skill-docs.ts` | Startup block: 7 initialization steps — update check, session tracking, operational learning, timeline, context recovery, AskUserQuestion format, Search Before Building |
 | `{{BROWSE_SETUP}}` | `gen-skill-docs.ts` | Binary discovery + setup instructions |
 | `{{BASE_BRANCH_DETECT}}` | `gen-skill-docs.ts` | Dynamic base branch detection for PR-targeting skills (ship, review, qa, plan-ceo-review) |
 | `{{QA_METHODOLOGY}}` | `gen-skill-docs.ts` | Shared QA methodology block for /qa and /qa-only |
@@ -213,13 +213,15 @@ This is structurally sound — if a command exists in code, it appears in docs. 
 
 ### The preamble
 
-Every skill starts with a `{{PREAMBLE}}` block that runs before the skill's own logic. It handles five things in a single bash command:
+Every skill starts with a `{{PREAMBLE}}` block that runs before the skill's own logic. It handles seven things:
 
 1. **Update check** — calls `gstack-update-check`, reports if an upgrade is available.
 2. **Session tracking** — touches `~/.gstack/sessions/$PPID` and counts active sessions (files modified in the last 2 hours). When 3+ sessions are running, all skills enter "ELI16 mode" — every question re-grounds the user on context because they're juggling windows.
 3. **Operational self-improvement** — at the end of every skill session, the agent reflects on failures (CLI errors, wrong approaches, project quirks) and logs operational learnings to the project's JSONL file for future sessions.
-4. **AskUserQuestion format** — universal format: context, question, `RECOMMENDATION: Choose X because ___`, lettered options. Consistent across all skills.
-5. **Search Before Building** — before building infrastructure or unfamiliar patterns, search first. Three layers of knowledge: tried-and-true (Layer 1), new-and-popular (Layer 2), first-principles (Layer 3). When first-principles reasoning reveals conventional wisdom is wrong, the agent names the "eureka moment" and logs it. See `ETHOS.md` for the full builder philosophy.
+4. **Session timeline** — every skill auto-logs start/complete events to `timeline.jsonl`. Local-only, never sent anywhere. Enables `/retro` to show "this week: 3 /review, 2 /ship across 3 branches."
+5. **Context recovery** — after compaction or session start, the preamble lists recent CEO plans, checkpoints, and reviews. The agent reads the most recent one to recover decisions and progress without asking you to repeat yourself.
+6. **AskUserQuestion format** — universal format: context, question, `RECOMMENDATION: Choose X because ___`, lettered options. Consistent across all skills.
+7. **Search Before Building** — before building infrastructure or unfamiliar patterns, search first. Three layers of knowledge: tried-and-true (Layer 1), new-and-popular (Layer 2), first-principles (Layer 3). When first-principles reasoning reveals conventional wisdom is wrong, the agent names the "eureka moment" and logs it. See `ETHOS.md` for the full builder philosophy.
 
 ### Why committed, not generated at runtime?
 
@@ -352,6 +354,70 @@ The `EvalCollector` accumulates test results and writes them in two ways:
 | 3 — LLM-as-judge | Sonnet scores docs on clarity/completeness/actionability | ~$0.15 | ~30s |
 
 Tier 1 runs on every `bun test`. Tiers 2+3 are gated behind `EVALS=1`. The idea: catch 95% of issues for free, use LLMs only for judgment calls and integration testing.
+
+## Bridge architecture (gastack-specific)
+
+The bridge connects gstack quality gates to Gas Town's agent fleet. It's the automation layer that replaces you as the integration router between design → dispatch → review → merge.
+
+### Seven-stage pipeline
+
+```
+PLAN → EXECUTE → REVIEW → REFINE → VERIFY → DEPLOY → DONE
+```
+
+Each stage is a pure function of the event log. No mutable state. The orchestrator replays events on crash and reconstructs exactly where it was.
+
+### Review cycles
+
+The REVIEW stage doesn't run once. It iterates:
+
+```
+REVIEW → findings? → fix (polecat) → REVIEW again → clean? → REFINE → VERIFY
+```
+
+Each cycle gets its own scoped approval context (`{runId, stage, reviewCycle}`). Stale approvals from previous cycles are ignored. The orchestrator tracks iteration count and caps at a configurable maximum to prevent infinite loops.
+
+### Multi-model dispatch
+
+Reviews can be dispatched to multiple models simultaneously. The quality engine reconciles verdicts:
+
+- **Agreement** — both models flag the same issue → confidence boost, fast-path decision.
+- **Disagreement** — one model flags, the other doesn't → surfaces for human judgment with both rationales.
+- **Exclusive findings** — unique to one model → included at original confidence.
+
+This catches the class of bugs where one model's blind spot is another's strength.
+
+### Smart review routing
+
+Not every change needs every reviewer. The dispatch decision tree routes like a well-run startup:
+
+```
+Security-sensitive paths (auth, crypto, permissions)
+  → Full /cso + /review + adversarial
+
+Data migrations
+  → /review with migration specialist
+
+Infra-only changes (CI, Docker, config)
+  → /review only, skip design review
+
+Small diffs (<50 lines, no auth scope)
+  → Lightweight /review, skip specialists
+```
+
+The routing reads `gstack-diff-scope` signals (SCOPE_AUTH, SCOPE_MIGRATIONS, SCOPE_API, etc.) and activates the right specialist subagents.
+
+### VERIFY stage
+
+After REFINE passes and before DEPLOY, the VERIFY stage runs pre-merge canary checks against staging or preview environments. It uses the browse daemon to hit endpoints, check for console errors, and verify page load times against baselines. A regression here blocks the deploy.
+
+### Session death handling
+
+When a polecat dies mid-task (context exhaustion, crash, SIGKILL), the bridge detects the death event, captures diagnostic context, and can auto-invoke `/investigate` to diagnose the failure before re-dispatching.
+
+### Stranded convoy diagnosis
+
+If a convoy stalls (all polecats dead, no progress), the stranded convoy detector runs diagnosis with quality gate context — it knows which reviews passed, which failed, and what the current blocker is.
 
 ## What's intentionally not here
 
