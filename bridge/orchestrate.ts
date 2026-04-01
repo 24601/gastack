@@ -1137,6 +1137,134 @@ export class Orchestrator {
     };
   }
 
+  // --- Pre-verified signaling (after REVIEW passes) ---
+
+  /**
+   * Signal completing polecats to use `gt done --pre-verified` after REVIEW passes.
+   *
+   * After the bridge's REVIEW stage passes, polecats that completed their EXECUTE
+   * tasks should use `--pre-verified` when running `gt done`, allowing the refinery
+   * to skip redundant review gates and fast-path merge.
+   *
+   * Polecat discovery strategy:
+   *   1. If explicit targets are provided, use those directly
+   *   2. Extract polecat targets from EXECUTE task metadata (set during dispatch)
+   *   3. If a rig is specified but no targets found, query active polecats via
+   *      `polecats.active` adapter command
+   *
+   * The nudge message is structured so polecats can parse and act on it:
+   *   "BRIDGE_PRE_VERIFIED: REVIEW passed. Use gt done --pre-verified --target <branch>"
+   *
+   * Returns a summary of nudge attempts (successes/failures).
+   */
+  async signalPreVerified(opts?: {
+    /** Explicit polecat targets to nudge (e.g., ["gastack/polecats/furiosa"]). */
+    targets?: string[];
+    /** Rig name for querying active polecats if no explicit targets. */
+    rig?: string;
+    /** Target branch for the --pre-verified done command (default: "main"). */
+    targetBranch?: string;
+  }): Promise<{
+    nudged: string[];
+    failed: Array<{ target: string; error: string }>;
+    skipped: boolean;
+  }> {
+    const branch = opts?.targetBranch ?? 'main';
+    const nudged: string[] = [];
+    const failed: Array<{ target: string; error: string }> = [];
+
+    // Step 1: Resolve polecat targets
+    let targets = opts?.targets ?? [];
+
+    if (targets.length === 0) {
+      // Extract from EXECUTE task metadata
+      targets = this.extractPolecatTargets();
+    }
+
+    if (targets.length === 0 && opts?.rig) {
+      // Query active polecats via gastown adapter
+      const adapter = this.adapters['gastown'];
+      if (adapter) {
+        try {
+          const result = await adapter.execute('polecats.active', { rig: opts.rig });
+          const parsed = JSON.parse(result);
+          const active = Array.isArray(parsed)
+            ? parsed
+            : (parsed.polecats ?? parsed.active ?? []);
+          targets = active.map((p: string | { address?: string; name?: string }) =>
+            typeof p === 'string' ? p : (p.address ?? `${opts.rig}/polecats/${p.name ?? ''}`),
+          );
+        } catch {
+          // polecats.active not available or failed — skip (non-fatal)
+        }
+      }
+    }
+
+    if (targets.length === 0) {
+      return { nudged: [], failed: [], skipped: true };
+    }
+
+    // Step 2: Nudge each polecat with pre-verified signal
+    const message = `BRIDGE_PRE_VERIFIED: REVIEW passed. Use gt done --pre-verified --target ${branch}`;
+
+    const adapter = this.adapters['gastown'];
+    if (!adapter) {
+      return { nudged: [], failed: [], skipped: true };
+    }
+
+    for (const target of targets) {
+      try {
+        await this.externalCall('gastown', 'nudge', {
+          target,
+          message,
+        });
+        nudged.push(target);
+      } catch (err) {
+        failed.push({
+          target,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return { nudged, failed, skipped: false };
+  }
+
+  /**
+   * Extract polecat targets from EXECUTE stage task metadata.
+   *
+   * Tasks queued during EXECUTE can have `polecatTarget` in their metadata,
+   * set by the dispatch layer when sling assigns work to a specific polecat.
+   * Also checks task completion results for polecat assignment info.
+   */
+  private extractPolecatTargets(): string[] {
+    const executeTasks = this.tasksForStage('EXECUTE');
+    const targets = new Set<string>();
+
+    for (const task of executeTasks) {
+      // Check metadata for polecat target (set at dispatch time)
+      const metaTarget = task.metadata?.polecatTarget;
+      if (typeof metaTarget === 'string' && metaTarget) {
+        targets.add(metaTarget);
+      }
+
+      // Check task result for polecat assignment (set by sling response)
+      if (task.result) {
+        try {
+          const parsed = JSON.parse(task.result);
+          const assignee = parsed.polecatTarget ?? parsed.assignee ?? parsed.polecat;
+          if (typeof assignee === 'string' && assignee) {
+            targets.add(assignee);
+          }
+        } catch {
+          // Non-JSON result — skip
+        }
+      }
+    }
+
+    return [...targets];
+  }
+
   // --- Stranded convoy polling (EXECUTE stage) ---
 
   /** Poll counter for stranded checks (breaks idempotency cache per poll). */

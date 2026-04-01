@@ -695,6 +695,7 @@ describe('T3.4 structural invariants', () => {
       { cmd: 'sling', args: { beadId: 'gt-t1x', rig: 'gastack', merge: 'mr' } },
       { cmd: 'sling.review', args: { beadId: 'gt-t1x', rig: 'gastack', agent: 'claude' } },
       { cmd: 'sling.batch', args: { beadIds: ['ga-001', 'ga-002'], rig: 'gastack', maxConcurrent: 2 } },
+      { cmd: 'polecats.active', args: { rig: 'gastack' } },
       { cmd: 'raw', args: { args: ['status', '--verbose'] } },
     ];
 
@@ -724,5 +725,19 @@ describe('T3.4 structural invariants', () => {
     const args = adapter.lastCliArgsFor('raw')!;
 
     expect(args).toEqual(['gt', 'mail', 'send', '--stdin', '$(evil)']);
+  });
+
+  test('polecats.active constructs correct args with rig', async () => {
+    await adapter.execute('polecats.active', { rig: 'gastack' });
+    const args = adapter.lastCliArgsFor('polecats.active')!;
+
+    expect(args).toEqual(['gt', 'polecats', 'list', '--rig', 'gastack']);
+  });
+
+  test('polecats.active without rig omits --rig flag', async () => {
+    await adapter.execute('polecats.active', {});
+    const args = adapter.lastCliArgsFor('polecats.active')!;
+
+    expect(args).toEqual(['gt', 'polecats', 'list']);
   });
 });

@@ -1264,3 +1264,277 @@ describe('sessionStartTime', () => {
     expect(new Date(startTime!).toISOString()).toBe(startTime);
   });
 });
+
+// --- signalPreVerified tests ---
+
+describe('signalPreVerified', () => {
+  function createOrch(adapters?: Record<string, Adapter>) {
+    return Orchestrator.create({
+      logDir: tmpDir,
+      projectDir: '/tmp/project',
+      adapters,
+      config: { test: true },
+    });
+  }
+
+  test('nudges explicit targets with pre-verified message', async () => {
+    const nudges: Array<{ target: string; message: string }> = [];
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd, args) {
+        if (cmd === 'nudge') {
+          nudges.push({
+            target: String(args?.target),
+            message: String(args?.message),
+          });
+          return 'ok';
+        }
+        return '';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    const result = await orch.signalPreVerified({
+      targets: ['gastack/polecats/furiosa', 'gastack/polecats/dementus'],
+    });
+
+    expect(result.skipped).toBe(false);
+    expect(result.nudged).toEqual([
+      'gastack/polecats/furiosa',
+      'gastack/polecats/dementus',
+    ]);
+    expect(result.failed).toHaveLength(0);
+    expect(nudges).toHaveLength(2);
+    expect(nudges[0].message).toContain('BRIDGE_PRE_VERIFIED');
+    expect(nudges[0].message).toContain('--pre-verified');
+    expect(nudges[0].message).toContain('--target main');
+  });
+
+  test('uses custom target branch in nudge message', async () => {
+    const nudges: Array<{ message: string }> = [];
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd, args) {
+        if (cmd === 'nudge') {
+          nudges.push({ message: String(args?.message) });
+        }
+        return 'ok';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    await orch.signalPreVerified({
+      targets: ['gastack/polecats/furiosa'],
+      targetBranch: 'develop',
+    });
+
+    expect(nudges[0].message).toContain('--target develop');
+  });
+
+  test('extracts polecat targets from EXECUTE task metadata', async () => {
+    const nudges: string[] = [];
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd, args) {
+        if (cmd === 'nudge') {
+          nudges.push(String(args?.target));
+        }
+        return 'ok';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+
+    // Queue tasks with polecat metadata
+    orch.queueTask('impl auth', { polecatTarget: 'gastack/polecats/furiosa' });
+    orch.queueTask('impl api', { polecatTarget: 'gastack/polecats/dementus' });
+
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+
+    const result = await orch.signalPreVerified();
+
+    expect(result.skipped).toBe(false);
+    expect(result.nudged).toContain('gastack/polecats/furiosa');
+    expect(result.nudged).toContain('gastack/polecats/dementus');
+  });
+
+  test('extracts polecat targets from task result JSON', async () => {
+    const nudges: string[] = [];
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd, args) {
+        if (cmd === 'nudge') {
+          nudges.push(String(args?.target));
+        }
+        return 'ok';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+
+    const taskId = orch.queueTask('impl auth');
+    orch.startTask(taskId);
+    orch.completeTask(taskId, JSON.stringify({ assignee: 'gastack/polecats/furiosa' }));
+
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+
+    const result = await orch.signalPreVerified();
+
+    expect(result.nudged).toContain('gastack/polecats/furiosa');
+  });
+
+  test('deduplicates polecat targets from metadata and result', async () => {
+    const nudges: string[] = [];
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd, args) {
+        if (cmd === 'nudge') {
+          nudges.push(String(args?.target));
+        }
+        return 'ok';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+
+    const taskId = orch.queueTask('impl auth', { polecatTarget: 'gastack/polecats/furiosa' });
+    orch.startTask(taskId);
+    orch.completeTask(taskId, JSON.stringify({ assignee: 'gastack/polecats/furiosa' }));
+
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+
+    const result = await orch.signalPreVerified();
+
+    // Should only nudge once despite appearing in both metadata and result
+    expect(result.nudged).toEqual(['gastack/polecats/furiosa']);
+    expect(nudges).toHaveLength(1);
+  });
+
+  test('falls back to polecats.active when no metadata or targets', async () => {
+    const nudges: string[] = [];
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd, args) {
+        if (cmd === 'polecats.active') {
+          return JSON.stringify({
+            polecats: ['gastack/polecats/furiosa'],
+          });
+        }
+        if (cmd === 'nudge') {
+          nudges.push(String(args?.target));
+        }
+        return 'ok';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    const result = await orch.signalPreVerified({ rig: 'gastack' });
+
+    expect(result.skipped).toBe(false);
+    expect(result.nudged).toContain('gastack/polecats/furiosa');
+  });
+
+  test('skips when no targets found and no rig specified', async () => {
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute() { return 'ok'; },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    const result = await orch.signalPreVerified();
+
+    expect(result.skipped).toBe(true);
+    expect(result.nudged).toHaveLength(0);
+  });
+
+  test('skips when no gastown adapter registered', async () => {
+    const orch = createOrch();
+    const result = await orch.signalPreVerified({
+      targets: ['gastack/polecats/furiosa'],
+    });
+
+    expect(result.skipped).toBe(true);
+  });
+
+  test('captures failures for individual nudge errors', async () => {
+    let callCount = 0;
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd) {
+        if (cmd === 'nudge') {
+          callCount++;
+          if (callCount === 1) throw new Error('polecat unreachable');
+          return 'ok';
+        }
+        return '';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    const result = await orch.signalPreVerified({
+      targets: ['gastack/polecats/dead', 'gastack/polecats/alive'],
+    });
+
+    expect(result.nudged).toEqual(['gastack/polecats/alive']);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].target).toBe('gastack/polecats/dead');
+    expect(result.failed[0].error).toContain('polecat unreachable');
+  });
+
+  test('handles polecats.active returning array of objects', async () => {
+    const nudges: string[] = [];
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd, args) {
+        if (cmd === 'polecats.active') {
+          return JSON.stringify([
+            { name: 'furiosa', address: 'gastack/polecats/furiosa' },
+            { name: 'dementus', address: 'gastack/polecats/dementus' },
+          ]);
+        }
+        if (cmd === 'nudge') {
+          nudges.push(String(args?.target));
+        }
+        return 'ok';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    const result = await orch.signalPreVerified({ rig: 'gastack' });
+
+    expect(result.nudged).toEqual([
+      'gastack/polecats/furiosa',
+      'gastack/polecats/dementus',
+    ]);
+  });
+
+  test('gracefully handles polecats.active failure', async () => {
+    const adapter: Adapter = {
+      name: 'gastown',
+      async execute(cmd) {
+        if (cmd === 'polecats.active') {
+          throw new Error('command not found');
+        }
+        return 'ok';
+      },
+    };
+
+    const orch = createOrch({ gastown: adapter });
+    const result = await orch.signalPreVerified({ rig: 'gastack' });
+
+    // Should skip gracefully, not throw
+    expect(result.skipped).toBe(true);
+  });
+});

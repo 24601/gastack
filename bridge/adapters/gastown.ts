@@ -420,6 +420,7 @@ export function extractExecutionContext(beadJson: Record<string, unknown>): Exec
  *   - tail.restore  → restore tail state from args
  *   - bead.context  → bd show --json <beadId>, extract execution context
  *   - changelog     → gt changelog --json [--since <date>] [--rig <rig>]
+ *   - polecats.active → gt polecats list --json --rig <rig> (active polecats in a rig)
  *   - raw           → pass-through for arbitrary gt subcommands
  */
 export class GasTownAdapter implements Adapter {
@@ -684,6 +685,12 @@ export class GasTownAdapter implements Adapter {
           throw new Error('bead.context requires args.beadId');
         }
         return this.fetchBeadContext(beadId);
+      }
+
+      case 'polecats.active': {
+        const polecatArgs = ['polecats', 'list'];
+        if (args?.rig) polecatArgs.push('--rig', String(args.rig));
+        return this.jsonCommand(polecatArgs);
       }
 
       case 'raw': {

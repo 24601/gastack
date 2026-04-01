@@ -159,6 +159,12 @@ export class TestableGasTownAdapter implements Adapter {
         return { tool: 'gt', cliArgs: batchArgs };
       }
 
+      case 'polecats.active': {
+        const polecatArgs = ['gt', 'polecats', 'list'];
+        if (args?.rig) polecatArgs.push('--rig', String(args.rig));
+        return { tool: 'gt', cliArgs: polecatArgs };
+      }
+
       case 'raw': {
         const rawArgs = args?.args;
         if (!Array.isArray(rawArgs)) {
