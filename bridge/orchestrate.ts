@@ -768,21 +768,34 @@ export class Orchestrator {
       }
     }
 
-    // All review dispatch routes through gt sling --agent for proper
-    // lifecycle management from the witness (see GASTOWN-BRIDGE-REVIEW.md #4).
-    // The routing mode (review-only vs inline) determines the reason logged,
-    // but both use sling.review with --agent for native multi-model dispatch.
+    // Route review through either quick (sling.review) or deep (sling.deepReview)
+    // mode based on config. Deep mode slings to a polecat with full workspace
+    // context (git diff, file reads) for richer findings. Quick mode uses headless
+    // sling --review-only --agent. See GASTOWN-BRIDGE-REVIEW.md #3.
+    const useDeepReview = this.multiModelConfig.reviewMode === 'deep';
+    const slingCommand = useDeepReview ? 'sling.deepReview' : 'sling.review';
+
     const callArgs: Record<string, unknown> = {
       beadId: opts?.beadId,
       rig: opts?.rig,
       agent: opts?.agent ?? this.multiModelConfig.primary,
     };
     if (opts?.iteration) callArgs.iteration = opts.iteration;
-    if (executionContext) {
-      callArgs.formulaArgs = `${executionContext}\n\nRun /review on the branch, then /cso. Persist findings to bead notes.`;
+    if (useDeepReview) {
+      // Deep review: pass execution context for the polecat to use alongside
+      // full workspace access (git diff, file reads, skill invocation).
+      if (executionContext) callArgs.executionContext = executionContext;
+    } else {
+      // Quick review: pass formula args for headless skill execution.
+      if (executionContext) {
+        callArgs.formulaArgs = `${executionContext}\n\nRun /review on the branch, then /cso. Persist findings to bead notes.`;
+      }
     }
-    const result = await this.externalCall('gastown', 'sling.review', callArgs);
-    return { mode: routing.mode, reason: routing.reason, result: result.result };
+    const result = await this.externalCall('gastown', slingCommand, callArgs);
+
+    // Augment the reason with the review mode for event log clarity.
+    const modeLabel = useDeepReview ? ' [deep]' : ' [quick]';
+    return { mode: routing.mode, reason: routing.reason + modeLabel, result: result.result };
   }
 
   // --- Review-fix-rereview loop ---

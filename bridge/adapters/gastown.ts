@@ -521,6 +521,38 @@ export class GasTownAdapter implements Adapter {
         return this.textCommand(reviewSlingArgs);
       }
 
+      case 'sling.deepReview': {
+        // Deep review mode: sling a review-only bead to a polecat that runs
+        // full /review + /cso skills with workspace context (git diff, file reads).
+        // The polecat gets its own worktree and can read the full codebase,
+        // producing richer findings than headless sling (see GASTOWN-BRIDGE-REVIEW.md #3).
+        const deepReviewPrompt = [
+          args?.executionContext ? String(args.executionContext) : '',
+          '',
+          'You are a review polecat. Your job is to review code changes on this branch.',
+          '',
+          '1. Run `git diff origin/main...HEAD` to see all changes',
+          '2. Read any files that need full context to understand the changes',
+          '3. Run /review --branch to get a structured grade with findings',
+          '4. Run /cso to check for security issues',
+          '5. Persist ALL findings to bead notes via `bd update <id> --notes "..."`',
+          '6. Include the grade, every finding with severity, and your assessment',
+          '',
+          'You have full workspace access. Use it — read related files, check test coverage,',
+          'verify imports, trace call paths. This is a deep review, not a surface scan.',
+        ].filter(Boolean).join('\n');
+
+        const deepReviewSlingArgs = [
+          'sling', String(args?.beadId ?? ''), String(args?.rig ?? ''),
+          '--review-only',
+          '--formula', 'mol-polecat-work',
+          '--args', deepReviewPrompt,
+        ];
+        if (args?.agent) deepReviewSlingArgs.push('--agent', String(args.agent));
+        if (args?.merge) deepReviewSlingArgs.push('--merge', String(args.merge));
+        return this.textCommand(deepReviewSlingArgs);
+      }
+
       case 'sling.investigate': {
         const error = String(args?.error ?? 'unknown error');
         const taskDescription = args?.taskDescription ? String(args.taskDescription) : '';

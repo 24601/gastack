@@ -34,6 +34,18 @@ export interface MultiModelConfig {
    * Default: 3.
    */
   maxReviewIterations: number;
+  /**
+   * Review dispatch mode: 'quick' or 'deep'.
+   *
+   * - quick: Run review skills via gt sling --review-only --agent (headless,
+   *   fast, no workspace context). This is the existing behavior.
+   * - deep: Sling review-only beads to polecats that run full /review and /cso
+   *   skills in a workspace context with git diff and file reads. Higher quality
+   *   but adds polecat spawn latency.
+   *
+   * Default: 'quick'. See GASTOWN-BRIDGE-REVIEW.md #3.
+   */
+  reviewMode: 'quick' | 'deep';
 }
 
 export const DEFAULT_MULTI_MODEL: MultiModelConfig = {
@@ -41,6 +53,7 @@ export const DEFAULT_MULTI_MODEL: MultiModelConfig = {
   primary: 'claude',
   review: 'codex',
   maxReviewIterations: 3,
+  reviewMode: 'quick',
 };
 
 // --- Bridge config ---

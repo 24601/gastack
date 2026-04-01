@@ -349,4 +349,77 @@ describe('Orchestrator.dispatchReview', () => {
     expect(slingCall).toBeDefined();
     expect(slingCall!.args?.agent).toBe('gemini');
   });
+
+  test('uses sling.deepReview when reviewMode is deep', async () => {
+    const gastown = new RecordingAdapter('gastown');
+    const gstack = new RecordingAdapter('gstack');
+    const orch = rig.createOrchestrator({ gastown, gstack });
+
+    orch.setMultiModelConfig({ reviewMode: 'deep' });
+
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+
+    const result = await orch.dispatchReview(
+      { changedFiles: ['src/utils.ts'], totalChangedLines: 15 },
+      { beadId: 'gt-d1', rig: 'gastack' },
+    );
+
+    // Should route through sling.deepReview, not sling.review
+    expect(gastown.calls.some((c) => c.command === 'sling.deepReview')).toBe(true);
+    expect(gastown.calls.some((c) => c.command === 'sling.review')).toBe(false);
+
+    // Reason should include [deep] label
+    expect(result.reason).toContain('[deep]');
+  });
+
+  test('uses sling.review when reviewMode is quick (default)', async () => {
+    const gastown = new RecordingAdapter('gastown');
+    const gstack = new RecordingAdapter('gstack');
+    const orch = rig.createOrchestrator({ gastown, gstack });
+
+    // Default reviewMode is 'quick' — no setMultiModelConfig needed
+
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+
+    const result = await orch.dispatchReview(
+      { changedFiles: ['src/utils.ts'], totalChangedLines: 15 },
+    );
+
+    expect(gastown.calls.some((c) => c.command === 'sling.review')).toBe(true);
+    expect(gastown.calls.some((c) => c.command === 'sling.deepReview')).toBe(false);
+    expect(result.reason).toContain('[quick]');
+  });
+
+  test('deep review passes executionContext instead of formulaArgs', async () => {
+    const gastown = new RecordingAdapter('gastown');
+    const gstack = new RecordingAdapter('gstack');
+    const orch = rig.createOrchestrator({ gastown, gstack });
+
+    orch.setMultiModelConfig({ reviewMode: 'deep' });
+
+    orch.enterStage('PLAN');
+    orch.completeStage();
+    orch.enterStage('EXECUTE');
+    orch.completeStage();
+    orch.enterStage('REVIEW');
+
+    await orch.dispatchReview(
+      { changedFiles: ['src/auth/login.ts'], totalChangedLines: 30 },
+      { beadId: 'gt-d2', rig: 'gastack' },
+    );
+
+    const deepCall = gastown.calls.find((c) => c.command === 'sling.deepReview');
+    expect(deepCall).toBeDefined();
+
+    // Deep review should NOT have formulaArgs (that's the quick mode pattern)
+    expect(deepCall!.args?.formulaArgs).toBeUndefined();
+  });
 });
