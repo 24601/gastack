@@ -1,5 +1,5 @@
 /**
- * dispatch.ts — Priority sorting and batch grouping for task dispatch.
+ * dispatch.ts — Priority sorting, batch grouping, and convoy dispatch.
  *
  * Encodes gstack's opinion: not all tasks are equal.
  * Security work never gets starved by feature volume.
@@ -13,9 +13,15 @@
  *   - Tasks sorted by priority, then by extraction number within same priority
  *   - Batches respect --max-concurrent limit
  *   - Each batch contains priority-ordered bead IDs for a single gt sling call
+ *
+ * Convoy dispatch (preferred):
+ *   - stageAndLaunch() uses gt convoy stage + gt convoy launch
+ *   - gastown handles dependency ordering and wave-based dispatch natively
+ *   - Falls back to manual sling.batch if stage/launch fails
  */
 
 import type { ExtractedTask } from './task-extract.js';
+import type { Adapter } from './orchestrate.js';
 
 // --- Priority levels ---
 
@@ -154,4 +160,102 @@ export function batchBeadIds(batch: PrioritizedTask[]): string[] {
   return batch
     .filter((t) => t.beadId)
     .map((t) => t.beadId!);
+}
+
+// --- Convoy stage + launch dispatch ---
+
+/** Result of a convoy stage + launch dispatch attempt. */
+export interface ConvoyDispatchResult {
+  /** Whether stage+launch succeeded. */
+  ok: boolean;
+  /** Convoy ID if staging succeeded. */
+  convoyId?: string;
+  /** Whether we fell back to manual sling. */
+  fellBackToSling: boolean;
+  /** Error message if stage or launch failed. */
+  error?: string;
+}
+
+/**
+ * Dispatch tasks via `gt convoy stage` + `gt convoy launch`.
+ *
+ * Replaces the manual "gt convoy create → gt sling × N" loop.
+ * gastown handles dependency ordering and wave-based dispatch natively.
+ *
+ * Falls back to manual sling.batch if stage or launch fails.
+ *
+ * @param beadIds - Bead IDs to dispatch (already created via bd create)
+ * @param adapter - Gas Town adapter for executing commands
+ * @param opts - Optional title, rig, and maxConcurrent for fallback
+ */
+export async function stageAndLaunch(
+  beadIds: string[],
+  adapter: Adapter,
+  opts?: {
+    title?: string;
+    rig?: string;
+    maxConcurrent?: number;
+  },
+): Promise<ConvoyDispatchResult> {
+  if (beadIds.length === 0) {
+    return { ok: true, fellBackToSling: false };
+  }
+
+  // Try stage + launch
+  try {
+    const stageResult = await adapter.execute('convoy.stage', {
+      beadIds,
+      title: opts?.title,
+    });
+
+    // Parse convoy ID from JSON output
+    const convoyId = parseConvoyId(stageResult);
+    if (!convoyId) {
+      throw new Error(`convoy.stage returned no convoy ID: ${stageResult}`);
+    }
+
+    await adapter.execute('convoy.launch', { convoyId });
+
+    return { ok: true, convoyId, fellBackToSling: false };
+  } catch (stageErr) {
+    // Stage or launch failed — fall back to manual sling.batch
+    try {
+      await adapter.execute('sling.batch', {
+        beadIds,
+        rig: opts?.rig ?? '',
+        maxConcurrent: opts?.maxConcurrent ?? 4,
+      });
+
+      return {
+        ok: true,
+        fellBackToSling: true,
+        error: `stage/launch failed, used sling fallback: ${errorMessage(stageErr)}`,
+      };
+    } catch (slingErr) {
+      return {
+        ok: false,
+        fellBackToSling: true,
+        error: `both stage/launch and sling fallback failed: ${errorMessage(stageErr)}; sling: ${errorMessage(slingErr)}`,
+      };
+    }
+  }
+}
+
+/** Parse convoy ID from gt convoy stage --json output. */
+function parseConvoyId(stageOutput: string): string | undefined {
+  try {
+    const parsed = JSON.parse(stageOutput);
+    // gt convoy stage --json returns { convoy_id: "..." } or { id: "..." }
+    return parsed.convoy_id ?? parsed.id ?? undefined;
+  } catch {
+    // Try line-based fallback: "Convoy hq-xxx staged"
+    const match = stageOutput.match(/[Cc]onvoy\s+([\w-]+)/);
+    return match?.[1];
+  }
+}
+
+/** Extract error message from unknown error type. */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }

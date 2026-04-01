@@ -20,9 +20,11 @@ import {
   batchTasks,
   planDispatch,
   batchBeadIds,
+  stageAndLaunch,
   type PrioritizedTask,
 } from '../dispatch.js';
 import type { ExtractedTask } from '../task-extract.js';
+import type { Adapter } from '../orchestrate.js';
 
 // --- Helpers ---
 
@@ -316,5 +318,139 @@ describe('batchBeadIds — extract IDs for sling command', () => {
 
   test('empty batch returns empty array', () => {
     expect(batchBeadIds([])).toEqual([]);
+  });
+});
+
+// --- stageAndLaunch ---
+
+/** Mock adapter that records calls and returns configured responses. */
+function mockAdapter(responses: Record<string, string | Error>): Adapter & { calls: Array<{ command: string; args?: Record<string, unknown> }> } {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  return {
+    name: 'mock-gastown',
+    calls,
+    async execute(command: string, args?: Record<string, unknown>): Promise<string> {
+      calls.push({ command, args });
+      const response = responses[command];
+      if (response instanceof Error) throw response;
+      return response ?? '';
+    },
+  };
+}
+
+describe('stageAndLaunch — convoy dispatch', () => {
+  test('stages and launches convoy successfully', async () => {
+    const adapter = mockAdapter({
+      'convoy.stage': JSON.stringify({ convoy_id: 'hq-abc123' }),
+      'convoy.launch': 'Convoy hq-abc123 launched',
+    });
+
+    const result = await stageAndLaunch(['ga-001', 'ga-002'], adapter, {
+      title: 'Test convoy',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.convoyId).toBe('hq-abc123');
+    expect(result.fellBackToSling).toBe(false);
+    expect(adapter.calls).toHaveLength(2);
+    expect(adapter.calls[0].command).toBe('convoy.stage');
+    expect(adapter.calls[0].args?.beadIds).toEqual(['ga-001', 'ga-002']);
+    expect(adapter.calls[0].args?.title).toBe('Test convoy');
+    expect(adapter.calls[1].command).toBe('convoy.launch');
+    expect(adapter.calls[1].args?.convoyId).toBe('hq-abc123');
+  });
+
+  test('falls back to sling.batch when stage fails', async () => {
+    const adapter = mockAdapter({
+      'convoy.stage': new Error('stage command not found'),
+      'sling.batch': 'Slung 2 beads',
+    });
+
+    const result = await stageAndLaunch(['ga-001', 'ga-002'], adapter, {
+      rig: 'gastack',
+      maxConcurrent: 3,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.fellBackToSling).toBe(true);
+    expect(result.error).toContain('stage/launch failed');
+    expect(adapter.calls).toHaveLength(2);
+    expect(adapter.calls[1].command).toBe('sling.batch');
+    expect(adapter.calls[1].args?.beadIds).toEqual(['ga-001', 'ga-002']);
+    expect(adapter.calls[1].args?.maxConcurrent).toBe(3);
+  });
+
+  test('falls back to sling.batch when launch fails', async () => {
+    const adapter = mockAdapter({
+      'convoy.stage': JSON.stringify({ convoy_id: 'hq-abc123' }),
+      'convoy.launch': new Error('launch failed: no workers available'),
+      'sling.batch': 'Slung 2 beads',
+    });
+
+    const result = await stageAndLaunch(['ga-001', 'ga-002'], adapter);
+
+    expect(result.ok).toBe(true);
+    expect(result.fellBackToSling).toBe(true);
+    expect(result.error).toContain('stage/launch failed');
+  });
+
+  test('reports failure when both stage and sling fallback fail', async () => {
+    const adapter = mockAdapter({
+      'convoy.stage': new Error('stage failed'),
+      'sling.batch': new Error('sling failed too'),
+    });
+
+    const result = await stageAndLaunch(['ga-001'], adapter);
+
+    expect(result.ok).toBe(false);
+    expect(result.fellBackToSling).toBe(true);
+    expect(result.error).toContain('both stage/launch and sling fallback failed');
+    expect(result.error).toContain('stage failed');
+    expect(result.error).toContain('sling failed too');
+  });
+
+  test('empty beadIds returns ok without calling adapter', async () => {
+    const adapter = mockAdapter({});
+
+    const result = await stageAndLaunch([], adapter);
+
+    expect(result.ok).toBe(true);
+    expect(result.fellBackToSling).toBe(false);
+    expect(adapter.calls).toHaveLength(0);
+  });
+
+  test('parses convoy ID from "id" field', async () => {
+    const adapter = mockAdapter({
+      'convoy.stage': JSON.stringify({ id: 'hq-xyz789' }),
+      'convoy.launch': 'Launched',
+    });
+
+    const result = await stageAndLaunch(['ga-001'], adapter);
+
+    expect(result.convoyId).toBe('hq-xyz789');
+  });
+
+  test('parses convoy ID from text output when JSON fails', async () => {
+    const adapter = mockAdapter({
+      'convoy.stage': 'Convoy hq-fallback staged successfully',
+      'convoy.launch': 'Launched',
+    });
+
+    const result = await stageAndLaunch(['ga-001'], adapter);
+
+    expect(result.convoyId).toBe('hq-fallback');
+  });
+
+  test('defaults rig and maxConcurrent in sling fallback', async () => {
+    const adapter = mockAdapter({
+      'convoy.stage': new Error('stage unavailable'),
+      'sling.batch': 'OK',
+    });
+
+    await stageAndLaunch(['ga-001'], adapter);
+
+    const slingCall = adapter.calls.find((c) => c.command === 'sling.batch');
+    expect(slingCall?.args?.rig).toBe('');
+    expect(slingCall?.args?.maxConcurrent).toBe(4);
   });
 });

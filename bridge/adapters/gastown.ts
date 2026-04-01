@@ -407,6 +407,8 @@ export function extractExecutionContext(beadJson: Record<string, unknown>): Exec
  *   - sling.review  → gt sling <beadId> <rig> --review-only [--agent <agent>]
  *   - sling.investigate → gt sling <beadId> <rig> --review-only with /investigate prompt
  *   - sling.batch   → gt sling <id1> <id2> ... <rig> [--max-concurrent N] [--merge <strategy>]
+ *   - convoy.stage  → gt convoy stage <beadIds> --json [--title <title>] [--launch]
+ *   - convoy.launch → gt convoy launch <convoyId> [--force]
  *   - tail.poll     → poll events.jsonl for new events
  *   - tail.state    → return current tail state
  *   - tail.restore  → restore tail state from args
@@ -546,6 +548,27 @@ export class GasTownAdapter implements Adapter {
         if (args?.formula) batchArgs.push('--formula', String(args.formula));
         if (args?.formulaArgs) batchArgs.push('--args', String(args.formulaArgs));
         return this.textCommand(batchArgs);
+      }
+
+      case 'convoy.stage': {
+        const beadIds = args?.beadIds;
+        if (!Array.isArray(beadIds) || beadIds.length === 0) {
+          throw new Error('convoy.stage requires args.beadIds as non-empty string[]');
+        }
+        const stageArgs = ['convoy', 'stage', ...beadIds.map(String), '--json'];
+        if (args?.title) stageArgs.push('--title', String(args.title));
+        if (args?.launch) stageArgs.push('--launch');
+        return this.textCommand(stageArgs);
+      }
+
+      case 'convoy.launch': {
+        const convoyId = String(args?.convoyId ?? '');
+        if (!convoyId) {
+          throw new Error('convoy.launch requires args.convoyId');
+        }
+        const launchArgs = ['convoy', 'launch', convoyId];
+        if (args?.force) launchArgs.push('--force');
+        return this.textCommand(launchArgs);
       }
 
       case 'convoy.stranded':
