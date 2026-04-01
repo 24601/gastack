@@ -51,6 +51,11 @@ import {
   type BridgeConfig,
   DEFAULT_MULTI_MODEL,
 } from './config.js';
+import {
+  diagnoseStranded,
+  type StrandedConvoy,
+  type StrandedDiagnosis,
+} from './stranded.js';
 
 // --- Adapter interface ---
 
@@ -1121,6 +1126,184 @@ export class Orchestrator {
       mergedReport,
       approvalId,
     };
+  }
+
+  // --- Stranded convoy polling (EXECUTE stage) ---
+
+  /** Poll counter for stranded checks (breaks idempotency cache per poll). */
+  private strandedPollCount = 0;
+
+  /**
+   * Poll for stranded convoys during the EXECUTE stage.
+   *
+   * Calls `gt convoy stranded --json` via the gastown adapter, filters for
+   * the specified convoy, joins with quality context from the event log,
+   * and returns actionable diagnoses.
+   *
+   * For each stranded convoy:
+   *   - no_workers  → re-sling ready issues via gastown adapter
+   *   - quality_blocked → request human approval (quality findings need review)
+   *   - dependency_blocked → log and continue (external dependency)
+   *   - empty → signal for auto-close
+   *
+   * Each call increments an internal poll counter to ensure fresh external
+   * calls (not cached by idempotency). This is intentional — polling must
+   * see current state, not replayed state.
+   *
+   * The orchestrator must be in the EXECUTE stage when this is called.
+   */
+  async pollStranded(opts?: {
+    /** Convoy ID to filter for. If omitted, diagnoses ALL stranded convoys. */
+    convoyId?: string;
+    /** Rig to re-sling tasks to (required for auto re-sling). */
+    rig?: string;
+    /** Agent override for re-slung tasks. */
+    agent?: string;
+  }): Promise<{
+    /** All stranded diagnoses (filtered to convoyId if provided). */
+    diagnoses: StrandedDiagnosis[];
+    /** Actions taken automatically (re-sling, approval requests). */
+    actions: Array<{
+      type: 'resling' | 'approval' | 'empty';
+      convoyId: string;
+      detail: string;
+    }>;
+    /** Poll number (monotonically increasing). */
+    pollNumber: number;
+  }> {
+    const current = this.currentStage();
+    if (current !== 'EXECUTE') {
+      throw new Error(`pollStranded requires EXECUTE stage, currently in ${current}`);
+    }
+
+    this.strandedPollCount++;
+    const pollNumber = this.strandedPollCount;
+
+    // Step 1: Fetch stranded convoys via gastown adapter.
+    // Pass pollCount in args to break the idempotency cache — each poll
+    // must query current state, not return a cached previous result.
+    let rawConvoys: StrandedConvoy[];
+    try {
+      const result = await this.externalCall('gastown', 'convoy.stranded', {
+        _poll: pollNumber,
+      });
+      const parsed = JSON.parse(result.result);
+      rawConvoys = Array.isArray(parsed) ? parsed : (parsed.convoys ?? parsed.data ?? []);
+    } catch (err) {
+      // convoy.stranded failed — return empty (non-fatal, will retry next poll)
+      return { diagnoses: [], actions: [], pollNumber };
+    }
+
+    // Step 2: Filter to our convoy if specified
+    const convoys = opts?.convoyId
+      ? rawConvoys.filter((c) => c.id === opts.convoyId)
+      : rawConvoys;
+
+    if (convoys.length === 0) {
+      return { diagnoses: [], actions: [], pollNumber };
+    }
+
+    // Step 3: Build quality cache from event log
+    const qualityCache = this.buildQualityCache();
+
+    // Step 4: Diagnose
+    const diagnoses = diagnoseStranded(convoys, qualityCache);
+
+    // Step 5: Take action per diagnosis
+    const actions: Array<{
+      type: 'resling' | 'approval' | 'empty';
+      convoyId: string;
+      detail: string;
+    }> = [];
+
+    for (const diagnosis of diagnoses) {
+      switch (diagnosis.strandedReason) {
+        case 'no_workers': {
+          // Find the convoy's ready issues and re-sling them
+          const convoy = convoys.find((c) => c.id === diagnosis.convoyId);
+          if (convoy && convoy.ready_issues.length > 0 && opts?.rig) {
+            try {
+              await this.externalCall('gastown', 'sling.batch', {
+                beadIds: convoy.ready_issues,
+                rig: opts.rig,
+                agent: opts.agent,
+                _poll: pollNumber,
+              });
+              actions.push({
+                type: 'resling',
+                convoyId: diagnosis.convoyId,
+                detail: `Re-slung ${convoy.ready_issues.length} ready issue(s): ${convoy.ready_issues.join(', ')}`,
+              });
+            } catch {
+              // Re-sling failed — surface to human via approval
+              this.requestApproval(
+                `Stranded convoy ${diagnosis.convoyId}: re-sling failed for ` +
+                  `${convoy.ready_issues.length} issue(s). Manual intervention needed.`,
+              );
+              actions.push({
+                type: 'approval',
+                convoyId: diagnosis.convoyId,
+                detail: `Re-sling failed — approval requested`,
+              });
+            }
+          }
+          break;
+        }
+
+        case 'quality_blocked': {
+          // Quality findings block progress — surface to human
+          this.requestApproval(
+            `Stranded convoy ${diagnosis.convoyId}: ${diagnosis.recommendedAction}`,
+          );
+          actions.push({
+            type: 'approval',
+            convoyId: diagnosis.convoyId,
+            detail: diagnosis.recommendedAction,
+          });
+          break;
+        }
+
+        case 'empty': {
+          actions.push({
+            type: 'empty',
+            convoyId: diagnosis.convoyId,
+            detail: 'Empty convoy — candidate for auto-close.',
+          });
+          break;
+        }
+
+        case 'dependency_blocked': {
+          // External dependency — nothing we can do, just log
+          break;
+        }
+      }
+    }
+
+    return { diagnoses, actions, pollNumber };
+  }
+
+  /**
+   * Build a quality cache from this session's event log.
+   *
+   * Scans EXTERNAL_CALL_COMPLETED events for quality evaluation results
+   * and maps idempotency keys to QualityReport objects. Used by pollStranded
+   * to join convoy data with quality context.
+   */
+  private buildQualityCache(): Map<string, QualityReport> {
+    const cache = new Map<string, QualityReport>();
+    const calls = this.log.ofType('EXTERNAL_CALL_COMPLETED');
+    for (const call of calls) {
+      if (!call.success || !call.result) continue;
+      try {
+        const parsed = JSON.parse(call.result);
+        if (parsed.overall && Array.isArray(parsed.gates)) {
+          cache.set(call.idempotencyKey, parsed as QualityReport);
+        }
+      } catch {
+        // Not JSON or not a quality report — skip
+      }
+    }
+    return cache;
   }
 
   // --- Post-deploy canary verification ---
