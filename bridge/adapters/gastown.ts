@@ -69,6 +69,7 @@ const JSON_COMMANDS = new Set([
   'peek',
   'dolt',
   'convoy',
+  'changelog',
 ]);
 
 // --- gt CLI executor ---
@@ -413,6 +414,7 @@ export function extractExecutionContext(beadJson: Record<string, unknown>): Exec
  *   - tail.state    → return current tail state
  *   - tail.restore  → restore tail state from args
  *   - bead.context  → bd show --json <beadId>, extract execution context
+ *   - changelog     → gt changelog --json [--since <date>] [--rig <rig>]
  *   - raw           → pass-through for arbitrary gt subcommands
  */
 export class GasTownAdapter implements Adapter {
@@ -569,6 +571,13 @@ export class GasTownAdapter implements Adapter {
         const launchArgs = ['convoy', 'launch', convoyId];
         if (args?.force) launchArgs.push('--force');
         return this.textCommand(launchArgs);
+      }
+
+      case 'changelog': {
+        const clArgs = ['changelog'];
+        if (args?.since) clArgs.push('--since', String(args.since));
+        if (args?.rig) clArgs.push('--rig', String(args.rig));
+        return this.jsonCommand(clArgs);
       }
 
       case 'convoy.stranded':

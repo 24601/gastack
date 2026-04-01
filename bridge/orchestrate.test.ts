@@ -1113,3 +1113,154 @@ describe('pollStranded', () => {
     expect(orch.pendingApproval()).not.toBeNull();
   });
 });
+
+// --- buildCompletionSummary tests ---
+
+describe('buildCompletionSummary', () => {
+  function createOrch(adapters?: Record<string, Adapter>) {
+    const logDir = path.join(tmpDir, 'logs');
+    return Orchestrator.create({
+      logDir,
+      projectDir: tmpDir,
+      adapters,
+    });
+  }
+
+  test('returns fallback when no gastown adapter registered', async () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    const t = orch.queueTask('Build widget');
+    orch.startTask(t);
+    orch.completeTask(t);
+    orch.completeStage();
+
+    const summary = await orch.buildCompletionSummary();
+    expect(summary).toBe('Shipped. 1 task completed.');
+  });
+
+  test('returns fallback with failed task count', async () => {
+    const orch = createOrch();
+    orch.enterStage('PLAN');
+    const t1 = orch.queueTask('Build widget');
+    orch.startTask(t1);
+    orch.completeTask(t1);
+    const t2 = orch.queueTask('Build gizmo');
+    orch.startTask(t2);
+    orch.failTask(t2, 'compile error', true);
+    orch.completeStage();
+
+    const summary = await orch.buildCompletionSummary();
+    expect(summary).toBe('Shipped. 1 task completed, 1 failed.');
+  });
+
+  test('includes changelog data when gastown adapter returns results', async () => {
+    const mockChangelog = [
+      { type: 'bead_closed', id: 'ga-abc', title: 'Fix auth bug', status: 'closed' },
+      { type: 'commit', sha: 'deadbeef1234567', message: 'fix: auth token refresh' },
+      { type: 'commit', sha: 'cafebabe1234567', message: 'test: auth token tests' },
+    ];
+
+    const mockAdapter: Adapter = {
+      name: 'gastown',
+      execute: async (command: string, args?: Record<string, unknown>) => {
+        if (command === 'changelog') {
+          expect(args?.since).toBeDefined();
+          return JSON.stringify(mockChangelog);
+        }
+        return '{}';
+      },
+    };
+
+    const orch = createOrch({ gastown: mockAdapter });
+    orch.enterStage('PLAN');
+    const t = orch.queueTask('Fix auth');
+    orch.startTask(t);
+    orch.completeTask(t);
+    orch.completeStage();
+
+    const summary = await orch.buildCompletionSummary({ rig: 'gastack' });
+    expect(summary).toContain('Shipped. 1 task completed.');
+    expect(summary).toContain('ga-abc');
+    expect(summary).toContain('deadbee');
+    expect(summary).toContain('fix: auth token refresh');
+  });
+
+  test('passes rig to changelog call', async () => {
+    let capturedArgs: Record<string, unknown> | undefined;
+
+    const mockAdapter: Adapter = {
+      name: 'gastown',
+      execute: async (command: string, args?: Record<string, unknown>) => {
+        if (command === 'changelog') {
+          capturedArgs = args;
+          return '[]';
+        }
+        return '{}';
+      },
+    };
+
+    const orch = createOrch({ gastown: mockAdapter });
+    orch.enterStage('PLAN');
+    orch.completeStage();
+
+    await orch.buildCompletionSummary({ rig: 'myrig' });
+    expect(capturedArgs?.rig).toBe('myrig');
+    expect(capturedArgs?.since).toBeDefined();
+  });
+
+  test('falls back gracefully when changelog call throws', async () => {
+    const mockAdapter: Adapter = {
+      name: 'gastown',
+      execute: async (command: string) => {
+        if (command === 'changelog') {
+          throw new Error('gt changelog not available');
+        }
+        return '{}';
+      },
+    };
+
+    const orch = createOrch({ gastown: mockAdapter });
+    orch.enterStage('PLAN');
+    const t = orch.queueTask('Deploy');
+    orch.startTask(t);
+    orch.completeTask(t);
+    orch.completeStage();
+
+    const summary = await orch.buildCompletionSummary();
+    expect(summary).toBe('Shipped. 1 task completed.');
+  });
+
+  test('caps commits at 10 for readability', async () => {
+    const commits = Array.from({ length: 15 }, (_, i) => ({
+      type: 'commit',
+      sha: `${String(i).padStart(7, '0')}abcdef0`,
+      message: `commit ${i}`,
+    }));
+
+    const mockAdapter: Adapter = {
+      name: 'gastown',
+      execute: async () => JSON.stringify(commits),
+    };
+
+    const orch = createOrch({ gastown: mockAdapter });
+    orch.enterStage('PLAN');
+    orch.completeStage();
+
+    const summary = await orch.buildCompletionSummary();
+    expect(summary).toContain('... and 5 more');
+  });
+});
+
+// --- sessionStartTime tests ---
+
+describe('sessionStartTime', () => {
+  test('returns ISO timestamp from SESSION_CREATED event', () => {
+    const logDir = path.join(tmpDir, 'logs');
+    const orch = Orchestrator.create({ logDir, projectDir: tmpDir });
+
+    const startTime = orch.sessionStartTime();
+    expect(startTime).toBeDefined();
+    // Should be a valid ISO timestamp
+    expect(new Date(startTime!).toISOString()).toBe(startTime);
+  });
+});

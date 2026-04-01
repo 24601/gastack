@@ -81,6 +81,19 @@ export interface TaskState {
   metadata?: Record<string, unknown>;
 }
 
+// --- Changelog entry (from gt changelog --json) ---
+
+/** Entry from gt changelog --json output. Flexible shape to handle varying gt versions. */
+export interface ChangelogEntry {
+  type?: string;
+  id?: string;
+  title?: string;
+  message?: string;
+  sha?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
 // --- Orchestrator options ---
 
 export interface OrchestratorOptions {
@@ -1540,6 +1553,93 @@ export class Orchestrator {
     }
 
     return logged;
+  }
+
+  // --- Completion summary ---
+
+  /**
+   * Get the session start time from the SESSION_CREATED event envelope.
+   * Returns ISO timestamp string, or null if no SESSION_CREATED found.
+   */
+  sessionStartTime(): string | null {
+    const events = this.log.all();
+    for (const env of events) {
+      if (env.event.type === 'SESSION_CREATED') {
+        return env.timestamp;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Build a rich completion summary using gt changelog data.
+   *
+   * Calls `gt changelog --json --since <session-start> --rig <rig>` via the
+   * gastown adapter and formats a summary with actual git commits and bead
+   * closures instead of just "Shipped. N tasks."
+   *
+   * Falls back to task-count summary if the adapter call fails or no
+   * gastown adapter is registered.
+   */
+  async buildCompletionSummary(opts?: { rig?: string }): Promise<string> {
+    const tasks = this.tasks();
+    const completed = tasks.filter((t) => t.status === 'completed');
+    const failed = tasks.filter((t) => t.status === 'failed');
+    const fallback = `Shipped. ${completed.length} task${completed.length !== 1 ? 's' : ''} completed` +
+      (failed.length > 0 ? `, ${failed.length} failed` : '') + '.';
+
+    const adapter = this.adapters['gastown'];
+    if (!adapter) return fallback;
+
+    const startTime = this.sessionStartTime();
+    if (!startTime) return fallback;
+
+    // Extract date portion (YYYY-MM-DD) for --since flag
+    const sinceDate = startTime.slice(0, 10);
+
+    try {
+      const changelogArgs: Record<string, unknown> = { since: sinceDate };
+      if (opts?.rig) changelogArgs.rig = opts.rig;
+
+      const raw = await adapter.execute('changelog', changelogArgs);
+      const changelog = JSON.parse(raw) as ChangelogEntry[];
+
+      if (!Array.isArray(changelog) || changelog.length === 0) {
+        return fallback;
+      }
+
+      // Build rich summary
+      const parts: string[] = [];
+      parts.push(`Shipped. ${completed.length} task${completed.length !== 1 ? 's' : ''} completed.`);
+
+      // Summarize bead closures
+      const closedBeads = changelog.filter((e) => e.type === 'bead_closed' || e.status === 'closed');
+      if (closedBeads.length > 0) {
+        parts.push(`Beads closed: ${closedBeads.map((b) => b.id || b.title || 'unknown').join(', ')}.`);
+      }
+
+      // Summarize git commits
+      const commits = changelog.filter((e) => e.type === 'commit' || e.sha);
+      if (commits.length > 0) {
+        const commitLines = commits
+          .slice(0, 10) // Cap at 10 for readability
+          .map((c) => `  ${(c.sha as string)?.slice(0, 7) || '?'} ${c.message || c.title || ''}`)
+          .join('\n');
+        parts.push(`Git commits:\n${commitLines}`);
+        if (commits.length > 10) {
+          parts.push(`  ... and ${commits.length - 10} more`);
+        }
+      }
+
+      if (failed.length > 0) {
+        parts.push(`Failed: ${failed.length} task${failed.length !== 1 ? 's' : ''}.`);
+      }
+
+      return parts.join('\n');
+    } catch {
+      // Changelog call failed — fall back to simple summary
+      return fallback;
+    }
   }
 
   // --- Session lifecycle ---
