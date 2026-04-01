@@ -82,6 +82,8 @@ export interface ApprovalSignal {
   reviewCycle: number;
   /** Reason for the decision. */
   reason?: string;
+  /** Target a specific specialist's findings (e.g., 'security', 'performance'). */
+  specialist?: string;
 }
 
 export interface StrandedResult {
@@ -489,15 +491,16 @@ Commands:
   list                                   List all sessions
   watch <run-id> [--timeout MS]          Live event stream
   stranded [--convoy-data JSON]          Diagnose stranded convoys with quality context
-  approve <run-id> --stage STAGE --cycle N [--reason TEXT]
-                                         Approve pending gate
-  reject <run-id> --stage STAGE --cycle N [--reason TEXT]
-                                         Reject pending gate
+  approve <run-id> --stage STAGE --cycle N [--reason TEXT] [--specialist NAME]
+                                         Approve pending gate (or specific specialist)
+  reject <run-id> --stage STAGE --cycle N [--reason TEXT] [--specialist NAME]
+                                         Reject pending gate (or specific specialist)
 
 Options:
   --log-dir DIR       Event log directory (default: .bridge/logs)
   --project-dir DIR   Project directory (default: cwd)
   --json              Output as JSON
+  --specialist NAME   Target a specific specialist's findings
 `;
 
 export async function main(argv: string[]): Promise<void> {
@@ -610,9 +613,10 @@ export async function main(argv: string[]): Promise<void> {
         const stage = parsed.flags['stage'] as Stage;
         const cycle = parseInt(parsed.flags['cycle'] ?? '0', 10);
         const reason = parsed.flags['reason'];
+        const specialist = parsed.flags['specialist'];
 
         if (!runId || !stage || !cycle) {
-          err(`Usage: bridge ${parsed.command} <run-id> --stage STAGE --cycle N [--reason TEXT]`);
+          err(`Usage: bridge ${parsed.command} <run-id> --stage STAGE --cycle N [--reason TEXT] [--specialist NAME]`);
           process.exit(1);
         }
 
@@ -621,14 +625,15 @@ export async function main(argv: string[]): Promise<void> {
           process.exit(1);
         }
 
-        const signal: ApprovalSignal = { runId, stage, reviewCycle: cycle, reason };
+        const signal: ApprovalSignal = { runId, stage, reviewCycle: cycle, reason, specialist };
         const fn = parsed.command === 'approve' ? approve : reject;
         const result = fn(ctx, signal);
 
         if (json) {
           out(JSON.stringify(result));
         } else {
-          out(`${parsed.command === 'approve' ? 'Approved' : 'Rejected'}: ${result.approvalId}`);
+          const specialistSuffix = specialist ? ` (specialist: ${specialist})` : '';
+          out(`${parsed.command === 'approve' ? 'Approved' : 'Rejected'}: ${result.approvalId}${specialistSuffix}`);
         }
         break;
       }

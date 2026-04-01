@@ -13,7 +13,7 @@
  */
 
 import type { Adapter } from './orchestrate.js';
-import type { ReviewResult, Finding } from './adapters/gstack.js';
+import type { ReviewResult, Finding, SpecialistOutput } from './adapters/gstack.js';
 
 // --- Merge strategy ---
 
@@ -36,9 +36,19 @@ export interface GateResult {
   findings: Finding[];
 }
 
+/** Per-specialist verdict for granular approve/reject decisions. */
+export interface SpecialistVerdict {
+  specialist: string;
+  grade: string | null;
+  verdict: GateVerdict;
+  findings: Finding[];
+}
+
 export interface QualityReport {
   overall: GateVerdict;
   gates: GateResult[];
+  /** Per-specialist breakdown from Review Army (present when specialist data available). */
+  specialists?: SpecialistVerdict[];
   /** Human-readable summary of what happened. */
   summary: string;
 }
@@ -226,6 +236,46 @@ export function evaluateCorrectnessGate(
   };
 }
 
+// --- Specialist evaluation ---
+
+/**
+ * Evaluate per-specialist verdicts from Review Army output.
+ *
+ * Each specialist gets its own verdict based on their findings:
+ *   - Any CRITICAL/MAJOR finding → BLOCKED
+ *   - Any MINOR finding → WARN
+ *   - No findings → PASS
+ */
+export function evaluateSpecialists(
+  specialists: SpecialistOutput[],
+  policy: QualityPolicy = DEFAULT_POLICY,
+): SpecialistVerdict[] {
+  return specialists.map((s) => {
+    const blockingFindings = s.findings.filter(
+      (f) => policy.blockingSecuritySeverities.includes(f.severity),
+    );
+    const warningFindings = s.findings.filter(
+      (f) => policy.warningSecuritySeverities.includes(f.severity),
+    );
+
+    let verdict: GateVerdict;
+    if (blockingFindings.length > 0) {
+      verdict = 'BLOCKED';
+    } else if (warningFindings.length > 0) {
+      verdict = 'WARN';
+    } else {
+      verdict = 'PASS';
+    }
+
+    return {
+      specialist: s.specialist,
+      grade: s.grade,
+      verdict,
+      findings: s.findings,
+    };
+  });
+}
+
 // --- Combined evaluation ---
 
 export interface EvaluateInput {
@@ -237,6 +287,7 @@ export interface EvaluateInput {
  * Evaluate all quality gates and produce a combined report.
  *
  * Overall verdict: BLOCKED if any gate is BLOCKED, WARN if any is WARN, else PASS.
+ * When specialist data is available, includes per-specialist breakdown.
  */
 export function evaluate(
   input: EvaluateInput,
@@ -247,10 +298,20 @@ export function evaluate(
     evaluateSecurityGate(input.cso ?? null, policy),
   ];
 
-  const overall = deriveOverall(gates);
-  const summary = formatSummary(gates, overall);
+  // Collect specialist outputs from review and CSO results
+  const allSpecialists: SpecialistOutput[] = [
+    ...(input.review?.specialists ?? []),
+    ...(input.cso?.specialists ?? []),
+  ];
 
-  return { overall, gates, summary };
+  const specialists = allSpecialists.length > 0
+    ? evaluateSpecialists(allSpecialists, policy)
+    : undefined;
+
+  const overall = deriveOverall(gates);
+  const summary = formatSummary(gates, overall, specialists);
+
+  return { overall, gates, specialists, summary };
 }
 
 /** Derive overall verdict from individual gate results. */
@@ -261,11 +322,27 @@ function deriveOverall(gates: GateResult[]): GateVerdict {
 }
 
 /** Format a human-readable summary. */
-function formatSummary(gates: GateResult[], overall: GateVerdict): string {
+function formatSummary(
+  gates: GateResult[],
+  overall: GateVerdict,
+  specialists?: SpecialistVerdict[],
+): string {
   const lines = gates.map(
     (g) => `${g.gate}: ${g.verdict} — ${g.reason}`,
   );
-  return `Quality: ${overall}\n${lines.join('\n')}`;
+  let summary = `Quality: ${overall}\n${lines.join('\n')}`;
+
+  if (specialists && specialists.length > 0) {
+    const specialistLines = specialists.map((s) => {
+      const grade = s.grade ? ` (${s.grade})` : '';
+      const count = s.findings.length;
+      const detail = count > 0 ? `, ${count} finding(s)` : '';
+      return `  ${s.specialist}: ${s.verdict}${grade}${detail}`;
+    });
+    summary += `\nSpecialists:\n${specialistLines.join('\n')}`;
+  }
+
+  return summary;
 }
 
 // --- Merge strategy from quality verdicts ---

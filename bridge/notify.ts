@@ -33,6 +33,13 @@ export interface NotifyPayload {
   fields?: Record<string, string>;
   /** Optional severity for color-coding. */
   severity?: 'info' | 'warn' | 'error' | 'success';
+  /** Per-specialist breakdown for Review Army results. */
+  specialists?: Array<{
+    specialist: string;
+    verdict: string;
+    grade?: string | null;
+    findingCount: number;
+  }>;
 }
 
 export interface DeliveryResult {
@@ -68,21 +75,45 @@ const SEVERITY_COLORS: Record<string, { slack: string; discord: number }> = {
 
 // --- Payload formatters ---
 
+/** Format specialist breakdown as a compact text block. */
+export function formatSpecialistBreakdown(
+  specialists: NonNullable<NotifyPayload['specialists']>,
+): string {
+  return specialists
+    .map((s) => {
+      const grade = s.grade ? ` (${s.grade})` : '';
+      const findings = s.findingCount > 0 ? ` — ${s.findingCount} finding(s)` : '';
+      return `${s.verdict} ${s.specialist}${grade}${findings}`;
+    })
+    .join('\n');
+}
+
 /** Build a Slack webhook payload. */
 export function formatSlack(payload: NotifyPayload): Record<string, unknown> {
   const body: Record<string, unknown> = { text: payload.text };
   const color = SEVERITY_COLORS[payload.severity ?? 'info']?.slack;
 
-  if (payload.fields || color) {
+  // Merge specialist breakdown into fields if present
+  const fields = payload.fields
+    ? Object.entries(payload.fields).map(([title, value]) => ({
+        title,
+        value,
+        short: value.length < 40,
+      }))
+    : [];
+
+  if (payload.specialists && payload.specialists.length > 0) {
+    fields.push({
+      title: 'Specialist Breakdown',
+      value: formatSpecialistBreakdown(payload.specialists),
+      short: false,
+    });
+  }
+
+  if (fields.length > 0 || color) {
     body.attachments = [{
       color,
-      fields: payload.fields
-        ? Object.entries(payload.fields).map(([title, value]) => ({
-            title,
-            value,
-            short: value.length < 40,
-          }))
-        : undefined,
+      fields: fields.length > 0 ? fields : undefined,
     }];
   }
 
@@ -93,21 +124,33 @@ export function formatSlack(payload: NotifyPayload): Record<string, unknown> {
 export function formatDiscord(payload: NotifyPayload): Record<string, unknown> {
   const color = payload.severity ? SEVERITY_COLORS[payload.severity]?.discord : undefined;
 
-  if (!payload.fields && !color) {
+  const hasSpecialists = payload.specialists && payload.specialists.length > 0;
+
+  if (!payload.fields && !color && !hasSpecialists) {
     return { content: payload.text };
+  }
+
+  const fields = payload.fields
+    ? Object.entries(payload.fields).map(([name, value]) => ({
+        name,
+        value,
+        inline: value.length < 40,
+      }))
+    : [];
+
+  if (hasSpecialists) {
+    fields.push({
+      name: 'Specialist Breakdown',
+      value: formatSpecialistBreakdown(payload.specialists!),
+      inline: false,
+    });
   }
 
   return {
     embeds: [{
       description: payload.text,
       color,
-      fields: payload.fields
-        ? Object.entries(payload.fields).map(([name, value]) => ({
-            name,
-            value,
-            inline: value.length < 40,
-          }))
-        : undefined,
+      fields: fields.length > 0 ? fields : undefined,
     }],
   };
 }

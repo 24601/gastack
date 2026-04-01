@@ -26,12 +26,23 @@ export interface ClaudeResult {
 export interface ReviewResult {
   grade: string | null;
   findings: Finding[];
+  /** Per-specialist breakdown from Review Army (present when JSON specialist output detected). */
+  specialists?: SpecialistOutput[];
   raw: string;
 }
 
 export interface Finding {
   severity: 'CRITICAL' | 'MAJOR' | 'MINOR';
   description: string;
+  /** Specialist reviewer that produced this finding (e.g., 'security', 'performance'). */
+  specialist?: string;
+}
+
+/** Per-specialist structured output from Review Army JSON. */
+export interface SpecialistOutput {
+  specialist: string;
+  grade: string | null;
+  findings: Finding[];
 }
 
 /** Combined result from parallel review + CSO execution. */
@@ -79,11 +90,84 @@ export function parseFindings(text: string): Finding[] {
   return findings;
 }
 
+/**
+ * Parse specialist JSON blocks from Review Army output.
+ *
+ * Review Army specialists emit structured JSON blocks like:
+ *   ```json
+ *   { "specialist": "security", "grade": "B+", "findings": [...] }
+ *   ```
+ * This parser extracts all such blocks. Falls back gracefully when
+ * output is markdown-only (no JSON blocks found).
+ */
+export function parseSpecialistOutputs(raw: string): SpecialistOutput[] {
+  const results: SpecialistOutput[] = [];
+
+  // Match JSON blocks in fenced code blocks or bare JSON objects
+  const jsonBlockPattern = /```(?:json)?\s*\n(\{[\s\S]*?\})\s*\n```/g;
+  const bareObjectPattern = /^\s*(\{"specialist"[\s\S]*?\})\s*$/gm;
+
+  for (const pattern of [jsonBlockPattern, bareObjectPattern]) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(raw)) !== null) {
+      try {
+        const obj = JSON.parse(match[1]);
+        if (typeof obj.specialist === 'string') {
+          const findings: Finding[] = Array.isArray(obj.findings)
+            ? obj.findings
+                .filter((f: unknown) =>
+                  typeof f === 'object' && f !== null &&
+                  'severity' in f && 'description' in f,
+                )
+                .map((f: { severity: string; description: string }) => ({
+                  severity: f.severity.toUpperCase() as Finding['severity'],
+                  description: f.description,
+                  specialist: obj.specialist,
+                }))
+            : [];
+
+          results.push({
+            specialist: obj.specialist,
+            grade: typeof obj.grade === 'string' ? obj.grade : null,
+            findings,
+          });
+        }
+      } catch {
+        // Not valid JSON — skip
+      }
+    }
+  }
+
+  return results;
+}
+
 /** Parse full review output into structured result. */
 export function parseReviewOutput(raw: string): ReviewResult {
+  // Try specialist JSON parsing first (Review Army structured output)
+  const specialists = parseSpecialistOutputs(raw);
+
+  // Collect specialist findings (tagged with specialist name)
+  const specialistFindings = specialists.flatMap((s) => s.findings);
+
+  // Fall back to markdown parsing for any additional findings
+  const markdownFindings = parseFindings(raw);
+
+  // Merge: specialist findings first, then markdown findings not already covered
+  const allFindings = [...specialistFindings];
+  for (const mf of markdownFindings) {
+    const isDuplicate = allFindings.some(
+      (sf) => sf.description === mf.description && sf.severity === mf.severity,
+    );
+    if (!isDuplicate) {
+      allFindings.push(mf);
+    }
+  }
+
   return {
     grade: parseGrade(raw),
-    findings: parseFindings(raw),
+    findings: allFindings,
+    specialists: specialists.length > 0 ? specialists : undefined,
     raw,
   };
 }
