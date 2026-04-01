@@ -1,14 +1,18 @@
 /**
- * gstack adapter — claude -p review execution.
+ * gstack adapter — skill execution via gt sling --agent.
  *
- * Runs /review and /cso skills via `claude -p` in parallel (Promise.all).
- * Parses review output for structured grades and findings.
+ * Routes /review, /cso, /investigate, /canary skills through gt sling --agent
+ * for native multi-model dispatch and proper lifecycle management from the
+ * witness (see GASTOWN-BRIDGE-REVIEW.md #4).
  *
- * All claude CLI calls use Bun.spawn with array args (no shell interpolation).
- * Output is streamed via --output-format stream-json for real-time parsing.
+ * claudeExec() is still exported for lightweight one-shot operations (e.g.,
+ * task extraction in extract.ts) that don't need lifecycle management.
+ *
+ * All CLI calls use Bun.spawn with array args (no shell interpolation).
  */
 
 import type { Adapter } from '../orchestrate.js';
+import { gtExec } from './gastown.js';
 
 // --- Types ---
 
@@ -206,29 +210,30 @@ export class ClaudeError extends Error {
  * gstack adapter for the bridge orchestrator.
  *
  * Commands routed through execute():
- *   - review       → Run /review via claude -p, parse grade + findings
- *   - cso          → Run /cso via claude -p, parse grade + findings
- *   - review-suite → Run /review + /cso in parallel (Promise.all)
- *   - investigate  → Run /investigate via claude -p for root cause analysis
- *   - canary       → Run /canary via claude -p for post-deploy verification
- *   - raw          → Run arbitrary prompt via claude -p
+ *   - review       → Run /review via gt sling --agent, parse grade + findings
+ *   - cso          → Run /cso via gt sling --agent, parse grade + findings
+ *   - review-suite → Run /review + /cso via gt sling --agent (parallel)
+ *   - investigate  → Run /investigate via gt sling --agent for root cause analysis
+ *   - canary       → Run /canary via gt sling --agent for post-deploy verification
+ *   - raw          → Run arbitrary prompt via claude -p (no lifecycle needed)
  */
 export class GstackAdapter implements Adapter {
   readonly name = 'gstack';
   private cwd: string;
   private timeout: number;
-  private model: string | undefined;
+  private agent: string;
   private maxTurns: number;
 
   constructor(opts: {
     cwd: string;
     timeout?: number;
-    model?: string;
+    /** Agent for gt sling --agent (e.g., 'claude', 'codex', 'gemini'). Default: 'claude'. */
+    agent?: string;
     maxTurns?: number;
   }) {
     this.cwd = opts.cwd;
     this.timeout = opts.timeout ?? 300_000;
-    this.model = opts.model;
+    this.agent = opts.agent ?? 'claude';
     this.maxTurns = opts.maxTurns ?? 30;
   }
 
@@ -261,7 +266,7 @@ export class GstackAdapter implements Adapter {
   }
 
   /**
-   * Run a skill (e.g., /review, /cso) via claude -p.
+   * Run a skill (e.g., /review, /cso) via gt sling --agent.
    * Returns parsed JSON with grade, findings, and raw output.
    */
   private async runSkill(
@@ -274,28 +279,15 @@ export class GstackAdapter implements Adapter {
       : '';
     const prompt = `${contextPreamble}${skill}${branch}`;
 
-    const result = await claudeExec(prompt, {
-      cwd: this.cwd,
-      timeout: this.timeout,
-      model: this.model,
-      maxTurns: this.maxTurns,
-      dangerouslySkipPermissions: true,
-    });
-
-    if (result.exitCode !== 0) {
-      throw new ClaudeError(
-        `claude -p failed running ${skill} (exit ${result.exitCode})`,
-        prompt,
-        result,
-      );
-    }
+    const agent = args?.agent ? String(args.agent) : this.agent;
+    const result = await this.slingExec(prompt, agent);
 
     const parsed = parseReviewOutput(result.stdout);
     return JSON.stringify(parsed);
   }
 
   /**
-   * Run /review and /cso in parallel via Promise.all.
+   * Run /review and /cso in parallel via gt sling --agent (Promise.all).
    * Returns combined JSON with both results.
    */
   private async runReviewSuite(
@@ -318,7 +310,7 @@ export class GstackAdapter implements Adapter {
   }
 
   /**
-   * Run /investigate via claude -p for root cause analysis.
+   * Run /investigate via gt sling --agent for root cause analysis.
    * Returns JSON with { rootCause, systemic, diagnosis, raw }.
    */
   private async runInvestigate(
@@ -335,29 +327,15 @@ export class GstackAdapter implements Adapter {
     ].filter(Boolean);
 
     const prompt = contextParts.join('\n');
-
-    const result = await claudeExec(prompt, {
-      cwd: this.cwd,
-      timeout: this.timeout,
-      model: this.model,
-      maxTurns: this.maxTurns,
-      dangerouslySkipPermissions: true,
-    });
-
-    if (result.exitCode !== 0) {
-      throw new ClaudeError(
-        `claude -p failed running /investigate (exit ${result.exitCode})`,
-        prompt,
-        result,
-      );
-    }
+    const agent = args?.agent ? String(args.agent) : this.agent;
+    const result = await this.slingExec(prompt, agent);
 
     const diagnosis = parseInvestigationOutput(result.stdout);
     return JSON.stringify(diagnosis);
   }
 
   /**
-   * Run /canary via claude -p for post-deploy verification.
+   * Run /canary via gt sling --agent for post-deploy verification.
    * Returns JSON with { passed: boolean, errors?: string[], summary: string }.
    */
   private async runCanary(args?: Record<string, unknown>): Promise<string> {
@@ -365,21 +343,8 @@ export class GstackAdapter implements Adapter {
     const duration = args?.duration ? ` --duration ${String(args.duration)}` : '';
     const prompt = `/canary${url}${duration}`;
 
-    const result = await claudeExec(prompt, {
-      cwd: this.cwd,
-      timeout: this.timeout,
-      model: this.model,
-      maxTurns: this.maxTurns,
-      dangerouslySkipPermissions: true,
-    });
-
-    if (result.exitCode !== 0) {
-      throw new ClaudeError(
-        `claude -p failed running /canary (exit ${result.exitCode})`,
-        prompt,
-        result,
-      );
-    }
+    const agent = args?.agent ? String(args.agent) : this.agent;
+    const result = await this.slingExec(prompt, agent);
 
     return result.stdout;
   }
@@ -394,7 +359,7 @@ export class GstackAdapter implements Adapter {
     const result = await claudeExec(prompt, {
       cwd: this.cwd,
       timeout: this.timeout,
-      model: args?.model ? String(args.model) : this.model,
+      model: args?.model ? String(args.model) : undefined,
       maxTurns: args?.maxTurns ? Number(args.maxTurns) : this.maxTurns,
       dangerouslySkipPermissions: Boolean(args?.dangerouslySkipPermissions ?? true),
     });
@@ -408,5 +373,35 @@ export class GstackAdapter implements Adapter {
     }
 
     return result.stdout;
+  }
+
+  /**
+   * Execute a skill prompt via gt sling --agent for proper lifecycle management.
+   * Uses gt sling --review-only --agent <agent> --args <prompt>.
+   */
+  private async slingExec(
+    prompt: string,
+    agent: string,
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    const slingArgs = [
+      'sling', '--review-only',
+      '--agent', agent,
+      '--args', prompt,
+    ];
+
+    const result = await gtExec(slingArgs, {
+      cwd: this.cwd,
+      timeout: this.timeout,
+    });
+
+    if (result.exitCode !== 0) {
+      throw new ClaudeError(
+        `gt sling --agent ${agent} failed (exit ${result.exitCode})`,
+        prompt,
+        { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode },
+      );
+    }
+
+    return result;
   }
 }

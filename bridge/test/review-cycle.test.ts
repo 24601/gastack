@@ -287,13 +287,13 @@ describe('Orchestrator.reviewCycle', () => {
   }
 
   test('passes on first review when quality is PASS', async () => {
-    const gstack = new RecordingAdapter('gstack', {
+    // All review dispatch now routes through gastown sling.review with --agent
+    const gastown = new RecordingAdapter('gastown', {
       commandResponses: {
-        'review-suite': makeReviewSuiteResponse('A'),
+        'sling.review': makeReviewSuiteResponse('A'),
       },
     });
-    const gastown = new RecordingAdapter('gastown');
-    const orch = rig.createOrchestrator({ gstack, gastown });
+    const orch = rig.createOrchestrator({ gastown });
     advanceToReview(orch);
 
     const result = await orch.reviewCycle(
@@ -307,14 +307,14 @@ describe('Orchestrator.reviewCycle', () => {
   });
 
   test('passes on first review when quality is WARN', async () => {
-    const gstack = new RecordingAdapter('gstack', {
+    const gastown = new RecordingAdapter('gastown', {
       commandResponses: {
-        'review-suite': makeReviewSuiteResponse('B', [
+        'sling.review': makeReviewSuiteResponse('B', [
           { severity: 'MINOR', description: 'Style nit' },
         ]),
       },
     });
-    const orch = rig.createOrchestrator({ gstack });
+    const orch = rig.createOrchestrator({ gastown });
     advanceToReview(orch);
 
     const result = await orch.reviewCycle(
@@ -327,17 +327,13 @@ describe('Orchestrator.reviewCycle', () => {
 
   test('loops on BLOCKED with fixable findings', async () => {
     let callCount = 0;
-    const gstack = new RecordingAdapter('gstack', {
-      commandResponses: {
-        'review-suite': '', // Will be overridden below
-      },
-    });
+    const gastown = new RecordingAdapter('gastown');
 
     // First call: BLOCKED with MAJOR finding
     // Second call: PASS (finding fixed)
-    const originalExecute = gstack.execute.bind(gstack);
-    gstack.execute = async (command: string, args?: Record<string, unknown>) => {
-      if (command === 'review-suite') {
+    const originalExecute = gastown.execute.bind(gastown);
+    gastown.execute = async (command: string, args?: Record<string, unknown>) => {
+      if (command === 'sling.review') {
         callCount++;
         if (callCount === 1) {
           return makeReviewSuiteResponse('D', [
@@ -349,7 +345,7 @@ describe('Orchestrator.reviewCycle', () => {
       return originalExecute(command, args);
     };
 
-    const orch = rig.createOrchestrator({ gstack });
+    const orch = rig.createOrchestrator({ gastown });
     advanceToReview(orch);
 
     const result = await orch.reviewCycle(
@@ -363,9 +359,9 @@ describe('Orchestrator.reviewCycle', () => {
   });
 
   test('requests approval when only CRITICAL findings remain', async () => {
-    const gstack = new RecordingAdapter('gstack');
-    gstack.execute = async (command: string) => {
-      if (command === 'review-suite') {
+    const gastown = new RecordingAdapter('gastown');
+    gastown.execute = async (command: string) => {
+      if (command === 'sling.review') {
         return makeReviewSuiteResponse('F', [
           { severity: 'CRITICAL', description: 'SQL injection vulnerability' },
         ]);
@@ -373,7 +369,7 @@ describe('Orchestrator.reviewCycle', () => {
       return '{"ok":true}';
     };
 
-    const orch = rig.createOrchestrator({ gstack });
+    const orch = rig.createOrchestrator({ gastown });
     advanceToReview(orch);
 
     const result = await orch.reviewCycle(
@@ -387,10 +383,10 @@ describe('Orchestrator.reviewCycle', () => {
   });
 
   test('stops after max iterations with approval request', async () => {
-    const gstack = new RecordingAdapter('gstack');
+    const gastown = new RecordingAdapter('gastown');
     // Always return BLOCKED with fixable findings — never passes
-    gstack.execute = async (command: string) => {
-      if (command === 'review-suite') {
+    gastown.execute = async (command: string) => {
+      if (command === 'sling.review') {
         return makeReviewSuiteResponse('D', [
           { severity: 'MAJOR', description: 'Persistent bug' },
         ]);
@@ -398,7 +394,7 @@ describe('Orchestrator.reviewCycle', () => {
       return '{"ok":true}';
     };
 
-    const orch = rig.createOrchestrator({ gstack });
+    const orch = rig.createOrchestrator({ gastown });
     orch.setReviewLoopPolicy({ maxIterations: 2 });
     advanceToReview(orch);
 
@@ -414,9 +410,9 @@ describe('Orchestrator.reviewCycle', () => {
 
   test('stops when no progress is made (same findings, no fixes)', async () => {
     let callCount = 0;
-    const gstack = new RecordingAdapter('gstack');
-    gstack.execute = async (command: string) => {
-      if (command === 'review-suite') {
+    const gastown = new RecordingAdapter('gastown');
+    gastown.execute = async (command: string) => {
+      if (command === 'sling.review') {
         callCount++;
         // Always return the same findings — no progress
         return makeReviewSuiteResponse('D', [
@@ -426,7 +422,7 @@ describe('Orchestrator.reviewCycle', () => {
       return '{"ok":true}';
     };
 
-    const orch = rig.createOrchestrator({ gstack });
+    const orch = rig.createOrchestrator({ gastown });
     orch.setReviewLoopPolicy({ maxIterations: 5 }); // High limit — should stop before
     advanceToReview(orch);
 
@@ -442,9 +438,9 @@ describe('Orchestrator.reviewCycle', () => {
 
   test('records REFINE→EXECUTE transitions in event log', async () => {
     let callCount = 0;
-    const gstack = new RecordingAdapter('gstack');
-    gstack.execute = async (command: string) => {
-      if (command === 'review-suite') {
+    const gastown = new RecordingAdapter('gastown');
+    gastown.execute = async (command: string) => {
+      if (command === 'sling.review') {
         callCount++;
         if (callCount === 1) {
           return makeReviewSuiteResponse('D', [
@@ -456,7 +452,7 @@ describe('Orchestrator.reviewCycle', () => {
       return '{"ok":true}';
     };
 
-    const orch = rig.createOrchestrator({ gstack });
+    const orch = rig.createOrchestrator({ gastown });
     advanceToReview(orch);
 
     await orch.reviewCycle(
@@ -476,9 +472,9 @@ describe('Orchestrator.reviewCycle', () => {
 
   test('queues fix tasks with finding metadata in REFINE stage', async () => {
     let callCount = 0;
-    const gstack = new RecordingAdapter('gstack');
-    gstack.execute = async (command: string) => {
-      if (command === 'review-suite') {
+    const gastown = new RecordingAdapter('gastown');
+    gastown.execute = async (command: string) => {
+      if (command === 'sling.review') {
         callCount++;
         if (callCount === 1) {
           // Grade D is below minimum C → BLOCKED, only CRITICAL/MAJOR findings
@@ -493,7 +489,7 @@ describe('Orchestrator.reviewCycle', () => {
       return '{"ok":true}';
     };
 
-    const orch = rig.createOrchestrator({ gstack });
+    const orch = rig.createOrchestrator({ gastown });
     advanceToReview(orch);
 
     await orch.reviewCycle(

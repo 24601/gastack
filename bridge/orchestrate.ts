@@ -728,8 +728,8 @@ export class Orchestrator {
    *   - Multi-file >50 lines → review-only polecat (unbiased, fresh eyes)
    *   - Single file ≤50 lines → inline review (gstack adapter, same context)
    *
-   * For review-only: spawns a separate polecat via gastown sling.review.
-   * For inline: runs gstack review-suite in the same context.
+   * All review dispatch routes through gastown sling.review with --agent
+   * for native multi-model dispatch and proper lifecycle management.
    *
    * Returns the review mode used and the raw results.
    */
@@ -768,33 +768,21 @@ export class Orchestrator {
       }
     }
 
-    if (routing.mode === 'review-only') {
-      // Spawn a separate polecat with --review-only
-      // Execution context is forwarded via formulaArgs for the review polecat
-      const callArgs: Record<string, unknown> = {
-        beadId: opts?.beadId,
-        rig: opts?.rig,
-        agent: opts?.agent,
-      };
-      if (opts?.iteration) callArgs.iteration = opts.iteration;
-      if (executionContext) {
-        callArgs.formulaArgs = `${executionContext}\n\nRun /review on the branch, then /cso. Persist findings to bead notes.`;
-      }
-      const result = await this.externalCall('gastown', 'sling.review', callArgs);
-      return { mode: 'review-only', reason: routing.reason, result: result.result };
-    }
-
-    // Inline: run review-suite in current context via gstack adapter
-    // Include iteration to differentiate review cycles in the idempotency cache
-    const callArgs: Record<string, unknown> = {};
+    // All review dispatch routes through gt sling --agent for proper
+    // lifecycle management from the witness (see GASTOWN-BRIDGE-REVIEW.md #4).
+    // The routing mode (review-only vs inline) determines the reason logged,
+    // but both use sling.review with --agent for native multi-model dispatch.
+    const callArgs: Record<string, unknown> = {
+      beadId: opts?.beadId,
+      rig: opts?.rig,
+      agent: opts?.agent ?? this.multiModelConfig.primary,
+    };
     if (opts?.iteration) callArgs.iteration = opts.iteration;
-    if (executionContext) callArgs.executionContext = executionContext;
-    const result = await this.externalCall(
-      'gstack',
-      'review-suite',
-      Object.keys(callArgs).length > 0 ? callArgs : undefined,
-    );
-    return { mode: 'inline', reason: routing.reason, result: result.result };
+    if (executionContext) {
+      callArgs.formulaArgs = `${executionContext}\n\nRun /review on the branch, then /cso. Persist findings to bead notes.`;
+    }
+    const result = await this.externalCall('gastown', 'sling.review', callArgs);
+    return { mode: routing.mode, reason: routing.reason, result: result.result };
   }
 
   // --- Review-fix-rereview loop ---
@@ -1082,7 +1070,7 @@ export class Orchestrator {
       }
     }
 
-    // Step 2: Dispatch primary review
+    // Step 2: Dispatch primary review via gt sling --agent for lifecycle management
     const primarySlingArgs: Record<string, unknown> = {
       beadId: opts?.beadId,
       rig: opts?.rig,
@@ -1091,12 +1079,7 @@ export class Orchestrator {
     if (executionContext) {
       primarySlingArgs.formulaArgs = `${executionContext}\n\nRun /review on the branch, then /cso. Persist findings to bead notes.`;
     }
-    const primaryResult = routing.mode === 'review-only'
-      ? await this.externalCall('gastown', 'sling.review', primarySlingArgs)
-      : await this.externalCall('gstack', 'review-suite', {
-          agent: primaryAgent,
-          executionContext,
-        });
+    const primaryResult = await this.externalCall('gastown', 'sling.review', primarySlingArgs);
 
     // Step 3: Dispatch secondary (independent) review
     // Always use sling.review for secondary — separate context ensures independence

@@ -104,17 +104,13 @@ describe('Orchestrator.dispatchMultiModelReview', () => {
     return JSON.stringify(suite);
   }
 
-  test('dispatches to both primary and secondary agents', async () => {
+  test('dispatches both primary and secondary through sling.review with --agent', async () => {
     const gastown = new RecordingAdapter('gastown', {
       commandResponses: {
         'sling.review': makeReviewSuiteJson('A'),
       },
     });
-    const gstack = new RecordingAdapter('gstack', {
-      commandResponses: {
-        'review-suite': makeReviewSuiteJson('A'),
-      },
-    });
+    const gstack = new RecordingAdapter('gstack');
     const orch = rig.createOrchestrator({ gastown, gstack });
 
     orch.enterStage('PLAN');
@@ -128,26 +124,32 @@ describe('Orchestrator.dispatchMultiModelReview', () => {
       { beadId: 'gt-t1x', rig: 'gastack' },
     );
 
-    // Secondary always goes via sling.review
+    // Both primary and secondary go through sling.review with --agent
     const slingCalls = gastown.calls.filter((c) => c.command === 'sling.review');
-    expect(slingCalls.length).toBeGreaterThanOrEqual(1);
+    expect(slingCalls.length).toBe(2);
 
-    // Secondary call should use the review agent (codex by default)
+    // Primary uses config.primary agent (claude by default)
+    const primaryCall = slingCalls.find((c) => c.args?.agent === 'claude');
+    expect(primaryCall).toBeDefined();
+
+    // Secondary uses config.review agent (codex by default)
     const secondaryCall = slingCalls.find((c) => c.args?.agent === 'codex');
     expect(secondaryCall).toBeDefined();
+
+    // gstack adapter is NOT used for review-suite (all through sling now)
+    expect(gstack.calls.some((c) => c.command === 'review-suite')).toBe(false);
   });
 
   test('agreement (both PASS) does not trigger approval', async () => {
+    // Both agents return passing grades; gastown handles both via sling.review
+    // The adapter returns the same response for all sling.review calls, so
+    // we use the same grade for both primary and secondary in this test.
     const gastown = new RecordingAdapter('gastown', {
       commandResponses: {
         'sling.review': makeReviewSuiteJson('A'),
       },
     });
-    const gstack = new RecordingAdapter('gstack', {
-      commandResponses: {
-        'review-suite': makeReviewSuiteJson('A-'),
-      },
-    });
+    const gstack = new RecordingAdapter('gstack');
     const orch = rig.createOrchestrator({ gastown, gstack });
 
     orch.enterStage('PLAN');
@@ -174,16 +176,13 @@ describe('Orchestrator.dispatchMultiModelReview', () => {
       { severity: 'MAJOR', description: 'Race condition in concurrent handler' },
     ]);
 
+    // Both go through gastown sling.review — primary first, secondary second
     const gastown = new RecordingAdapter('gastown', {
-      commandResponses: {
-        'sling.review': blockSuite, // Secondary sees problems
+      commandSequences: {
+        'sling.review': [passSuite, blockSuite],
       },
     });
-    const gstack = new RecordingAdapter('gstack', {
-      commandResponses: {
-        'review-suite': passSuite, // Primary says it's fine
-      },
-    });
+    const gstack = new RecordingAdapter('gstack');
     const orch = rig.createOrchestrator({ gastown, gstack });
 
     orch.enterStage('PLAN');
@@ -213,11 +212,7 @@ describe('Orchestrator.dispatchMultiModelReview', () => {
         'sling.review': makeReviewSuiteJson('B+'),
       },
     });
-    const gstack = new RecordingAdapter('gstack', {
-      commandResponses: {
-        'review-suite': makeReviewSuiteJson('B'),
-      },
-    });
+    const gstack = new RecordingAdapter('gstack');
     const orch = rig.createOrchestrator({ gastown, gstack });
 
     orch.setMultiModelConfig({
@@ -248,11 +243,7 @@ describe('Orchestrator.dispatchMultiModelReview', () => {
         'sling.review': makeReviewSuiteJson('A'),
       },
     });
-    const gstack = new RecordingAdapter('gstack', {
-      commandResponses: {
-        'review-suite': makeReviewSuiteJson('A'),
-      },
-    });
+    const gstack = new RecordingAdapter('gstack');
     const orch = rig.createOrchestrator({ gastown, gstack });
 
     // Config says codex
@@ -291,12 +282,13 @@ describe('Orchestrator.dispatchMultiModelReview', () => {
 
     const passSuite = makeReviewSuiteJson('A');
 
+    // Primary returns WARN (B with MINOR findings), secondary returns PASS (A)
     const gastown = new RecordingAdapter('gastown', {
-      commandResponses: { 'sling.review': passSuite },
+      commandSequences: {
+        'sling.review': [JSON.stringify(warnSuite), passSuite],
+      },
     });
-    const gstack = new RecordingAdapter('gstack', {
-      commandResponses: { 'review-suite': JSON.stringify(warnSuite) },
-    });
+    const gstack = new RecordingAdapter('gstack');
     const orch = rig.createOrchestrator({ gastown, gstack });
 
     orch.enterStage('PLAN');

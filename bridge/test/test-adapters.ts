@@ -127,24 +127,41 @@ export class ReviewFixtureAdapter implements Adapter {
 /**
  * Minimal adapter that records all calls and returns configurable responses.
  * Use for verifying arg construction and call sequences.
+ *
+ * Supports sequential responses via commandSequences: returns responses
+ * in order for each call to the same command, then repeats the last one.
  */
 export class RecordingAdapter implements Adapter {
   readonly name: string;
   readonly calls: RecordedCall[] = [];
   private defaultResponse: string;
   private commandResponses: Record<string, string>;
+  private commandSequences: Record<string, string[]>;
+  private sequenceCounters: Record<string, number> = {};
 
   constructor(name: string, opts?: {
     defaultResponse?: string;
     commandResponses?: Record<string, string>;
+    /** Sequential responses: each call to the command returns the next response in order. */
+    commandSequences?: Record<string, string[]>;
   }) {
     this.name = name;
     this.defaultResponse = opts?.defaultResponse ?? '{"ok":true}';
     this.commandResponses = opts?.commandResponses ?? {};
+    this.commandSequences = opts?.commandSequences ?? {};
   }
 
   async execute(command: string, args?: Record<string, unknown>): Promise<string> {
     this.calls.push({ command, args, timestamp: Date.now() });
+
+    // Sequential responses take precedence
+    const seq = this.commandSequences[command];
+    if (seq && seq.length > 0) {
+      const idx = this.sequenceCounters[command] ?? 0;
+      this.sequenceCounters[command] = idx + 1;
+      return seq[Math.min(idx, seq.length - 1)];
+    }
+
     return this.commandResponses[command] ?? this.defaultResponse;
   }
 

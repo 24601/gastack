@@ -302,9 +302,9 @@ describe('Orchestrator.dispatchReview', () => {
     expect(gastown.calls.some((c) => c.command === 'sling.review')).toBe(true);
   });
 
-  test('routes small single-file change to inline review', async () => {
+  test('routes small single-file change through sling with inline mode label', async () => {
     const gastown = new RecordingAdapter('gastown');
-    const gstack = new ReviewFixtureAdapter({ reviewFixture: 'clean-review.md' });
+    const gstack = new RecordingAdapter('gstack');
     const orch = rig.createOrchestrator({ gastown, gstack });
 
     orch.enterStage('PLAN');
@@ -319,9 +319,14 @@ describe('Orchestrator.dispatchReview', () => {
 
     expect(result.mode).toBe('inline');
 
-    // Verify gstack review-suite was called, not gastown sling.review
-    expect(gstack.calls.some((c) => c.command === 'review-suite')).toBe(true);
-    expect(gastown.calls.some((c) => c.command === 'sling.review')).toBe(false);
+    // All review dispatch now routes through gastown sling.review with --agent
+    // for proper lifecycle management (GASTOWN-BRIDGE-REVIEW.md #4)
+    expect(gastown.calls.some((c) => c.command === 'sling.review')).toBe(true);
+    expect(gstack.calls.some((c) => c.command === 'review-suite')).toBe(false);
+
+    // Default agent should come from multiModelConfig.primary
+    const slingCall = gastown.calls.find((c) => c.command === 'sling.review');
+    expect(slingCall!.args?.agent).toBe('claude');
   });
 
   test('passes agent option to sling.review', async () => {
