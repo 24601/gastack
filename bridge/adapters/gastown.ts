@@ -70,7 +70,32 @@ const JSON_COMMANDS = new Set([
   'dolt',
   'convoy',
   'changelog',
+  'patrol',
+  'checkpoint',
 ]);
+
+// --- Identity sanitization ---
+
+/**
+ * Env vars stripped from child processes to prevent identity leaks.
+ * Agents should get identity via hooks or .gastown/settings.json, not env vars.
+ * See gastown commit daa039d9 (identity sanitization at process boundaries).
+ */
+const SANITIZED_ENV_VARS = new Set([
+  'CLAUDE_IDENTITY',
+  'CODEX_IDENTITY',
+  'GEMINI_IDENTITY',
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'GT_TOKEN',
+]);
+
+/** Create a sanitized copy of process.env for child processes. */
+function sanitizedEnv(): Record<string, string | undefined> {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !SANITIZED_ENV_VARS.has(k)),
+  );
+}
 
 // --- gt CLI executor ---
 
@@ -86,7 +111,7 @@ export async function gtExec(
     cwd: opts?.cwd,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env },
+    env: sanitizedEnv(),
   });
 
   const timeout = opts?.timeout ?? 30_000;
@@ -269,7 +294,7 @@ export async function bdExec(
     cwd: opts?.cwd,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env },
+    env: sanitizedEnv(),
   });
 
   const timeout = opts?.timeout ?? 15_000;
@@ -421,6 +446,12 @@ export function extractExecutionContext(beadJson: Record<string, unknown>): Exec
  *   - bead.context  → bd show --json <beadId>, extract execution context
  *   - changelog     → gt changelog --json [--since <date>] [--rig <rig>]
  *   - polecats.active → gt polecats list --json --rig <rig> (active polecats in a rig)
+ *   - convoy.watch  → gt convoy watch <convoyId> --json (push completion notifications)
+ *   - convoy.unwatch → gt convoy unwatch <convoyId> (stop watching)
+ *   - patrol.scan   → gt patrol scan --json (zombie/stall detection)
+ *   - checkpoint.write → gt checkpoint write --json [--stage <stage>] [--context <ctx>]
+ *   - checkpoint.read  → gt checkpoint read <id> --json
+ *   - bead.list     → bd list --json --flat [--status <status>] [--rig <rig>]
  *   - raw           → pass-through for arbitrary gt subcommands
  */
 export class GasTownAdapter implements Adapter {
@@ -464,13 +495,16 @@ export class GasTownAdapter implements Adapter {
       case 'mail.inbox':
         return this.jsonCommand(['mail', 'inbox']);
 
-      case 'mail.send':
-        return this.textCommand([
+      case 'mail.send': {
+        const mailArgs = [
           'mail', 'send',
           String(args?.target ?? ''),
           '-s', String(args?.subject ?? ''),
           '-m', String(args?.body ?? ''),
-        ]);
+        ];
+        if (args?.from) mailArgs.push('--from', String(args.from));
+        return this.textCommand(mailArgs);
+      }
 
       case 'done': {
         const doneArgs = ['done'];
@@ -623,6 +657,22 @@ export class GasTownAdapter implements Adapter {
       case 'convoy.stranded':
         return this.jsonCommand(['convoy', 'stranded']);
 
+      case 'convoy.watch': {
+        const watchConvoyId = String(args?.convoyId ?? '');
+        if (!watchConvoyId) {
+          throw new Error('convoy.watch requires args.convoyId');
+        }
+        return this.jsonCommand(['convoy', 'watch', watchConvoyId]);
+      }
+
+      case 'convoy.unwatch': {
+        const unwatchConvoyId = String(args?.convoyId ?? '');
+        if (!unwatchConvoyId) {
+          throw new Error('convoy.unwatch requires args.convoyId');
+        }
+        return this.textCommand(['convoy', 'unwatch', unwatchConvoyId]);
+      }
+
       case 'mountain': {
         const epicId = String(args?.epicId ?? '');
         if (!epicId) {
@@ -691,6 +741,35 @@ export class GasTownAdapter implements Adapter {
         const polecatArgs = ['polecats', 'list'];
         if (args?.rig) polecatArgs.push('--rig', String(args.rig));
         return this.jsonCommand(polecatArgs);
+      }
+
+      case 'patrol.scan':
+        return this.jsonCommand(['patrol', 'scan']);
+
+      case 'checkpoint.write': {
+        const cpWriteArgs = ['checkpoint', 'write'];
+        if (args?.stage) cpWriteArgs.push('--stage', String(args.stage));
+        if (args?.context) cpWriteArgs.push('--context', String(args.context));
+        return this.jsonCommand(cpWriteArgs);
+      }
+
+      case 'checkpoint.read': {
+        const cpId = String(args?.id ?? '');
+        if (!cpId) {
+          throw new Error('checkpoint.read requires args.id');
+        }
+        return this.jsonCommand(['checkpoint', 'read', cpId]);
+      }
+
+      case 'bead.list': {
+        const blArgs = ['list', '--json', '--flat'];
+        if (args?.status) blArgs.push('--status', String(args.status));
+        if (args?.rig) blArgs.push('--rig', String(args.rig));
+        const result = await bdExec(blArgs, { cwd: this.cwd, timeout: this.timeout });
+        if (result.exitCode !== 0) {
+          throw new GtError('bd list failed', blArgs, result);
+        }
+        return result.stdout;
       }
 
       case 'raw': {

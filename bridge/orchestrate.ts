@@ -18,6 +18,9 @@ import {
   type Stage,
   type EventEnvelope,
   type ExternalCallCompleted,
+  type CheckpointSaved,
+  type RateLimitDetected,
+  type ScopeExpansionRequested,
   STAGES,
   EventLog,
   idempotencyKey,
@@ -516,6 +519,98 @@ export class Orchestrator {
   resumeDispatch(): void {
     this.dispatchHalted = false;
     this.recentDeaths = [];
+  }
+
+  // --- B2: Checkpoint crash recovery ---
+
+  /**
+   * Write a checkpoint at the current stage for crash recovery.
+   * Delegates to gastown's gt checkpoint write. Records CHECKPOINT_SAVED event.
+   */
+  async writeCheckpoint(context?: string): Promise<string | null> {
+    const stage = this.currentStage();
+    if (!stage) return null;
+
+    const adapter = this.adapters['gastown'];
+    if (!adapter) return null;
+
+    try {
+      // Include a timestamp in args to defeat idempotency caching.
+      // Checkpoints must always write fresh — a cached checkpoint from
+      // earlier in the same stage would resume from stale progress.
+      const result = await this.externalCall('gastown', 'checkpoint.write', {
+        stage,
+        context: context ?? `Bridge stage ${stage}`,
+        _ts: Date.now(),
+      });
+
+      // Parse checkpoint ID from response
+      let checkpointId = 'unknown';
+      try {
+        const parsed = JSON.parse(result.result ?? '{}');
+        checkpointId = parsed.id ?? parsed.checkpointId ?? 'unknown';
+      } catch { /* use default */ }
+
+      this.log.append({
+        type: 'CHECKPOINT_SAVED',
+        checkpointId,
+        stage,
+      });
+
+      return checkpointId;
+    } catch {
+      // Checkpoint is best-effort — don't block stage work on failure
+      return null;
+    }
+  }
+
+  // --- B2: Rate-limit watchdog handling ---
+
+  /**
+   * Handle a rate-limit event from gastown's rate-limit-watchdog plugin.
+   * Halts dispatch, logs the event, AND creates an approval gate so the
+   * human can resume via approve/reject. Without the approval gate,
+   * pendingApproval() stays empty and the halt is invisible to the CLI.
+   * On restart, dispatchHalted resets to false, so the approval gate
+   * is the durable mechanism — not the in-memory flag.
+   */
+  handleRateLimitEvent(source: string): string {
+    this.dispatchHalted = true;
+
+    this.log.append({
+      type: 'RATE_LIMIT_DETECTED',
+      source,
+      action: 'halt',
+    });
+
+    // Create a durable approval gate so approve/reject CLI commands work
+    // and the halt persists across restarts (derived from unapproved gate).
+    const approvalId = this.requestApproval(
+      `Rate limit detected (source: ${source}). Dispatch halted. Approve to resume, reject to cancel.`,
+    );
+
+    return approvalId;
+  }
+
+  // --- B2: Scope expansion approval ---
+
+  /**
+   * Handle a scope expansion request from a polecat.
+   * Creates an APPROVAL_REQUESTED event so the human can approve/reject
+   * via the bridge CLI's approve/reject commands.
+   */
+  handleScopeExpansionRequest(beadId: string, description: string): string {
+    this.log.append({
+      type: 'SCOPE_EXPANSION_REQUESTED',
+      beadId,
+      description,
+    });
+
+    const approvalId = this.requestApproval(
+      `Scope expansion for ${beadId}: ${description}`,
+    );
+
+    return approvalId;
   }
 
   /**

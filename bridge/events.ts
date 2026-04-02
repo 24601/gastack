@@ -33,7 +33,12 @@ export type BridgeEvent =
   | ExternalCallCompleted
   | ApprovalRequested
   | ApprovalDecision
-  | SessionCompleted;
+  | SessionCompleted
+  // B2 events (14-17)
+  | CheckpointSaved
+  | RateLimitDetected
+  | ScopeExpansionRequested
+  | SpecialistGatingUpdated;
 
 // 1. Session lifecycle
 export interface SessionCreated {
@@ -136,6 +141,33 @@ export interface SessionCompleted {
   finalStage: Stage;
   success: boolean;
   summary?: string;
+}
+
+// 14. Checkpoint saved (crash recovery)
+export interface CheckpointSaved {
+  type: 'CHECKPOINT_SAVED';
+  checkpointId: string;
+  stage: Stage;
+}
+
+// 15. Rate limit detected (from watchdog plugin)
+export interface RateLimitDetected {
+  type: 'RATE_LIMIT_DETECTED';
+  source: string;
+  action: 'halt';
+}
+
+// 16. Scope expansion requested by polecat
+export interface ScopeExpansionRequested {
+  type: 'SCOPE_EXPANSION_REQUESTED';
+  beadId: string;
+  description: string;
+}
+
+// 17. Specialist gating state updated
+export interface SpecialistGatingUpdated {
+  type: 'SPECIALIST_GATING_UPDATED';
+  gatingState: Record<string, { runs: number; gated: boolean }>;
 }
 
 // --- Event envelope ---

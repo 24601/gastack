@@ -56,6 +56,35 @@ export const DEFAULT_MULTI_MODEL: MultiModelConfig = {
   reviewMode: 'quick',
 };
 
+// --- Gas Town integration config ---
+
+/**
+ * Gas Town adapter configuration.
+ *
+ * Controls how the bridge interacts with gastown's dispatch, patrol,
+ * merge, and identity systems.
+ */
+export interface GasTownConfig {
+  /** Effort level for idle patrol cycles. 'abbreviated' saves ~90% token cost. Default: 'abbreviated'. */
+  effortIdle: 'full' | 'abbreviated';
+  /** Prefer convoy.watch (push) over tail.poll (pull) for completion detection. Default: true. */
+  useConvoyWatch: boolean;
+  /** Per-rig review gates. When false for a rig, skip REVIEW stage for that rig's work. Default: {}. */
+  requireReview: Record<string, boolean>;
+  /** Whether to intercept polecat scope expansion requests as approval gates. Default: true. */
+  scopeExpansionApproval: boolean;
+  /** Use gt done --pre-verified when all quality gates pass (5s merge vs minutes). Default: true. */
+  preVerifiedMerge: boolean;
+}
+
+export const DEFAULT_GASTOWN: GasTownConfig = {
+  effortIdle: 'abbreviated',
+  useConvoyWatch: true,
+  requireReview: {},
+  scopeExpansionApproval: true,
+  preVerifiedMerge: true,
+};
+
 // --- Bridge config ---
 
 /**
@@ -64,10 +93,12 @@ export const DEFAULT_MULTI_MODEL: MultiModelConfig = {
  */
 export interface BridgeConfig {
   multiModel: MultiModelConfig;
+  gastown: GasTownConfig;
 }
 
 export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
   multiModel: { ...DEFAULT_MULTI_MODEL },
+  gastown: { ...DEFAULT_GASTOWN },
 };
 
 // --- Config loading ---
@@ -99,6 +130,10 @@ export function mergeBridgeConfig(partial: Partial<BridgeConfig>): BridgeConfig 
     multiModel: {
       ...DEFAULT_MULTI_MODEL,
       ...(partial.multiModel ?? {}),
+    },
+    gastown: {
+      ...DEFAULT_GASTOWN,
+      ...(partial.gastown ?? {}),
     },
   };
 }

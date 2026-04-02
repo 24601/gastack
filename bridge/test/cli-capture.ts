@@ -88,10 +88,9 @@ export class TestableGasTownAdapter implements Adapter {
         const target = String(args?.target ?? '');
         const subject = String(args?.subject ?? '');
         const body = String(args?.body ?? '');
-        return {
-          tool: 'gt',
-          cliArgs: ['gt', 'mail', 'send', target, '-s', subject, '-m', body],
-        };
+        const mailCli = ['gt', 'mail', 'send', target, '-s', subject, '-m', body];
+        if (args?.from) mailCli.push('--from', String(args.from));
+        return { tool: 'gt', cliArgs: mailCli };
       }
 
       case 'done': {
@@ -163,6 +162,40 @@ export class TestableGasTownAdapter implements Adapter {
         const polecatArgs = ['gt', 'polecats', 'list'];
         if (args?.rig) polecatArgs.push('--rig', String(args.rig));
         return { tool: 'gt', cliArgs: polecatArgs };
+      }
+
+      // B2 commands
+      case 'convoy.watch': {
+        const cwId = String(args?.convoyId ?? '');
+        return { tool: 'gt', cliArgs: ['gt', 'convoy', 'watch', cwId, '--json'] };
+      }
+
+      case 'convoy.unwatch': {
+        const cuwId = String(args?.convoyId ?? '');
+        return { tool: 'gt', cliArgs: ['gt', 'convoy', 'unwatch', cuwId] };
+      }
+
+      case 'patrol.scan':
+        return { tool: 'gt', cliArgs: ['gt', 'patrol', 'scan', '--json'] };
+
+      case 'checkpoint.write': {
+        const cpwArgs = ['gt', 'checkpoint', 'write'];
+        if (args?.stage) cpwArgs.push('--stage', String(args.stage));
+        if (args?.context) cpwArgs.push('--context', String(args.context));
+        cpwArgs.push('--json');
+        return { tool: 'gt', cliArgs: cpwArgs };
+      }
+
+      case 'checkpoint.read': {
+        const cpId = String(args?.id ?? '');
+        return { tool: 'gt', cliArgs: ['gt', 'checkpoint', 'read', cpId, '--json'] };
+      }
+
+      case 'bead.list': {
+        const blArgs = ['bd', 'list', '--json', '--flat'];
+        if (args?.status) blArgs.push('--status', String(args.status));
+        if (args?.rig) blArgs.push('--rig', String(args.rig));
+        return { tool: 'bd', cliArgs: blArgs };
       }
 
       case 'raw': {
