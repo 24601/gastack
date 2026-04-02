@@ -1,0 +1,98 @@
+---
+name: convoy-status
+preamble-tier: 1
+version: 1.0.0
+description: |
+  Check running convoy status, diagnose stranded convoys, and show approval
+  gates. Lightweight read-only monitoring dashboard.
+  Use when: "convoy status", "what's running", "check the convoy",
+  "anything stranded", "show approvals", "polecat status", "/convoy-status". (gstack)
+allowed-tools:
+  - Bash
+  - Read
+  - Glob
+  - Grep
+---
+
+{{PREAMBLE}}
+
+# Convoy Status Dashboard
+
+Read-only monitoring — no mutations. Shows what's running, what's stuck,
+and what needs human attention.
+
+---
+
+## Step 1: List Active Convoys
+
+```bash
+gt convoy list --json --status open 2>/dev/null || echo '{"convoys":[]}'
+```
+
+For each active convoy, show:
+- Convoy ID and title
+- Total beads / completed / in-progress / failed
+- Elapsed time since launch
+
+---
+
+## Step 2: Check Polecat Health
+
+```bash
+# Detect zombie and stalled polecats
+gt patrol scan --json 2>/dev/null || echo '{"stalled":[],"zombies":[]}'
+```
+
+Report any issues:
+- **Stalled**: polecats with no progress for >15 minutes
+- **Zombies**: sessions that completed but didn't clean up
+
+---
+
+## Step 3: Stranded Convoy Diagnosis
+
+```bash
+gt convoy stranded --json 2>/dev/null || echo '[]'
+```
+
+For each stranded convoy, classify why:
+- **quality_blocked**: Quality gate blocked merger — show which findings block
+- **no_workers**: Beads ready but no polecats available — suggest re-sling
+- **dependency_blocked**: Waiting on upstream beads — show dependency chain
+- **empty**: No beads in convoy — suggest closing
+
+---
+
+## Step 4: Format Dashboard
+
+```
+Convoy Status
+══════════════════════════════════════
+  Active convoys: N
+  Total beads: N (done: N, running: N, failed: N)
+
+  [convoy-id] "title"
+    Progress: ██████░░░░ 6/10 beads
+    Failed: 1 (bead-id — error summary)
+    Elapsed: 12m
+
+  Polecat Health:
+    Stalled: N
+    Zombies: N
+
+  Stranded: N convoys need attention
+    [convoy-id]: quality_blocked — 2 CRITICAL findings
+    [convoy-id]: no_workers — re-sling needed
+══════════════════════════════════════
+```
+
+---
+
+## Actionable Suggestions
+
+Based on what's found:
+- Stranded with quality block → "Run `/collect` to review and address findings"
+- Stalled polecats → "Check `gt patrol scan` output for stuck sessions"
+- No workers → "Run `gt sling batch <beads> <rig>` to re-dispatch"
+- All complete → "Run `/collect` to review and merge results"
+- Nothing running → "Run `/dispatch` to start new work"

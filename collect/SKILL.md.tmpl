@@ -1,0 +1,212 @@
+---
+name: collect
+preamble-tier: 2
+version: 1.0.0
+description: |
+  Collect completed convoy results from gastown and run quality gates.
+  Gathers bead outputs, runs Review Army (7 specialists), /cso, /health,
+  evaluates quality, and merges or escalates. The handback FROM gastown TO gstack.
+  Use when: "collect results", "land the convoy", "review what polecats built",
+  "merge convoy output", "what did the polecats do", "/collect". (gstack)
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+  - AskUserQuestion
+sensitive: true
+---
+
+{{PREAMBLE}}
+
+# Collect: Handback from Gastown
+
+You are the quality gate between gastown's autonomous execution and gstack's
+merge pipeline. Your job: collect what the polecats built, run comprehensive
+review, and merge or escalate based on quality.
+
+---
+
+## Step 0: Find Active Convoy
+
+Detect what needs collecting:
+
+```bash
+# Check for active convoys
+gt convoy list --json --status open
+
+# Check convoy status
+gt convoy status <convoy-id> --json
+```
+
+If no convoy ID was provided, list recent convoys and AskUserQuestion:
+> Which convoy should I collect results from?
+> [list recent convoys with status]
+
+If the convoy is still running (not all beads complete), report status and suggest:
+> Convoy is still in progress. <N>/<total> beads complete.
+> Run `/convoy-status` to monitor, or wait and run `/collect` again.
+
+---
+
+## Step 1: Gather Bead Outputs
+
+For each completed bead in the convoy, fetch the execution context:
+
+```bash
+# List convoy beads
+gt convoy status <convoy-id> --json
+
+# For each completed bead, get context
+bd show <bead-id> --json
+```
+
+Build execution context summary:
+- Total beads, completed, failed
+- Files modified across all beads
+- Modules touched
+- Any escalation notes
+- Attempt counts (retries signal trouble)
+
+---
+
+## Step 2: Run Quality Gates
+
+Run three quality gates in sequence:
+
+### 2a. Review Army (Correctness)
+
+Run `/review` on the branch. The Review Army dispatches 7 specialists:
+- Security, Performance, Testing, Data Migration, Maintainability, API Contract, Red Team
+
+```bash
+# Get the diff for review
+git diff <base-branch>...HEAD --stat
+```
+
+The review produces:
+- Overall grade (A+ to F)
+- Per-specialist findings with severity (CRITICAL/MAJOR/MINOR/INFORMATIONAL)
+- Finding fingerprints for dedup
+- Optional test stubs for remediation
+
+### 2b. Security Scan (CSO)
+
+Run `/cso` for security-specific analysis:
+- OWASP Top 10 checks
+- STRIDE threat modeling
+- Secrets detection
+- Dependency vulnerabilities
+
+### 2c. Code Health
+
+Run `/health` for code quality scoring:
+- Composite score 0-10
+- Per-tool breakdown (typecheck, lint, tests, etc.)
+
+---
+
+## Step 3: Evaluate Quality
+
+Apply the quality policy:
+
+| Gate | PASS | WARN | BLOCKED |
+|------|------|------|---------|
+| Correctness | Grade >= C | Minor findings | Grade < C or CRITICAL findings |
+| Security | No findings | MINOR severity | CRITICAL or MAJOR severity |
+| Health | Score >= 7 | Score 4-6 | Score < 4 |
+
+**Overall verdict:**
+- BLOCKED if ANY gate is BLOCKED
+- WARN if any gate is WARN (no BLOCKED)
+- PASS otherwise
+
+### Dedup Findings
+
+Cross-reference findings across specialists using fingerprints. When the same
+issue is reported by multiple specialists, keep the highest severity instance.
+
+---
+
+## Step 4: Decision Tree
+
+Based on the quality verdict:
+
+### PASS (grade A/B)
+Fast-path merge via pre-verified refinery:
+```bash
+gt done --pre-verified
+```
+Report: "All quality gates passed. Merged via pre-verified fast-path (5s)."
+
+### PASS (grade C)
+Standard merge queue:
+```bash
+gt done
+```
+Report: "Quality gates passed with grade C. Submitted to refinery merge queue."
+
+### WARN
+Surface findings to user. AskUserQuestion:
+> Quality gates produced warnings:
+> [list warnings by gate]
+>
+> Options:
+> 1. Merge anyway (accept warnings)
+> 2. Fix warnings first (I'll queue fix tasks)
+> 3. Review findings in detail
+
+### BLOCKED
+Show blocking findings. Enter fix loop:
+1. Extract fixable findings (MAJOR/MINOR — not CRITICAL)
+2. Create fix beads for each fixable finding
+3. Re-dispatch to polecats via `/dispatch`
+4. Re-run `/collect` when fixes land
+
+If only CRITICAL findings remain (can't auto-fix):
+> BLOCKED by CRITICAL findings that require human review:
+> [list critical findings]
+>
+> These cannot be auto-fixed. Please review and address manually.
+
+---
+
+## Step 5: Report
+
+Show the quality scorecard:
+
+```
+Quality Report
+══════════════════════════════════════
+  Overall: PASS | WARN | BLOCKED
+
+  Correctness: [verdict] — Grade [grade]
+  Security:    [verdict] — [finding count] findings
+  Health:      [verdict] — Score [score]/10
+
+  Specialists:
+    Security:        [verdict] ([findings] findings)
+    Performance:     [verdict] ([findings] findings)
+    Testing:         [verdict] ([findings] findings)
+    Data Migration:  [verdict] ([findings] findings)
+    Maintainability: [verdict] ([findings] findings)
+    API Contract:    [verdict] ([findings] findings)
+    Red Team:        [verdict] ([findings] findings)
+
+  Merge: [strategy] — [status]
+══════════════════════════════════════
+```
+
+If merged successfully, suggest: "Run `/retro` for the weekly summary."
+
+---
+
+## Error Handling
+
+- **No completed beads**: Report and suggest waiting.
+- **Review fails**: Log error, continue with CSO and health. Report partial results.
+- **Health check unavailable**: Skip (advisory gate). Report as "not run."
+- **Rate limit during review**: Bridge halts. Surface to user.
+- **Merge conflict**: Report conflict details. Suggest manual resolution.

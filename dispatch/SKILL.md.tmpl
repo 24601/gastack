@@ -1,0 +1,178 @@
+---
+name: dispatch
+preamble-tier: 2
+version: 1.0.0
+description: |
+  Dispatch work to gastown polecats. Takes a design doc, plan, or task list,
+  extracts tasks, creates beads, dispatches a convoy, and monitors execution.
+  The handoff FROM gstack TO gastown — seamless parallel build phase.
+  Use when: "dispatch this", "build this in parallel", "send to polecats",
+  "run this with gastown", "dispatch to convoy", "/dispatch". (gstack)
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - Glob
+  - Grep
+  - AskUserQuestion
+sensitive: true
+---
+
+{{PREAMBLE}}
+
+# Dispatch: Handoff to Gastown
+
+You are the bridge between gstack's planning wisdom and gastown's execution power.
+Your job: take a design doc or task breakdown, extract actionable tasks, create beads
+in gastown, dispatch them to polecats, and report status.
+
+---
+
+## Step 0: Detect Input
+
+Determine what the user is dispatching:
+
+1. **Design doc path** — user provides a file path (e.g., `dispatch design.md`)
+   - Read the file
+2. **Recent plan** — check for CEO plan output in the conversation
+   - Look for `### N. Title` task headings
+3. **Inline description** — user describes what to build
+   - AskUserQuestion: "I need a structured task breakdown to dispatch. Should I
+     help you create one, or do you have a design doc?"
+
+If no clear input, AskUserQuestion:
+> What would you like to dispatch to gastown polecats?
+> - A design doc (provide the path)
+> - A plan from /plan-ceo-review (I'll find it in context)
+> - A description (I'll help break it into tasks)
+
+---
+
+## Step 1: Extract Tasks
+
+Parse tasks from the input. Look for `### N. Title` headings with acceptance criteria.
+
+```bash
+# If a design doc was provided, count tasks:
+grep -c '^### [0-9]' <design-doc-path>
+```
+
+For each task, classify priority:
+- **P0 (Security)**: auth, XSS, injection, CSRF, encryption, secrets, credentials, tokens
+- **P1 (Critical fix)**: fix, bug, crash, regression, hotfix, data loss
+- **P2 (Feature)**: everything else
+
+Show the user the extracted breakdown:
+
+```
+Tasks extracted: N
+  P0 (security): [list]
+  P1 (critical): [list]
+  P2 (features): [list]
+
+Dispatch strategy: [convoy | mountain (10+ tasks)]
+```
+
+**AskUserQuestion**: Confirm the task breakdown is correct before dispatching.
+
+---
+
+## Step 2: Detect Target Branch
+
+Check the design doc for target/base branch indicators:
+- "target branch:", "base branch:", "branch from", "merge into"
+- Default to `main` if not specified
+
+```bash
+# Detect the default branch
+git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main"
+```
+
+---
+
+## Step 3: Create Beads and Dispatch
+
+For each task, create a bead in gastown:
+
+```bash
+# Create beads (one per task)
+bd create --title "<task title>" --type task
+```
+
+Choose dispatch strategy:
+- **10+ tasks** → `gt mountain <epicId>` (enhanced stall detection, wave dispatch)
+- **< 10 tasks** → `gt convoy stage <bead1> <bead2> ... --json` then `gt convoy launch <id>`
+
+Pass variables to sling:
+- `--base-branch <detected branch>`
+- `--merge mr` (merge via refinery queue)
+- Effort tuning: bridge config determines `effort_idle`
+
+```bash
+# Convoy dispatch (< 10 tasks)
+gt convoy stage <bead-ids...> --json --title "Dispatch: <summary>"
+gt convoy launch <convoy-id>
+
+# Mountain dispatch (10+ tasks)
+gt mountain <epic-id> --json
+```
+
+---
+
+## Step 4: Monitor and Report
+
+After dispatch, set up monitoring:
+
+```bash
+# Watch for completion (push notifications)
+gt convoy watch <convoy-id> --json
+
+# Or check status
+gt convoy status <convoy-id> --json
+
+# Check for zombies/stalls
+gt patrol scan --json
+```
+
+Report to the user:
+
+```
+Dispatched to gastown:
+  Convoy: <id>
+  Tasks: <count> (P0: <n>, P1: <n>, P2: <n>)
+  Strategy: convoy | mountain
+  Base branch: <branch>
+
+Monitor: /convoy-status
+Collect results: /collect (when polecats complete)
+```
+
+---
+
+## Step 5: Handback Reminder
+
+Always end with:
+
+> When polecats complete their work, run `/collect` to:
+> - Review all changes (Review Army: 7 specialists)
+> - Run security scan (/cso)
+> - Check code health (/health)
+> - Merge or fix based on quality gates
+
+---
+
+## Error Handling
+
+- **gt not found**: AskUserQuestion — "gastown (gt) CLI is not available. Is Gas Town installed?"
+- **bd create fails**: Check if we're in a Gas Town workspace. Suggest `gt rig detect`.
+- **Convoy stage fails**: Fall back to `gt sling batch` for direct dispatch.
+- **Rate limit**: Bridge will auto-halt via watchdog. Surface to user.
+
+---
+
+## What This Skill Does NOT Do
+
+- Does not review code (that's `/collect` + `/review`)
+- Does not merge code (that's `/collect` + `gt done`)
+- Does not fix bugs found in review (that's the REFINE loop in `/collect`)
+- Does not monitor continuously (that's `/convoy-status`)

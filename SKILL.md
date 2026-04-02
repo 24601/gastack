@@ -372,6 +372,9 @@ quality gates that produce better results than answering inline.
 - User asks for safety mode, careful mode → invoke `/careful` or `/guard`
 - User asks to restrict edits to a directory → invoke `/freeze` or `/unfreeze`
 - User asks to upgrade gstack → invoke `/gstack-upgrade`
+- User wants to dispatch work to polecats, build in parallel, send to gastown → invoke `/dispatch`
+- User wants to collect results, land convoy output, review what polecats built → invoke `/collect`
+- User asks about convoy status, what's running, anything stranded, polecat health → invoke `/convoy-status`
 
 **Do NOT answer the user's question directly when a matching skill exists.** The skill
 provides a structured, multi-step workflow that is always better than an ad-hoc answer.
