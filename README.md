@@ -187,7 +187,27 @@ The bridge has **zero dependencies on parent gstack code** — all imports are i
 
 ---
 
-## Quick start
+## Quick start — slash commands (recommended)
+
+The fastest way to use the bridge is through three gstack slash commands.
+No CLI flags to remember — gastown feels like part of gstack:
+
+```bash
+# Dispatch a design doc to gastown polecats
+/dispatch docs/designs/auth-system.md
+
+# Monitor convoy progress, find stranded work
+/convoy-status
+
+# Collect results, run quality gates, merge
+/collect
+```
+
+That's it. `/dispatch` breaks your plan into tasks, creates beads, dispatches
+a convoy. `/collect` runs the Review Army (7 specialists), CSO security scan,
+health check, and merges via pre-verified fast-path when everything passes.
+
+## Quick start — CLI (advanced)
 
 ```bash
 # Start a pipeline from a design doc

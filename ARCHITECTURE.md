@@ -359,13 +359,20 @@ Tier 1 runs on every `bun test`. Tiers 2+3 are gated behind `EVALS=1`. The idea:
 
 The bridge connects gstack quality gates to Gas Town's agent fleet. It's the automation layer that replaces you as the integration router between design → dispatch → review → merge.
 
+Three slash commands make gastown feel like part of gstack:
+- `/dispatch` — handoff TO gastown (design doc → tasks → convoy)
+- `/collect` — handback FROM gastown (review → quality gates → merge)
+- `/convoy-status` — monitoring dashboard (what's running, what's stuck)
+
+See [bridge/BRIDGE.md](bridge/BRIDGE.md) for the full reference.
+
 ### Seven-stage pipeline
 
 ```
-PLAN → EXECUTE → REVIEW → REFINE → VERIFY → DEPLOY → DONE
+PLAN → EXECUTE → REVIEW → REFINE → DEPLOY → VERIFY → DONE
 ```
 
-Each stage is a pure function of the event log. No mutable state. The orchestrator replays events on crash and reconstructs exactly where it was.
+Each stage is a pure function of the event log (17 event types). No mutable state. The orchestrator replays events on crash and reconstructs exactly where it was.
 
 ### Review cycles
 
@@ -418,6 +425,18 @@ When a polecat dies mid-task (context exhaustion, crash, SIGKILL), the bridge de
 ### Stranded convoy diagnosis
 
 If a convoy stalls (all polecats dead, no progress), the stranded convoy detector runs diagnosis with quality gate context — it knows which reviews passed, which failed, and what the current blocker is.
+
+### B2 capabilities
+
+- **Convoy watch**: Push notifications instead of polling for convoy completion
+- **Rate-limit watchdog**: Auto-halts dispatch on API 429, surfaces as approval gate
+- **Pre-verified merge**: When all quality gates pass, 5s fast-path via `gt done --pre-verified`
+- **Adaptive specialist gating**: Auto-skip zero-finding specialists after 10 runs (security/data-migration exempt)
+- **Health gate**: /health code quality score as third quality gate alongside correctness and security
+- **Finding dedup**: Fingerprint-based cross-specialist and cross-iteration dedup
+- **Identity sanitization**: Strip sensitive env vars from child processes
+- **Checkpoint recovery**: Write checkpoints at stage transitions for crash recovery
+- **Scope expansion approval**: Intercept polecat scope requests as human approval gates
 
 ## What's intentionally not here
 
