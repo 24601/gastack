@@ -246,7 +246,7 @@ describe('evaluate', () => {
       cso: makeReview({ findings: [] }),
     });
     expect(report.overall).toBe('PASS');
-    expect(report.gates).toHaveLength(2);
+    expect(report.gates).toHaveLength(3); // correctness + security + health
   });
 
   test('security BLOCKED → overall BLOCKED', () => {
@@ -393,7 +393,7 @@ describe('QualityAdapter', () => {
 
     const report = JSON.parse(result);
     expect(report.overall).toBe('PASS');
-    expect(report.gates).toHaveLength(2);
+    expect(report.gates).toHaveLength(3); // correctness + security + health
   });
 
   test('security command evaluates CSO only', async () => {

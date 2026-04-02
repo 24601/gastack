@@ -276,11 +276,69 @@ export function evaluateSpecialists(
   });
 }
 
+// --- Health gate (B2) ---
+
+/** Health check result from /health skill. */
+export interface HealthResult {
+  /** Composite health score 0-10. */
+  score: number;
+  /** Per-tool breakdown (optional). */
+  breakdown?: Record<string, number>;
+}
+
+/**
+ * Evaluate code health check results.
+ *
+ * Policy (advisory — override via approval):
+ *   - Score < 4 → BLOCKED (serious quality issues)
+ *   - Score 4-6 → WARN (needs attention)
+ *   - Score >= 7 → PASS
+ *   - NOT_RUN (null) → PASS (health check is advisory in B2)
+ */
+export function evaluateHealthGate(
+  healthResult: HealthResult | null,
+): GateResult {
+  if (!healthResult) {
+    return {
+      gate: 'health',
+      verdict: 'PASS',
+      reason: 'Health check not run (advisory)',
+      findings: [],
+    };
+  }
+
+  if (healthResult.score < 4) {
+    return {
+      gate: 'health',
+      verdict: 'BLOCKED',
+      reason: `Health score ${healthResult.score}/10 — serious quality issues`,
+      findings: [],
+    };
+  }
+
+  if (healthResult.score < 7) {
+    return {
+      gate: 'health',
+      verdict: 'WARN',
+      reason: `Health score ${healthResult.score}/10 — needs attention`,
+      findings: [],
+    };
+  }
+
+  return {
+    gate: 'health',
+    verdict: 'PASS',
+    reason: `Health score ${healthResult.score}/10`,
+    findings: [],
+  };
+}
+
 // --- Combined evaluation ---
 
 export interface EvaluateInput {
   review?: ReviewResult | null;
   cso?: ReviewResult | null;
+  health?: HealthResult | null;
 }
 
 /**
@@ -296,6 +354,7 @@ export function evaluate(
   const gates: GateResult[] = [
     evaluateCorrectnessGate(input.review ?? null, policy),
     evaluateSecurityGate(input.cso ?? null, policy),
+    evaluateHealthGate(input.health ?? null),
   ];
 
   // Collect specialist outputs from review and CSO results
@@ -1005,7 +1064,24 @@ function parseEvaluateInput(args?: Record<string, unknown>): EvaluateInput {
   return {
     review: parseReviewArg(args.review),
     cso: parseReviewArg(args.cso),
+    health: parseHealthArg(args.health),
   };
+}
+
+/** Parse a HealthResult from adapter args (object or JSON string). */
+function parseHealthArg(value: unknown): HealthResult | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as HealthResult;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === 'object' && 'score' in (value as Record<string, unknown>)) {
+    return value as HealthResult;
+  }
+  return null;
 }
 
 /** Parse a single ReviewResult from adapter args (object or JSON string). */
