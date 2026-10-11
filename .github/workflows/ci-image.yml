@@ -1,8 +1,5 @@
 name: Build CI Image
 on:
-  # Rebuild weekly (Monday 6am UTC) to pick up CLI updates
-  schedule:
-    - cron: '0 6 * * 1'
   # Rebuild on Dockerfile or lockfile changes
   push:
     branches: [main]
